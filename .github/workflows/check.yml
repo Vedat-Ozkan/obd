@@ -1,0 +1,25 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v10
+      - run: pnpm install --frozen-lockfile
+      - run: cd tools/hil-bridge && uv sync --frozen
+      - run: pnpm check

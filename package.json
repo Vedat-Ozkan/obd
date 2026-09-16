@@ -1,0 +1,23 @@
+{
+  "name": "obd",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "check": "pnpm check:ts && pnpm check:bridge",
+    "check:ts": "pnpm typecheck && pnpm lint && pnpm test",
+    "check:bridge": "cd tools/hil-bridge && uv run ruff check . && uv run pytest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "pnpm --filter './packages/*' -r test"
+  },
+  "devDependencies": {
+    "eslint": "^10.10.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}

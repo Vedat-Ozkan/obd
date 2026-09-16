@@ -1,0 +1,38 @@
+---
+name: obd-feature
+description: Complete one task from this OBD repository's plan through a written spec, implementation, independent review, and bounded repairs. Use for a requested task ID or a scoped OBD feature or fix, including resuming one; not for implementing the entire roadmap.
+---
+
+# One OBD task
+
+Act as orchestrator. Read root `AGENTS.md`, `CODEX.md`, the requested entry in `docs/PLAN.md`, `docs/WORKFLOW.md`, and relevant existing specs. Project documents remain the source of truth; preserve Claude's setup. Work only on the requested task.
+
+## Preflight and handoff
+
+- Inspect actual files and `git status --short`, including pre-existing untracked work. Capture a task baseline so review can distinguish this task's edits from existing changes. Do not reset, stage, commit, or clean the user's work.
+- Check required tools, source documents, fixtures, and prerequisite tasks. Do not install anything outside the task's spec. Required recordings and unsourced OBD values are blockers, not reasons to invent evidence.
+- For a task ID, use the shared, tool-neutral `docs/task-runs/<task-id>.md` progress record. For a free-text request, assign an `X-<date>-<slug>` ID using the spec naming convention. Record last tool and role; current and completed stages; spec path; approved decisions; baseline and touched files; exact verification commands and evidence; remaining review findings; repair count; escalation count and reason; blocker; and next action. Update it at every role or Claude/Codex handoff and before yielding on a blocker. Keep secrets out.
+- On resume or a Claude/Codex transfer, ensure the other tool and role have stopped, then reconcile the shared record, spec, working tree, and evidence. If the record is absent on a transfer, reconstruct a new record only from verifiable spec, tree, and evidence state. Set repair and escalation counts to zero only for a genuinely new task; for incomplete imported history, keep them unknown. Do not invent approvals, completed stages, findings, or counters; ask only when an unknown changes continuation or a repair/escalation limit. Resume at the first incomplete or invalidated stage. Reuse completed architecture or implementation only when evidence remains valid; never trust a stale approval. A receiving reviewer reruns every check affected by current changes and every spec-required check before approval. Do not reset repair or escalation counters.
+
+## Delegate the roles
+
+Use separate fresh subagents for architecture, implementation, and review. Run them sequentially with only one worker active at a time; finish or close each before starting the next and never run beside Claude on the same task. The parent handles sequencing, questions, and the progress record, not product implementation. Give each bounded role context only the task, its spec when available, baseline, permitted files, relevant decisions, required source documents, and required output. No role may delegate or start a nested workflow.
+
+Use the named custom agents below. Their native `model` and `model_reasoning_effort` configuration is mandatory: architect `gpt-5.6-sol`/medium, implementer `gpt-5.6-terra`/medium, reviewer `gpt-5.6-sol`/high. If the client cannot select a named role, read its TOML, use its `developer_instructions` in a fresh ordinary subagent, and pass the same model and reasoning override when the spawn tool supports it; never silently inherit a stronger parent model. If the fallback cannot honor that configuration or independent delegation is unavailable, stop that stage and report the limitation (review is NOT RUN). Do not launch nested CLI sessions to bypass unavailable delegation, model selection, or permissions.
+
+1. **Architect — `obd_architect`**, `.codex/agents/obd_architect.toml`: write the task spec using `docs/specs/README.md`. Check sources, dependencies, prerequisites, and exact verification commands. Split an oversized task into ordered specs within its scope; do not advance to another plan task. Resume an existing suitable spec instead of duplicating it.
+2. **Questions:** surface material open questions before dependent implementation and record answers in the spec's Decisions section. The user's choice of this automatic workflow supplies routine scope confirmation; summarize Goal / Non-goals / Files and proceed when there are no material questions. Do not infer answers about changed scope or missing evidence. Permission requests still follow the active sandbox rules.
+3. **Implementer — `obd_implementer`**, `.codex/agents/obd_implementer.toml`: build the spec and return the verification report. A source, dependency, or spec conflict returns to the architect/orchestrator; the implementer must not silently rewrite the contract.
+4. **Reviewer — `obd_reviewer`**, `.codex/agents/obd_reviewer.toml`: inspect this task's complete changes, including untracked additions, and independently rerun checks. Review begins only after implementation stops. Preserve the verdict and findings in the progress record.
+5. **Repair:** on REQUEST_CHANGES, give a fresh implementer the spec and findings, then obtain another independent review. Allow at most two repair rounds after the initial review, across resumptions. If still unapproved, stop with the remaining findings. A material spec revision goes back through architecture and any needed user decision.
+6. **Close:** summarize changed files, reviewer verdict, verification PASS / FAIL / NOT RUN with reasons, and next action. On APPROVE, describe software as approved under the existing workflow gate; explicitly list pending hardware checks. Do not tick the plan, claim a phase milestone, commit, publish, or start the next task.
+
+## Bounded escalation
+
+Escalate only the affected role and stage after recording concrete evidence that its default tier is insufficient: unresolved cross-package design ambiguity, repeated failure on the same implementation defect, or review of a high-risk protocol or safety change. Because a named role's fixed tier takes precedence over spawn overrides, use a fresh ordinary subagent with that role's instructions and explicit elevated model and reasoning override. Record the evidence, target tier, and reason in `docs/task-runs/<task-id>.md`; retry that stage once. Allow at most one model-tier escalation per stage. Do not upgrade unrelated roles or choose the strongest model by default. If the retry remains insufficient, stop with a concrete blocker or surface a material question; do not recurse or continue escalating.
+
+## Evidence boundaries
+
+All completion gates in `docs/WORKFLOW.md` still apply. Missing tools, a failed check, or CI that has not run are not hardware-only exceptions. If a mandatory replay fixture is missing, keep the item unmet even if synthetic tests pass. Do not weaken tests or the spec to obtain approval. Hardware-only deferral requires the exact command/session and intended recording path. Only claim real hardware verification with an actual recording path. Do not contact the vehicle without an owner-arranged session; clearing codes always requires the explicit confirmation required by `AGENTS.md`.
+
+Before the scaffold exists, report absent commands as NOT RUN. Do not substitute this workflow's syntax checks for product `pnpm check`. The user's selection of this workflow authorizes routine work within the approved task; surface real scope, design, source, recording, or safety questions before dependent work. Keep the last valid spec and a precise blocker/next action so the same task can resume.

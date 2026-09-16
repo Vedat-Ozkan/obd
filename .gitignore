@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.log
+.env
+.env.*
+!.env.example
+.expo/
+android/app/build/
+ios/build/
+__pycache__/
+.venv/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+.DS_Store
+# eval run outputs are large and regenerable; keep the labeled inputs only
+eval/runs/
