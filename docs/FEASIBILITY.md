@@ -1,6 +1,6 @@
 # Feasibility
 
-Reviewed 2026-09-16. Each area has a status, the evidence behind it, and what to do about it. "Verified" means checked against a primary source or hardware; "reported" means secondhand from owners or forums; "assumed" means nobody has checked yet.
+Hardware findings reviewed 2026-09-16; ML scope revised 2026-09-20. Each area has a status, evidence, and next step. "Verified" means checked against a primary source or hardware; "reported" means secondhand; "assumed" means unchecked. This documentation revision does not verify hardware, model availability, GPU compatibility, or prices.
 
 ## Summary
 
@@ -13,11 +13,12 @@ Reviewed 2026-09-16. Each area has a status, the evidence behind it, and what to
 | HIL bridge from WSL2 | Not feasible as planned: WSL2 has no Bluetooth and the desktop is out of range | Low | Run on the laptop near the car (ADR-003); WSL2 mirrored networking confirmed |
 | Background BLE logging on Android | Feasible with a foreground service; power management varies by phone | Medium | Phase 0 is foreground only; logger is T1.1 with a 30-minute drive as the test |
 | Expo dev builds from WSL2 | Feasible via EAS Build plus Metro over LAN | Low–Medium | Start the EAS build early; `--tunnel` as fallback |
-| LLM cost | Verified against current pricing | Negligible | See table |
-| Local GPU inference | Feasible with effort; not needed | n/a | Cut (ADR-002) |
+| LLM cost | Must be measured using dated, verified rates | Workload-dependent | Log usage and total experiment costs |
+| Training and GPU serving | Planned; compatibility and budget undecided | Medium | Bounded feasibility check and compute choice in ML specs (ADR-011) |
+| Training data | Candidate sources only; no audited training set | High | Provenance/license audit, target review, independent splits |
 | Ground truth from induced faults | Feasible; small n | Medium | Report honestly; more cars later |
 | Mode 06 | Assumed; varies by manufacturer | Low (stretch) | Spike includes it |
-| Timeline | Tight but consistent with full-time | Medium | Slip policy in README |
+| Timeline | ML track added before EV delivery; dates provisional | Medium–High | Re-estimate after prerequisites; retain task IDs |
 
 ## Findings in detail
 
@@ -48,21 +49,23 @@ Veepeak OBDCheck BLE (the non-plus model) is an ELM327-compatible clone over BLE
 - **Consequence for the workflow.** Hardware verification is a session you schedule (laptop out, car on, bridge up), not a button an agent presses. Every session should end with recordings that cover the next several tasks. Longer term, the phone app can serve as the bridge itself (Phase 3 idea), which removes the laptop from the loop.
 - **Expo on WSL2.** Expo Go cannot load `react-native-ble-plx`, so a development build is required. EAS Build produces the dev-client APK in the cloud; Metro runs in WSL2 and the phone connects at the desktop's LAN address thanks to mirrored networking, with `expo start --tunnel` as the fallback. Native rebuilds are needed only when native dependencies or the config plugin change, which is rare after T0.8. The [config plugin](https://github.com/expo/config-plugins/blob/main/packages/react-native-ble-plx/README.md) sets `isBackgroundEnabled` and `neverForLocation`; a foreground service for background logging is separate (T1.1) and there is a [fork with built-in foreground-service support](https://github.com/sfourdrinier/react-native-ble-plx) to evaluate against doing it with a notification library.
 
-### LLM cost (Anthropic first-party pricing, checked 2026-09-16)
+### Model and compute costs
 
-A diagnostic turn is roughly 4k tokens of cached reference material, 6k of case data, and 2k of output.
+Earlier model names and price estimates are not a verified current budget. Before an experiment, verify exact model availability and dated rates. Record input/output/cached tokens for APIs, and training/rental duration plus startup/idle time for GPU runs. Separate marginal request cost from the full experiment expense. Prompt size and cache savings are measured on the actual case workload. No spending cap is selected yet.
 
-| Model | Input $/M | Output $/M | Per turn (uncached) | Personal use, 50 turns/mo | 100 users × 10 turns/mo |
-|---|---|---|---|---|---|
-| claude-opus-5 | 5 | 25 | ~$0.10 | ~$5 | ~$100 |
-| claude-sonnet-5 | 2 | 10 | ~$0.04 | ~$2 | ~$40 |
-| claude-haiku-4-5 | 1 | 5 | ~$0.02 | ~$1 | ~$20 |
+### Fine-tuning and inference engineering (ADR-011)
 
-Prompt caching cuts the reference-material portion by about 90% after the first call. An eval run of 30 cases × 3 models × 3 effort levels is roughly $20–25. Cost was never the constraint and still is not; it does not justify local inference or a routing tier.
+The recorded hardware inventory is an AMD RX 6600 and a 7900-class card on Windows/WSL2. Exact GPU, VRAM, OS/driver/runtime support, and usable training memory need verification; do not assume both cards form one usable memory pool. Local compute avoids rental expense but may add compatibility work. Rented compute can simplify environment selection but requires an agreed cap and teardown plan. The choice remains open.
 
-### Local GPU inference: decision is no (ADR-002)
+Start with a small instruction model and LoRA, using QLoRA if memory warrants it. Run a bounded compatibility/memory smoke test before a full training job. Model size, context length, batch size, runtime, and precision affect feasibility. Candidate training tools and primary references are in [ML.md](ML.md); no dependencies are installed by the roadmap.
 
-The hardware is an AMD RX 6600 (RDNA2) and a 7900-class card (RDNA3) on a Windows host with WSL2. ROCm on WSL2 supports RDNA3 only; the 6600 needs overrides or the Vulkan backend of llama.cpp. All of that is doable in a weekend and none of it changes the product: the deterministic layer runs on the phone, the diagnostic turn needs a frontier model to be worth evaluating, and the "privacy" case is met by stripping the VIN client-side. Offline operation is real in a garage without signal, but everything except the narrative turn already works offline. Revisit in Phase 3 only for the open-weight benchmarking arm, and even then a hosted provider is cheaper in time.
+Serving experiments compare caching, quantization, concurrency, and request sizes under controlled workloads. Lower memory use does not guarantee lower latency; measure both and repeat quality checks. The hosted app baseline remains available regardless of experiment outcomes. Inference engineering is now justified as a learning goal, not an assumed cost-saving production requirement.
+
+### Training data
+
+No audited training dataset exists yet. Public automotive datasets vary in task fit, provenance, and permissions; some closely related instruction datasets are synthetic and labeled noncommercial. Candidate sources and limitations are listed in [ML.md](ML.md). They must be reviewed before use, especially given the paid-app intent.
+
+Teacher-generated targets can reproduce teacher errors. Review targets, include healthy/ambiguous cases, deduplicate, and split by source session before augmentation. The small real fleet supports case studies and failure discovery, not broad generalization or calibrated confidence claims. Keep external, synthetic, and real measurements separate.
 
 ### Ground truth
 
@@ -70,7 +73,7 @@ Six induced faults on the Chrysler and three on the Elantra give about nine labe
 
 ### Timeline
 
-Phase 0 at 3.5 weeks full-time is achievable if the Expo build and the spike happen in the first week rather than the last. The long poles are BLE on the phone (T0.8) and the ELM327 session layer (T0.4); both benefit from the spike recordings existing first. Phase 1's calendar risk is the induced-fault sessions, which need dry weather and cold mornings; start them in the first week of the phase. Phase 2 is the most likely to slip because its scope depends on what the car answers.
+The original Phase 0/1 dates are provisional. BLE and session work depend on spike recordings; diagnostic evaluation depends on independent labeled sessions. ML1–ML6 now follow that baseline and precede EV delivery. Data review and compute compatibility are additional schedule risks. Re-estimate Phase 2 after ML6; its scope still depends on what the car answers. No simultaneous product/ML delivery is assumed.
 
 ## Answered questions (2026-09-16)
 

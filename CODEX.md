@@ -16,7 +16,7 @@ Or launch the economical coordinator tier from a shell:
 codex --model gpt-5.6-sol --config model_reasoning_effort="medium" '$obd-feature T0.1'
 ```
 
-The single quotes keep the shell from expanding `$obd`. That shell launch selects the `gpt-5.6-sol` coordinator with medium reasoning; an existing session keeps its selected coordinator model. In either case, roles use fixed, economical tiers: architect `gpt-5.6-sol`/medium, implementer `gpt-5.6-terra`/medium, and reviewer `gpt-5.6-sol`/high. Start with T0.1: the repository currently contains planning documents, not runnable packages.
+The single quotes keep the shell from expanding `$obd`. That shell launch selects the `gpt-5.6-sol` coordinator with medium reasoning; an existing session keeps its selected coordinator model. In either case, roles use fixed, economical tiers: architect `gpt-5.6-sol`/medium, implementer `gpt-5.6-terra`/medium, and reviewer `gpt-5.6-sol`/high. T0.1 above illustrates invocation syntax; the scaffold now exists. Select the next incomplete task from `docs/PLAN.md` and reconcile its task record before starting.
 
 The skill delegates to `obd_architect`, `obd_implementer`, and `obd_reviewer` in sequence. It asks about material missing decisions before implementation, then implements, checks, reviews, and repairs within the requested task. Selecting this automatic workflow supplies the routine scope authorization; you do not need to approve the same task again. It does not start the next task or commit changes.
 
@@ -46,7 +46,9 @@ Take over <task-id> from Codex. Stop any active work first; reconcile its shared
 
 Approval requires the reviewer's own successful `pnpm check` and the existing verification gates. There are at most two repair rounds after the initial review. Escalate a single affected stage at most once only after recording concrete insufficiency evidence, target tier, and reason; otherwise stop with a blocker. Remaining defects, missing tooling, and external checks are reported as FAIL or NOT RUN, with a concrete next step. Software approval with explicitly deferred hardware checks is not hardware verification or a completed phase milestone.
 
-The original README, `AGENTS.md`, `CLAUDE.md`, `.claude/`, and planning documents are reference material. Codex adds task specs and reports without rewriting this setup. Any necessary change to an existing planning decision is raised with you first.
+The README, `AGENTS.md`, `CLAUDE.md`, `.claude/`, and planning documents are authoritative reference material. Routine feature tasks add specs and reports without rewriting unrelated setup. User-authorized roadmap revisions update the affected documents and append an ADR while preserving historical specs and verification evidence.
+
+ML1–ML6 follow the diagnostic baseline and precede EV delivery. Read `docs/ML.md` and `docs/EVAL.md` for those tasks. Record data/model provenance, grouped splits, reviewed targets, matched baselines, compute/spending choices, and reproducible experiment artifacts. Normal CI remains fixture-based; missing training or serving compute is NOT RUN and cannot use the vehicle hardware-only exception.
 
 ## Prerequisites and limits
 

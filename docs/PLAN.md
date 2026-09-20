@@ -1,10 +1,10 @@
 # Plan
 
-Revised 2026-09-16 after the kickoff review. Assumptions this plan rests on: full-time effort (40+ h/week), Android only, three cars available (2013 Chrysler 200, 2019 Elantra, 2024 Equinox EV), Veepeak OBDCheck BLE dongle, development in WSL2 with the HIL bridge on a laptop near the car. Changes from the original plan are listed at the end.
+Revised 2026-09-20 to prioritize a combined fine-tuning and inference-engineering showcase. Assumptions: full-time effort (40+ h/week), Android only, three cars available (2013 Chrysler 200, 2019 Elantra, 2024 Equinox EV), Veepeak OBDCheck BLE dongle, development in WSL2 with the HIL bridge on a laptop near the car. Delivery order is Phase 0 → Phase 1 → ML1–ML6 → Phase 2 → Phase 3. Existing task IDs remain stable. Future dates are provisional; compute, spending, model, and dataset choices await experiment specs. See [ML.md](ML.md) and ADR-011.
 
 Each task has a **verify** line. That line is the definition of done; the reviewer checks it, not the description. Tasks are sized for one implementer session (S: half a day, M: a day, L: two days). Anything larger gets split by the architect.
 
-## Phase 0: Pre-purchase inspection tool (Sep 16 – Oct 9)
+## Phase 0: Pre-purchase inspection tool (Sep 16 – Oct 9; target provisional)
 
 Goal: plug in, read the car, hand over a report that would change a buying decision. Ships for the two gas cars; on the EV it reports VIN plus whatever answers.
 
@@ -25,7 +25,7 @@ Milestone check (Oct 9): PPI report produced on both ICE cars from the phone, wi
 
 Not in Phase 0: background logging, any LLM call, EV-specific decoding beyond the spike, iOS.
 
-## Phase 1: Diagnostic engine for gas cars (Oct 12 – Nov 6)
+## Phase 1: Diagnostic engine for gas cars (Oct 12 – Nov 6; target provisional)
 
 Goal: log a drive in the background, capture the cold start, extract deterministic features, get a ranked list of hypotheses with evidence, and know how often it is right.
 
@@ -37,16 +37,31 @@ Milestone check (Nov 6): eval harness reports top-1 and top-3 accuracy over at l
 | T1.2 | Symptom anchor: a big button (and optional voice note) that timestamps "it just did it" into the log. | S | Anchor appears in the exported log at the right offset. |
 | T1.3 | `obd-diagnose`: feature extraction, pure functions over a log: fuel trim mean/variance by load bin, warm-up coolant slope, time to closed loop, O2 switching rate, MAF vs RPM residual against a per-car baseline, RPM roughness at idle as a misfire proxy, Mode 06 misfire counts when available. | L | Unit tests with synthetic logs; snapshot tests on baseline recordings; a healthy baseline yields features inside declared ranges. |
 | T1.4 | `obd-diagnose`: the case object (zod): vehicle, DTCs, freeze frame, readiness, features, symptom anchors, user-described symptom. Redacts VIN before leaving the device. | S | Schema tests; a case built from a baseline recording validates. |
-| T1.5 | `obd-diagnose`: the diagnostic turn. Anthropic TypeScript SDK, `claude-opus-5` default with adaptive thinking, structured output (`messages.parse` + zod) returning ranked hypotheses each with evidence references into the case, a confidence, and one concrete next test. Reference material (PID meanings, common-fault patterns) in a cached system prompt. Model and effort are parameters, not constants. | M | Runs on a baseline case and a synthetic fault case; output validates; `usage.cache_read_input_tokens` > 0 on the second call. |
+| T1.5 | `obd-diagnose`: the diagnostic turn. Anthropic TypeScript SDK, a hosted baseline selected in the task spec with provider-supported reasoning controls, structured output (`messages.parse` + zod) returning ranked hypotheses each with evidence references into the case, a confidence, and one concrete next test. Reference material (PID meanings, common-fault patterns) in a cached system prompt. Model and effort are parameters, not constants. | M | Runs on a baseline case and a synthetic fault case; output validates; `usage.cache_read_input_tokens` > 0 on the second call. |
 | T1.6 | Ground truth: run the induced-fault protocol in `docs/EVAL.md` on the Chrysler (six faults) and the Elantra (vacuum leak, MAF unplug, coolant sensor unplug). Each yields a labeled log plus DTC snapshot. Clear codes and confirm baseline between faults. | L (calendar: spread over the phase) | Nine labeled fault fixtures plus two baselines under `fixtures/recordings/`, each with a label file. |
-| T1.7 | `obd-eval`: harness. Runs the engine over labeled fixtures, scores top-1/top-3 match against label, records cost, tokens, latency, model, effort. Compares `claude-opus-5`, `claude-sonnet-5`, and one hosted open-weight model behind the same interface. Writes a markdown report. | M | `pnpm eval` produces the report; a deliberately wrong label fails the score; results table committed to `docs/eval-results.md`. |
+| T1.7 | `obd-eval`: harness. Runs the engine over labeled fixtures, scores top-1/top-3 match against label, records cost, tokens, latency, model, effort. Compares two hosted reference models and one hosted open-weight model behind the same interface; exact IDs are verified in the spec. Writes a markdown report. | M | `pnpm eval` produces the report; a deliberately wrong label fails the score; results table committed to `docs/eval-results.md`. |
 | T1.8 | App: case screen with symptom entry, hypothesis list with evidence, BYOK key entry in secure store, offline behavior (everything but the LLM turn works without network). | M | Manual run on a fault fixture replayed on-device; key never appears in logs or exports. |
 
-## Phase 2: EV battery health for Ultium (Nov 9 – Dec 11)
+## Applied ML track: fine-tuning and inference engineering (after Phase 1)
+
+Goal: test whether a small specialized model can deliver evidence-grounded hypotheses at lower cost and latency than a larger general model. Completion requires reproducible evidence, not an improvement claim. Exact models and dated API pricing must be verified in task specs; model names elsewhere in the original roadmap are planning placeholders, not availability guarantees.
+
+| ID | Task | Prerequisite | Verify |
+|---|---|---|---|
+| ML1 | Establish hosted and untuned small-model baselines using the same case/output contract. | Phase 1 diagnostic/eval baseline | Versioned cases/prompts and per-case quality, latency, and cost report; freeze held-out cases before adaptation. |
+| ML2 | Curate an audited training pilot with reviewed targets and source/license manifests. | ML1 | Grouped train/validation/test splits, duplicate/leakage audit, real/synthetic labels, and intended-use review recorded. |
+| ML3 | Supervised LoRA training; use QLoRA if memory warrants it. | ML2; model, compute, dependency, and spending decisions in spec | Reproducible run with revisions, settings, losses, validation results, and identified adapter artifacts. |
+| ML4 | Compare tuned, untuned, and hosted models. | ML3 | Untouched test results separated by provenance, healthy/ambiguous cases scored, unsupported claims and regressions reported. |
+| ML5 | Benchmark caching, quantization, concurrency, and input/output size independently. | ML4 | Documented workload/hardware, cold/warm p50/p95 latency, first-token timing where available, throughput, memory, costs, and repeated quality checks. |
+| ML6 | Publish the experiment and portfolio discussion. | ML1–ML5 | Reproduction instructions, dataset/model documentation, failure examples, measured tradeoffs, limitations, and deployment recommendation. |
+
+These are milestones, not single-session implementation specs; split them into bounded tasks before implementation. Detailed contracts and candidate sources: [ML.md](ML.md). Training and serving runs remain separate from normal CI. Missing compute is NOT RUN and blocks the affected milestone; it is not the vehicle hardware-only exception. No GPU purchase, cloud spend, dataset import, or production deployment is authorized by this roadmap alone.
+
+## Phase 2: EV battery health for Ultium (after ML6; dates to be re-estimated)
 
 Goal: a battery report for the Equinox EV that an owner would trust more than the dash, built on verified signals and honest about unverified ones. Go/no-go is decided by the T0.2 spike.
 
-Milestone check (Dec 11): report on own car covering SOC, pack voltage, cell min/max/spread, and a capacity estimate from a logged full charge; at least one other Equinox EV owner has run it.
+Milestone check (date to be re-estimated after ML6): report on own car covering SOC, pack voltage, cell min/max/spread, and a capacity estimate from a logged full charge; at least one other Equinox EV owner has run it.
 
 | ID | Task | Size | Verify |
 |---|---|---|---|
@@ -57,14 +72,14 @@ Milestone check (Dec 11): report on own car covering SOC, pack voltage, cell min
 | T2.5 | 12 V health (`ATRV` plus any module-reported 12 V), and a note on dongle drain: an always-on dongle on an EV's small 12 V battery is a real problem, so the app reminds the user to unplug. | S | Voltage in report; reminder shown. |
 | T2.6 | Report screen and share, same shape as the PPI report. Post to the Equinox EV owners' forum for beta. | S | One external user run. |
 
-## Phase 3: stretch (Dec 2026 onward)
+## Phase 3: stretch (after Phase 2; dates provisional)
 
 Unordered. Pick by what Phase 1 and 2 results say is worth it.
 
 - Mode 06 on-board monitor results on the ICE cars (may return nothing on the Chrysler; the spike will tell).
 - Active-test loop: hypothesis → guided action ("unplug X, rev to 2000") → capture → re-rank.
 - Full module scan on the EV via UDS `19 02` per module, once 29-bit enumeration is solid.
-- Open-weight model benchmarking on the eval harness via a hosted provider.
+- Further model experiments motivated by ML1–ML6 results; the initial open-weight comparison is already part of Phase 1 and ML1.
 - Distribution: thin API proxy for the diagnostic feature, Play Store listing, pricing and a license decision for the app (ADR-009).
 - iOS via EAS Build.
 - `obd-core` published as a package with its own README, if the interfaces have held for two phases.
@@ -73,8 +88,8 @@ Unordered. Pick by what Phase 1 and 2 results say is worth it.
 
 - **Bolt EUV replaced by Equinox EV.** There is no Bolt; there is a 2024 Equinox EV. The battery-health direction survives and gets broader (Ultium spans several GM models), but the community data for this specific car is thinner than for the Bolt, so it stays in Phase 2 behind a spike.
 - **HIL bridge moves to a laptop near the car.** WSL2 has no Bluetooth stack and the desktop is out of range. See ADR-003.
-- **No local GPU inference in Phases 0–2.** See ADR-002. The open-weight comparison arm uses a hosted provider.
-- **Model routing simplified.** No cheap classifier tier. Deterministic feature extraction decides whether an LLM turn is even needed; one frontier model does the turn; model and effort are eval parameters. See ADR-006.
+- **GPU experiments follow the diagnostic baseline.** ADR-011 amends ADR-002: local or rented compute can support ML1–ML6 once the experiment spec selects it; hosted inference remains the product baseline.
+- **Model routing simplified.** No cheap classifier tier. Deterministic feature extraction decides whether an LLM turn is even needed; one hosted baseline model does the app turn while small models are evaluated separately; model and effort are eval parameters. See ADR-006.
 - **Android only until Phase 3.** See ADR-001.
 - **A hardware spike is the second task of Phase 0** instead of discovering dongle and EV behavior mid-implementation.
-- **Dates re-based** to a Sep 16 start with full-time effort. Phase lengths are unchanged; the original dates were already assuming this pace.
+- **Dates provisional.** The Sep 16 kickoff remains historical; adding ML1–ML6 before EV work requires re-estimating later delivery dates. Existing task IDs and completed-task history are preserved.

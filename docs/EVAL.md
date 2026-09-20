@@ -35,7 +35,25 @@ Per case: top-1 hit, top-3 hit, whether the top hypothesis's evidence references
 
 Healthy baselines are scored too: a run that hallucinates a fault on a healthy log is a false positive and counts.
 
-Compare arms by changing exactly one thing: model (`claude-opus-5`, `claude-sonnet-5`, one hosted open-weight model), effort (`low`/`medium`/`high`/`xhigh`), or prompt version. Results go to `docs/eval-results.md` with the git SHA and date. A synthetic case never counts toward the headline table; it can appear in a separate synthetic table.
+Compare arms by changing one factor at a time: model, supported effort setting, prompt version, fine-tuning, or serving configuration. Exact model IDs and provider capabilities are verified in the task spec. Results go to `docs/eval-results.md` with git SHA, date, model revision, prompt version, and dataset/split identity. A synthetic case never counts toward the real-case headline table; it appears in a separate table.
+
+## ML training and evaluation contract
+
+ML1–ML6 follow the Phase 1 baseline; see [ML.md](ML.md). Compare the tuned model with the same untuned model using matched inputs and decoding settings, plus a larger hosted reference. Record all attempted configurations; select prompts/checkpoints on validation data and evaluate the frozen selection on held-out test data.
+
+Split by independent source case/session before producing windows, paraphrases, or teacher-generated variants. Audit duplicates across datasets and keep each parent and its derivatives together. Keep labels out of model inputs. Hold out vehicles/fault families when coverage permits and state when it does not. Real, synthetic, and external-domain results have separate denominators and tables. Nine fault sessions do not become thousands of independent test cases by slicing them into windows.
+
+Score top-1/top-3 ranking, healthy-case false positives, schema validity, reference resolution, unsupported conclusions, missing-evidence handling, and appropriate abstention. Review whether cited evidence actually supports each claim: a valid pointer alone is insufficient. Record the rubric and human adjudication for semantic judgments, including any model-assisted grading. Self-reported confidence is not calibrated probability; report calibration as unestablished unless there is enough independent evidence to assess it.
+
+Required scenarios include healthy baselines, known faults, ambiguous evidence, missing sensors, conflicting observations, and out-of-coverage cases. Synthetic scenarios test behavior but cannot substitute for required real recordings. Report denominators and per-case failures; quantify uncertainty only with methods appropriate to independent cases, not correlated windows.
+
+## Serving experiments
+
+For ML5, independently vary prefix caching, inference precision, concurrency, and input/output size. Repeat quality evaluation after configuration changes. Record cold/warm state, hardware/runtime, exact model/adapter, workload and request count, output limits, errors, time to first token where exposed, time to complete validated output, p50/p95 latency, throughput, peak GPU memory, and cost. Do not infer first-token timing from a non-streaming response.
+
+Include dated rates, training/rental expense, idle/startup cost, and marginal request cost separately. Load tests are laboratory workloads, not evidence of production demand. Publish reproducible commands/configurations and raw permitted measurements with the report; a regression or lack of improvement is a result, not a failed learning milestone.
+
+Normal CI uses fixtures and does not require GPUs or paid API calls. Mocked unit tests are not model evaluation. Required training/serving runs marked NOT RUN leave the relevant milestone incomplete; they cannot use the vehicle hardware-only exception. Every report lists PASS, FAIL, and NOT RUN with reasons.
 
 ## Induced-fault protocol
 

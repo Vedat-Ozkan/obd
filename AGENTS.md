@@ -6,7 +6,7 @@ Instructions for coding agents (Claude Code, Cursor, Codex, and humans in a hurr
 
 A transport-agnostic OBD-II library in TypeScript (`obd-core`), an Android app built on it (Expo), a hardware-in-the-loop bridge so agents can test against the real dongle, and an evaluated diagnostic engine that turns logged vehicle data into ranked, evidence-cited hypotheses. Test fleet: 2013 Chrysler 200 (ICE), 2019 Hyundai Elantra (ICE), 2024 Chevrolet Equinox EV (Ultium). Dongle: Veepeak OBDCheck BLE.
 
-It is a portfolio and personal-use project first. Correctness and honest verification matter more than feature count.
+It is a portfolio and personal-use project first, including a planned applied-ML showcase: small-model fine-tuning and inference engineering after the diagnostic baseline, before EV delivery. Correctness and honest verification matter more than feature count. See ADR-011; compute and spending are undecided.
 
 ## Read before working
 
@@ -17,6 +17,7 @@ It is a portfolio and personal-use project first. Correctness and honest verific
 | ELM327 / dongle / vehicle quirks | `docs/ELM327.md` |
 | Risks, research findings, decisions on tooling | `docs/FEASIBILITY.md` |
 | Ground truth, fixtures, eval scoring, induced faults | `docs/EVAL.md` |
+| Fine-tuning, datasets, serving experiments, ML verification | `docs/ML.md` |
 | How the architect/implementer/reviewer loop runs | `docs/WORKFLOW.md` |
 | Why things were decided | `docs/DECISIONS.md` |
 | Spec template | `docs/specs/README.md` |
@@ -29,6 +30,7 @@ packages/obd-diagnose/  pure TS: case object, feature extraction, LLM diagnostic
 packages/obd-eval/      Node: eval harness over labeled fixtures, scoring, reports
 apps/mobile/            Expo (Android): BLE transport, drive logger, PPI + case screens
 tools/hil-bridge/       Python (runs on a laptop near the car, not WSL2): bleak + FastAPI, exposes dongle over HTTP
+tools/ml/               planned isolated Python training and serving experiments (not implemented)
 fixtures/recordings/    recorded ELM327 transcripts (never hand-edited)
 fixtures/synthetic/     hand-written fixtures, labeled synthetic
 docs/                   the documents above
@@ -60,6 +62,7 @@ cd tools/hil-bridge && uv run hil-bridge   # on the laptop near the car; URL in 
 8. **No secrets in the repo.** API keys live in the app's secure store (BYOK) or in `.env` files that are gitignored.
 9. **Tests run against fixtures, not the dongle.** CI has no Bluetooth. Tests that need hardware are tagged and skipped in CI, and the spec says how to run them via the HIL bridge.
 10. **Simplicity.** Minimum code for the task. No single-use abstractions. If a senior engineer would call it overbuilt, rewrite it smaller.
+11. **ML evidence.** Track data/model provenance and intended-use licensing; separate synthetic and real results; split by source case/session before augmentation. No test-set tuning or invented benchmark results. Required training/serving runs cannot be waived as vehicle hardware-only checks. Exact compute, spending, dependencies, and model choices belong in the experiment spec before execution.
 
 ## ELM327 quick facts (full detail in `docs/ELM327.md`)
 
@@ -77,5 +80,5 @@ Architect writes a spec, implementer builds to it, reviewer gates it. `/feature 
 ## Style
 
 - TypeScript: strict, ESM, named exports only, `zod` at package boundaries, `vitest`. Small files, small functions. Comments explain why, not what.
-- Python (hil-bridge only): `uv`, `ruff`, type hints, `pytest`.
+- Python (HIL bridge and planned isolated ML workspace): `uv`, `ruff`, type hints, `pytest`. Training/serving dependencies stay out of the bridge and normal fixture-based CI.
 - Commit messages: imperative subject, body says what was verified. No commits unless the user asks.

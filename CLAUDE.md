@@ -73,4 +73,5 @@ Claude Code specifics for this repo:
 - Subagents live in `.claude/agents/`: `architect` (spec, no code), `implementer` (build to spec), `reviewer` (read-only gate). Use `/feature <task-id>` to run the loop for a task in `docs/PLAN.md`.
 - The HIL bridge runs on a laptop near the car, not in this WSL2 shell. If `pnpm hil:smoke` cannot reach it, report NOT RUN; do not simulate.
 - Before writing any OBD constant, open `docs/ELM327.md` and cite the section. See AGENTS.md hard rule 1.
+- For ML1–ML6, read `docs/ML.md` and `docs/EVAL.md`: preserve split isolation and provenance, separate real/synthetic results, and never treat missing training/serving compute as a vehicle hardware-only exception.
 - Codex works in this repo too (`CODEX.md`). The shared handoff is `docs/task-runs/<task-id>.md`; `/feature` reads it before doing anything. Protocol in `docs/WORKFLOW.md`, Handoff section.

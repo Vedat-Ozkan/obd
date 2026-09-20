@@ -85,9 +85,9 @@ src/
     diagnose.ts  diagnose(case, {model, effort}) → Diagnosis
 ```
 
-The LLM turn is one `messages.parse` call with a zod output format, adaptive thinking, and `output_config.effort` as a parameter. Default model `claude-opus-5`; the eval harness sweeps models and effort. Reference material is a stable system block with `cache_control` so repeated calls hit the cache. VIN is redacted before the case leaves the device.
+The hosted baseline is one structured-output call through `LlmClient`, with zod validation and provider-supported effort controls. Exact model identifiers, SDK methods, and pricing are verified in the implementation spec; original roadmap model names are placeholders. Reference material is a stable, cacheable system block. VIN and identifying free text are redacted before the case leaves the device. Provider-specific caching and effort controls stay in adapters rather than becoming mandatory capabilities of every model.
 
-The deterministic layer is the product. If features already say "long-term fuel trim +22% at idle, normal at load", the LLM's job is to rank vacuum leak above MAF and say which hose to check, and to cite the feature it used. Hypotheses without an evidence reference into the case are rejected by the schema.
+The deterministic layer owns measured facts. The LLM ranks hypotheses from those facts and cites the features it used. Runtime validation rejects references that do not resolve into the case; a schema alone cannot establish diagnostic support. The output contract must also represent insufficient information and missing evidence. Semantic support and healthy-case behavior are scored separately in the eval.
 
 ### `packages/obd-eval` (Node)
 
@@ -122,6 +122,14 @@ The app contains no protocol logic. It owns BLE, screens, storage, and the foreg
 
 **Diagnosis (Phase 1):** logger polls a PID schedule into a drive log → user taps anchor → on request, `features(log)` → `Case` → `diagnose(case)` → hypothesis list with evidence pointers back into features and DTCs.
 
+### `tools/ml/` (planned, isolated Python experiments)
+
+After Phase 1, ML1–ML6 add data preparation, supervised LoRA/QLoRA training, and serving benchmarks. This workspace is separate from the HIL bridge and does not introduce Python or GPU dependencies into the TypeScript packages or phone. No experiment tooling exists yet. See [ML.md](ML.md) for data, training, serving, and artifact requirements.
+
+An experimental endpoint is consumed by a concrete `LlmClient` adapter. All arms use the same redacted `Case` and validated `Diagnosis` contract. The eval records model/prompt/dataset revisions and provider/runtime metadata; serving measurements additionally record workload, precision, hardware, and cache state. Exact interfaces are specified in the implementing task, not assumed to exist today.
+
+Training inputs and adapters are derived artifacts with manifests; immutable recordings remain their original source. Training labels and held-out answers never enter inference cases. Large checkpoints and private data are kept outside git. Optional retrieval supplies sourced context and does not replace deterministic decoding. Hosted inference remains the app baseline pending measured quality and operational evidence.
+
 ## What is deliberately not here
 
-No backend. No accounts. No proxy for the API key (BYOK in secure store) until the app is distributed. No plugin system for vehicle profiles; a profile is a TypeScript object. No abstraction over "LLM providers" beyond the two-method `LlmClient` interface the eval needs to swap implementations.
+No production model-serving backend or accounts yet. No proxy for the API key (BYOK in secure store) until distribution. A bounded experimental model endpoint is permitted for ML work; it is not a production deployment. No automatic routing tier or on-device LLM commitment. No plugin system for vehicle profiles; a profile is a TypeScript object. Keep model integration limited to the `LlmClient` seam the eval needs.

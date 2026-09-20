@@ -35,6 +35,12 @@ A task is done when all of these hold:
 4. The reviewer returned APPROVE.
 5. The implementer's report lists what was not run. "Everything passed" without a NOT RUN section is treated as suspicious, not as good news.
 
+## ML task verification
+
+For ML1–ML6, read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
+
+Normal `pnpm check` stays fixture-based. GPU training, serving benchmarks, and paid model evaluations run separately when a spec requires them. The reviewer reruns required checks or marks them NOT RUN; absent compute does not qualify for the vehicle hardware-only exception and leaves the experiment incomplete. A reproducible negative result can pass; an unrun experiment cannot. No model is promoted to the app merely because training completed.
+
 ## What each role must not do
 
 - Architect: write code; leave a constant unsourced; spec more than one implementer-day of work.
