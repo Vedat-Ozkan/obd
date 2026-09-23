@@ -1,6 +1,6 @@
 # Architecture
 
-The design has one load-bearing idea: **everything that talks to a car goes through one `Transport` interface, and everything above it is pure TypeScript that runs identically on the phone, on the desk against the HIL bridge, and in CI against recordings.** If that holds, agents can develop and test protocol code without a phone in hand, and every bug found on hardware becomes a recording and then a regression test.
+The design has one load-bearing idea: **everything that talks to a car goes through one `Transport` interface, and everything above it is pure TypeScript that runs identically on the phone, on the desk through the phone relay, and in CI against recordings.** If that holds, agents can develop and test protocol code without a phone in hand, and every bug found on hardware becomes a recording and then a regression test.
 
 ## Packages
 
@@ -11,7 +11,8 @@ src/
   transport/
     types.ts        Transport interface
     replay.ts       ReplayTransport: plays a recording, asserts the commands match
-    http.ts         HttpTransport: talks to the HIL bridge (fetch is injected, not imported)
+    relay.ts        RelayTransport: one command per round trip to tools/relay (socket injected, not imported)
+    http.ts         HttpTransport: laptop bridge fallback for the spike (fetch injected)
   elm/
     reader.ts       ElmLineReader: byte chunks → complete responses (until '>')
     session.ts      Elm327Session: init, protocol select, single-flight queue, timeouts, retries
@@ -27,14 +28,14 @@ src/
   vehicles/
     profile.ts      VehicleProfile: protocol, headers, extra commands, decoders
     generic.ts      the default 11-bit CAN profile
-    obdb/           importer for OBDb signalset JSON (Phase 2)
+    obdb/           importer for OBDb signalset JSON; every signal tagged community | verified (Phase 2)
   report/
-    ppi.ts          PpiReport type, buildPpiReport(), recentlyCleared()
-    render.ts       markdown renderer
+    codes.ts        CodesReport type, buildCodesReport(), recentlyCleared(); embedded in every battery report
+    render.ts       template renderer
   recording/
     format.ts       recording line schema (zod) and writer/reader
 vehicles/
-  chevrolet-equinox-ev/   vendored OBDb signalset + LICENSE (CC-BY-SA-4.0)   (Phase 2)
+  <make>-<model>/         vendored OBDb signalsets + LICENSE (CC-BY-SA-4.0), Equinox EV first   (Phase 2)
 ```
 
 Core interfaces (T0.3/T0.4 own these; the architect may adjust names but not the shape):
@@ -72,64 +73,87 @@ Recording format (`fixtures/recordings/<car>/<date>-<slug>.jsonl`), one JSON obj
 
 `t` is seconds since recording start. `ReplayTransport` feeds `rx` lines back in order and asserts each `tx` matches what the session sends; a mismatch fails the test, which is the point. Recordings are never edited by hand (AGENTS.md rule 2).
 
-### `packages/obd-diagnose` (pure TypeScript)
+### `packages/obd-battery` (pure TypeScript)
 
 ```
 src/
-  case.ts        Case schema (zod): vehicle, dtcs, freezeFrame, readiness, features, anchors, symptomText
-  features/      pure functions: DriveLog → Features (fuel trim by load bin, warm-up slope, ...)
-  llm/
-    client.ts    LlmClient interface; AnthropicClient implementation (@anthropic-ai/sdk)
-    prompt.ts    system prompt with reference material (stable, cacheable) and the case rendering
-    schema.ts    Diagnosis output schema (zod): hypotheses[] { title, confidence, evidence[], nextTest }
-    diagnose.ts  diagnose(case, {model, effort}) → Diagnosis
+  session.ts     ChargeSession: resampled log of SOC, pack voltage, cell min/max, current/energy when available
+  capacity.ts    deterministic capacity estimate: integrated energy / ΔSOC, or charger kWh / ΔSOC (Gate B fallback), with error band
+  imbalance.ts   cell spread vs SOC, flags
+  twelve-volt.ts 12 V thresholds (sourced)
+  report.ts      BatteryReport and UsedEvReport types; embed the obd-core CodesReport
+  templates.ts   plain-language text from templates: the offline default and the LLM fallback
+  models/        on-device model evaluation (BM4), e.g. a tree ensemble loaded from JSON
 ```
 
-The hosted baseline is one structured-output call through `LlmClient`, with zod validation and provider-supported effort controls. Exact model identifiers, SDK methods, and pricing are verified in the implementation spec; original roadmap model names are placeholders. Reference material is a stable, cacheable system block. VIN and identifying free text are redacted before the case leaves the device. Provider-specific caching and effort controls stay in adapters rather than becoming mandatory capabilities of every model.
+Every number in a report carries its source (logged value, derived value, or model estimate with interval) and the signal tier. Model estimates never replace measured values.
 
-The deterministic layer owns measured facts. The LLM ranks hypotheses from those facts and cites the features it used. Runtime validation rejects references that do not resolve into the case; a schema alone cannot establish diagnostic support. The output contract must also represent insufficient information and missing evidence. Semantic support and healthy-case behavior are scored separately in the eval.
+### `packages/obd-assist` (pure TypeScript; replaces the withdrawn `obd-diagnose`)
+
+```
+src/
+  client.ts      LlmClient interface; AnthropicClient implementation (@anthropic-ai/sdk); proxy client later
+  summary.ts     summarize(report, {model, effort}) → structured summary (zod)
+  assistant.ts   tool-calling loop: list_sessions, get_session, get_capacity_estimate, get_codes
+  check.ts       deterministic faithfulness check: every number in output must match the report or tool results
+  prompts/       versioned prompts; stable reference material as a cacheable system block
+```
+
+Opt-in only (ADR-012). The user's key lives in the app's secure store (BYOK) until a paid release adds the proxy. VIN and identifying free text never leave the device. If `check.ts` rejects an output, the app shows the template text instead. Imported files and beta notes are untrusted input to the assistant. Exact model identifiers, SDK methods, and pricing are verified in the implementing spec.
+
+The package rename from `obd-diagnose` to `obd-assist` and the new `obd-battery` package are small code tasks done with the first Phase 2 spec that needs them, not part of the documentation change.
 
 ### `packages/obd-eval` (Node)
 
-Runs `diagnose()` over every labeled fixture, compares against the label, and writes a markdown report with per-case results, cost from `usage`, latency, model, and effort. Labels live next to recordings as `<name>.label.json` (`docs/EVAL.md`). No mocking of the model in eval; mocked runs are for unit tests only and are named as such.
+Runs the deterministic report and models over labeled fixtures (capacity error and interval coverage, anomaly detection), and the LLM suite (faithfulness, judge scores with agreement against owner labels, assistant question set, prompt-injection cases, cost, latency). Writes a markdown report to `docs/eval-results.md`. A replay mode feeds saved model responses through the checkers so CI runs without paid calls; live runs are `pnpm eval` only. See `docs/EVAL.md`.
 
 ### `apps/mobile` (Expo, Android)
 
 ```
 src/
   ble/BleTransport.ts    react-native-ble-plx → Transport (MTU chunking, notify reassembly)
-  screens/Connect, Ppi, Report, Case, Settings
-  logger/                 foreground service + polling schedule (Phase 1)
-  storage/                recordings, drive logs, secure key store
+  relay/                 relay mode: WebSocket to tools/relay, forwards one command at a time (ADR-013)
+  screens/Connect, Console, VehiclePicker, BatteryReport, UsedEvReport, ChargeLogger, Assistant, Settings
+  logger/                 foreground service for multi-hour charge logging (T2.4)
+  storage/                recordings, charge logs, consent records, secure key store
 ```
 
-The app contains no protocol logic. It owns BLE, screens, storage, and the foreground service. Everything it shows comes from `obd-core` and `obd-diagnose`.
+The app contains no protocol logic. It owns BLE, screens, storage, the foreground service, and relay mode. Everything it shows comes from `obd-core`, `obd-battery`, and `obd-assist`. One codebase; two store listings later via EAS build variants (ADR-012).
 
-### `tools/hil-bridge` (Python, on the laptop near the car)
+### `tools/relay` (Node, in WSL2) and the car MCP server
 
-`bleak` client plus FastAPI:
+The phone connects out to the relay over WebSocket. The relay exposes the car to agents as an MCP server:
+
+- `send_command {cmd}` → `{lines: [...], ms}`
+- `start_recording {path}` / `stop_recording` → writes `fixtures/recordings/*.jsonl` in the standard format
+- `list_signals {vehicle}` → signals from the vehicle profile with their tier
+
+A read-only allowlist is enforced in the relay, not in prompts: Mode 04 requires a confirmation tapped on the phone; UDS writes (`2E`, `31`, `2F`) and anything not on the allowlist are rejected and logged. `RelayTransport` in `obd-core` lets `pnpm hil:smoke` and replay-style tests use the same path. Exact MCP SDK and dependencies are chosen in the T0.6 spec.
+
+### `tools/hil-bridge` (Python, on the laptop; spike and fallback)
+
+`bleak` client plus FastAPI, used for the T0.2 spike and kept as a fallback (ADR-003, ADR-013):
 
 - `GET /status` → `{connected, device, service, write_char, notify_char, mtu}`
 - `POST /cmd {cmd}` → `{lines: [...], ms}` (sends `cmd\r`, collects until `>`)
 - `POST /record/start {path}` / `POST /record/stop` → appends every exchange to a `.jsonl` in the recording format above
-- `POST /raw {bytes}` for the spike only
 
-`HttpTransport` in `obd-core` maps `write` to `/cmd`. This is deliberately a simplification: the bridge does prompt detection so the HTTP round trip is one command, not a byte stream. Byte-level behavior (chunking, partial notifications) is exercised by `BleTransport` on the phone and by recordings, not by the bridge.
+## Data flow
 
-## Data flow for the two products
+**Codes report (Phase 0):** connect → `session.init(profile)` → supported PIDs → Mode 09 VIN → Mode 03/07/0A → Mode 02 per stored DTC → PID 01/41 readiness → PIDs 30/31/4E → `buildCodesReport()` → render → share.
 
-**PPI (Phase 0):** connect → `session.init(profile)` → supported PIDs → Mode 09 VIN → Mode 03/07/0A → Mode 02 per stored DTC → PID 01/41 readiness → PIDs 30/31/4E → `buildPpiReport()` → render → share. Every step's exchange is optionally recorded.
+**Charge session (Phase 2):** logger polls the profile's battery signals into a charge log during a charge → `capacity()` and `imbalance()` → `BatteryReport` → template text → optional `summarize()` → `check()` → display (template on failure).
 
-**Diagnosis (Phase 1):** logger polls a PID schedule into a drive log → user taps anchor → on request, `features(log)` → `Case` → `diagnose(case)` → hypothesis list with evidence pointers back into features and DTCs.
+**Used-EV scan (Phase 2):** one snapshot of battery signals, 12 V, and the codes report → `UsedEvReport`; capacity shown only if a logged charge exists.
+
+**Assistant (Phase 2, opt-in):** question → tool calls over the user's stored sessions → answer with cited values → `check()` → display.
+
+**Agent discovery (T2.3):** agent → MCP tools on the relay → phone → dongle; every exchange recorded; the owner approves signals before they count.
 
 ### `tools/ml/` (planned, isolated Python experiments)
 
-After Phase 1, ML1–ML6 add data preparation, supervised LoRA/QLoRA training, and serving benchmarks. This workspace is separate from the HIL bridge and does not introduce Python or GPU dependencies into the TypeScript packages or phone. No experiment tooling exists yet. See [ML.md](ML.md) for data, training, serving, and artifact requirements.
-
-An experimental endpoint is consumed by a concrete `LlmClient` adapter. All arms use the same redacted `Case` and validated `Diagnosis` contract. The eval records model/prompt/dataset revisions and provider/runtime metadata; serving measurements additionally record workload, precision, hardware, and cache state. Exact interfaces are specified in the implementing task, not assumed to exist today.
-
-Training inputs and adapters are derived artifacts with manifests; immutable recordings remain their original source. Training labels and held-out answers never enter inference cases. Large checkpoints and private data are kept outside git. Optional retrieval supplies sourced context and does not replace deterministic decoding. Hosted inference remains the app baseline pending measured quality and operational evidence.
+Battery modeling for BM1–BM4 (dataset builds, capacity models, conformal calibration, anomaly detection, export to the on-device format) and the BM7 distillation stretch. Separate from the relay, bridge, TypeScript packages, and phone. Datasets and models are derived artifacts with manifests pointing back to recordings; private data and large checkpoints stay out of git. See [ML.md](ML.md).
 
 ## What is deliberately not here
 
-No production model-serving backend or accounts yet. No proxy for the API key (BYOK in secure store) until distribution. A bounded experimental model endpoint is permitted for ML work; it is not a production deployment. No automatic routing tier or on-device LLM commitment. No plugin system for vehicle profiles; a profile is a TypeScript object. Keep model integration limited to the `LlmClient` seam the eval needs.
+No production backend or accounts yet. BYOK for the LLM feature until a paid release adds a thin proxy with a usage cap. No automatic model routing. No plugin system for vehicle profiles; a profile is a TypeScript object plus vendored OBDb JSON. No LLM on the device; on-device models are small non-LLM battery models (BM4).

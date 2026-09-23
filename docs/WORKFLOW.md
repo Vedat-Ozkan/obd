@@ -37,9 +37,9 @@ A task is done when all of these hold:
 
 ## ML task verification
 
-For ML1–ML6, read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
+For BM1–BM7 and the LLM features (T2.10, T2.11), read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, consent, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
 
-Normal `pnpm check` stays fixture-based. GPU training, serving benchmarks, and paid model evaluations run separately when a spec requires them. The reviewer reruns required checks or marks them NOT RUN; absent compute does not qualify for the vehicle hardware-only exception and leaves the experiment incomplete. A reproducible negative result can pass; an unrun experiment cannot. No model is promoted to the app merely because training completed.
+Normal `pnpm check` stays fixture-based, including the LLM regression suite over saved responses. Model training and paid model evaluations run separately when a spec requires them. The reviewer reruns required checks or marks them NOT RUN; absent compute does not qualify for the vehicle hardware-only exception and leaves the experiment incomplete. A reproducible negative result can pass; an unrun experiment cannot. No model is promoted to the app merely because training completed.
 
 ## What each role must not do
 
@@ -49,9 +49,9 @@ Normal `pnpm check` stays fixture-based. GPU training, serving benchmarks, and p
 
 ## Hardware in the loop
 
-CI has no Bluetooth. The HIL bridge on the laptop near the car lets an agent send real commands to the real dongle and save the exchange as a recording. The cycle for anything protocol-related is: spike on hardware → recording → replay test → implementation → reviewer replays the recording. Agents never assert dongle behavior from memory; they assert it from a recording, or they say NOT RUN.
+CI has no Bluetooth. The phone relay (ADR-013; the laptop bridge for the spike) lets an agent send real commands to the real dongle through an MCP server with a read-only allowlist, and save the exchange as a recording. The cycle for anything protocol-related is: spike on hardware → recording → replay test → implementation → reviewer replays the recording. Agents never assert dongle behavior from memory; they assert it from a recording, or they say NOT RUN.
 
-If the bridge is unreachable (laptop not out, car off), the implementer says so and the reviewer marks the item hardware-only. Nobody simulates the dongle to make a check pass.
+If the relay is unreachable (phone not in the car, app not in relay mode, car off), the implementer says so and the reviewer marks the item hardware-only. Nobody simulates the dongle to make a check pass.
 
 ## Handoff between Claude and Codex
 

@@ -1,0 +1,27 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written from docs/ELM327.md (Framing, Init sequence, Responses, Multi-frame, Clone quirks); no car, no dongle; timestamps invented; data lines are opaque and must not be decoded"}
+{"t": 0.010, "dir": "tx", "data": "ATZ\r"}
+{"t": 0.020, "dir": "rx", "data": "ATZ\r"}
+{"t": 0.900, "dir": "rx", "data": "\r\rELM327 v1.5"}
+{"t": 1.012, "dir": "rx", "data": "\r\r>"}
+{"t": 1.100, "dir": "tx", "data": "ATE0\r"}
+{"t": 1.150, "dir": "rx", "data": "ATE0\rOK\r\r>"}
+{"t": 1.200, "dir": "tx", "data": "ATL0\r"}
+{"t": 1.250, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.300, "dir": "tx", "data": "ATSP0\r"}
+{"t": 1.350, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.400, "dir": "tx", "data": "ATRV\r"}
+{"t": 1.450, "dir": "rx", "data": "12.6V\r\r>"}
+{"t": 1.500, "dir": "tx", "data": "0100\r"}
+{"t": 1.550, "dir": "rx", "data": "SEARCHING...\r"}
+{"t": 4.000, "dir": "rx", "data": "UNABLE TO CONNECT\r\r>"}
+{"t": 4.100, "dir": "tx", "data": "0902\r"}
+{"t": 4.150, "dir": "rx", "data": "SEARCH"}
+{"t": 4.200, "dir": "rx", "data": "ING...\r7E8 10 14 49 02 01 31 43 34"}
+{"t": 4.250, "dir": "rx", "data": "\r\r>"}
+{"t": 4.300, "dir": "tx", "data": "0120\r"}
+{"t": 4.350, "dir": "rx", "data": "NO DATA\r\r>"}
+{"t": 4.400, "dir": "tx", "data": "0140\r"}
+{"t": 24.400, "dir": "meta", "note": "timeout waiting for '>' after 0140"}
+{"t": 24.450, "dir": "rx", "data": "NO DATA\r\r>"}
+{"t": 24.500, "dir": "tx", "data": "ATAT1\r"}
+{"t": 24.550, "dir": "rx", "data": "?\r\r>"}

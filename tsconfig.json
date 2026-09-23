@@ -1,14 +1,12 @@
 {
   "compilerOptions": {
-    // tsc needs at least one input while the packages are empty (include-only fails TS18003, "files": [] fails TS18002), so eslint.config.js is included via allowJs.
-    // Remove allowJs, checkJs, and the eslint.config.js include once the first package .ts source lands.
-    "allowJs": true,
-    "checkJs": false,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
     "strict": true,
-    "target": "ES2022"
+    "target": "ES2022",
+    // TypeScript 6 no longer auto-includes @types/*; test files under packages/*/test read fixtures with node:fs.
+    "types": ["node"]
   },
-  "include": ["eslint.config.js", "packages/**/*.ts", "apps/**/*.ts"]
+  "include": ["packages/**/*.ts", "apps/**/*.ts"]
 }

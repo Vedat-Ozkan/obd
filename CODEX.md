@@ -48,7 +48,7 @@ Approval requires the reviewer's own successful `pnpm check` and the existing ve
 
 The README, `AGENTS.md`, `CLAUDE.md`, `.claude/`, and planning documents are authoritative reference material. Routine feature tasks add specs and reports without rewriting unrelated setup. User-authorized roadmap revisions update the affected documents and append an ADR while preserving historical specs and verification evidence.
 
-ML1–ML6 follow the diagnostic baseline and precede EV delivery. Read `docs/ML.md` and `docs/EVAL.md` for those tasks. Record data/model provenance, grouped splits, reviewed targets, matched baselines, compute/spending choices, and reproducible experiment artifacts. Normal CI remains fixture-based; missing training or serving compute is NOT RUN and cannot use the vehicle hardware-only exception.
+BM1–BM7 (battery ML and LLM evals) follow the Phase 2 battery work (ADR-012). Read `docs/ML.md` and `docs/EVAL.md` for those tasks and for the LLM features (T2.10, T2.11). Record data/model provenance, consent, splits grouped by vehicle and session, baselines, compute/spending choices, and reproducible experiment artifacts. Normal CI remains fixture-based; a missing training or eval run is NOT RUN and cannot use the vehicle hardware-only exception.
 
 ## Prerequisites and limits
 

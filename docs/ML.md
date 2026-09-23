@@ -1,72 +1,75 @@
-# Applied ML: fine-tuning and inference engineering
+# Applied ML: battery health
 
-Planned learning track, adopted 2026-09-20. No training, dataset audit, or serving benchmark has been completed. Tasks ML1–ML6 follow the Phase 1 diagnostic baseline and precede Phase 2 EV delivery; see [PLAN.md](PLAN.md). Compute and spending remain undecided.
+Planned track, adopted 2026-09-22 (ADR-012); it replaces the withdrawn LLM fine-tuning track (ML1–ML6, ADR-011). No dataset, model, or measurement exists yet. BM1–BM7 follow the Phase 2 charging logger and beta data export; see [PLAN.md](PLAN.md).
 
 ## Question and boundaries
 
-Can a small, specialized model produce useful, evidence-grounded diagnostic hypotheses at lower cost and latency than a larger general-purpose model? A reproducible negative result is a successful experiment. Improving a synthetic benchmark is not evidence of real-world diagnostic accuracy.
+Can models built from OBD battery data give a more useful battery report than the deterministic baseline — a capacity estimate from partial charges with an honest interval, earlier warning of cell imbalance — while running on the phone? And can an in-app LLM explain the report and answer questions about the owner's data without ever stating a number the data does not contain? A reproducible negative result is a successful experiment.
 
-The model receives a structured case assembled from deterministic features, DTCs, symptoms, and available context. It ranks hypotheses, cites case evidence, identifies missing information, and proposes a next diagnostic step. Include healthy and ambiguous cases where no supported diagnosis is available. Protocol handling, decoding, units, and feature calculations remain tested TypeScript.
+Decoding, units, and the deterministic capacity estimate (T2.4) stay in tested TypeScript and remain the baseline every model is compared with. Models add estimates; they never replace a measured value in the report, and every model output in the report is labeled as an estimate with its interval.
 
-Fine-tuning changes learned parameters. Retrieval supplies reference material at inference time. Inference engineering changes how a model runs and serves requests. Retrieval is optional; automatic routing, on-device inference, and production GPU infrastructure are outside this track.
+The "reference estimate" of capacity comes from a logged full (or near-full) charge: integrated pack energy over ΔSOC, or charger-reported kWh over ΔSOC if no current/energy signal exists (Gate B in PLAN.md). It is not ground truth: the car's SOC is itself a BMS estimate, and charger kWh includes charging losses. Report which reference method each number uses.
 
 ## Experiment sequence
 
 | Task | Deliverable | Required evidence |
 |---|---|---|
-| ML1 | Hosted reference and untuned small-model baselines | Same case/output contract, versioned prompts, per-case quality and runtime results |
-| ML2 | Audited training pilot | Provenance/license manifest, reviewed targets, frozen grouped splits, duplicate audit |
-| ML3 | Supervised LoRA fine-tuning; QLoRA if memory warrants it | Model/tokenizer revisions, dependencies, seed, settings, losses, validation results, adapter artifact identity |
-| ML4 | Tuned versus untuned versus hosted comparison | Untouched test results, failure analysis, real/synthetic separation, all attempted configurations |
-| ML5 | Bounded serving experiments | Quality checks plus cold/warm latency, throughput, memory, and cost at documented loads |
-| ML6 | Reproducible portfolio report | Commands, dataset/model documentation, result tables, limitations, deployment recommendation |
+| BM1 | Dataset pipeline | Resampling of irregular BLE polling onto a time grid, dataset versions with manifests, provenance and consent per session, splits grouped by vehicle and session |
+| BM2 | Partial-charge capacity estimation with calibrated intervals | Error against the reference estimate per vehicle, conformal interval coverage measured on held-out sessions, comparison with the T2.4 baseline |
+| BM3 | Cell-imbalance anomaly detection | Detection on faults injected into real logs (labeled synthetic), false positives on healthy sessions, reported separately |
+| BM4 | On-device deployment and drift monitoring | Phone output matches offline output on identical inputs, on-phone latency and battery cost, a drift check that fires on shifted inputs |
+| BM5 | LLM eval infrastructure for the in-app summary and assistant (T2.10, T2.11) | Faithfulness scoring, judge calibrated against owner labels, assistant question set, prompt-injection cases, prompt versions, CI replay regression suite, cost and latency per model |
+| BM6 | Three write-ups | #1 own-car capacity case study (n=1), #2 fleet results and the LLM eval, #3 agentic engineering (agent workflow, Claude/Codex handoff, agent-driven discovery through MCP); reproduction commands, dataset documentation, failures, limitations, NOT RUN items |
+| BM7 (stretch) | Distillation of the summary model | LoRA fine-tune of a small open model on reviewed hosted summaries; held-out comparison with the hosted model on the BM5 suite; model, compute, and spending cap in the spec |
 
-ML1 requires the Phase 1 case and evaluation pipeline. Freeze the test partition before adapting prompts or generating training variants. ML3 follows ML2 approval; ML4 uses validation-selected checkpoints; ML5 follows a quality-characterized candidate. Each milestone is split into bounded implementation specs if necessary. No model must beat the baseline to finish the track.
+BM2 and BM3 can start on own-car data as case studies; fleet claims wait for beta data (T2.9). Each milestone is split into bounded specs before implementation.
 
 ## Data and labels
 
-Start with hundreds of reviewed examples as a pilot target, not a claim of sufficient training data. Measure coverage and learning curves before expanding. Include missing sensors, contradictory evidence, healthy cases, and insufficient-information cases. Remove identifiers and inspect free-text symptoms for personal information before export.
+Sources are project recordings only: own car, beta testers, inspection customers with consent, borrowed cars. Every session records vehicle (make, model, year; VIN redacted), dongle, app version, consent, and whether it is real or synthetic. Recordings stay immutable; derived datasets are versioned artifacts with manifests pointing back to recording paths and hashes.
 
-Record source, version/hash, acquisition method, license and intended-use restrictions, synthetic status, review status, and parent case/session for each example. Record teacher model and prompt for generated targets; check provider terms before generating training data. Teacher responses are candidate labels, not verified faults. Keep derived datasets and model artifacts outside immutable recordings, and never commit private data, secrets, or large checkpoints.
+Split by vehicle first and by session second, before any windowing or augmentation. All windows from one charge session stay in one split. Report per-vehicle results; never let a vehicle in the test split contribute to training, calibration, or model selection. With few vehicles, say so and report leave-one-vehicle-out results instead of a single headline.
 
-Group all windows and paraphrases from one source case/session into a single split. Deduplicate across imported sources. Where coverage permits, evaluate held-out vehicles and fault families separately; report when this is infeasible. Do not use test cases to generate training data, select prompts, tune hyperparameters, or choose checkpoints. Label a repeatedly consulted test set as development data and obtain a new holdout before further generalization claims.
+Synthetic data (injected imbalance faults, simulated charge curves) is labeled `synthetic: true`, reported in separate tables, and never counted toward real-data results.
 
-### Candidate sources, researched 2026-09-20
+## Methods (candidates, chosen in specs)
 
-These are leads, not approved imports. Inspect actual files, provenance, license terms, and task fit before selection. Public accessibility alone does not establish training or redistribution permission.
+- **Features.** Charge-curve shape by SOC window, incremental capacity (dQ/dV) where current and voltage resolution allow it, cell spread versus SOC, temperature effects if temperatures are available.
+- **Capacity models.** Gradient-boosted trees and Gaussian processes as the main candidates; a small 1D CNN or GRU as a comparison only if data volume supports it.
+- **Uncertainty.** Split conformal prediction on held-out calibration sessions; report empirical coverage of the nominal interval (e.g. 90%) per vehicle, with n.
+- **Anomaly detection.** Residual models against the vehicle's own history and isolation forest as candidates; faults are injected into real healthy logs with a documented recipe.
+- **On-device.** A tree model exported to JSON and evaluated in pure TypeScript needs no new dependency; ONNX Runtime or TFLite in Expo is a new native module and must be justified in the BM4 spec (AGENTS.md rule 7).
+- **Drift.** Input-distribution checks per vehicle, especially after over-the-air updates that may change signals or BMS behavior; a drifted model is flagged as stale in the report rather than silently used.
+- **Simulation (stretch).** Pretraining on [PyBaMM](https://github.com/pybamm-team/PyBaMM) simulations (BSD-3-Clause) and adapting to real logs. Ultium cell parameters are not public, so simulated data is a generic-chemistry prior, not a model of this pack.
 
-| Source | Possible use | Limitation |
+### Public battery datasets, researched 2026-09-22
+
+Leads for method practice and pretraining, not approved imports. They are lab cell-cycling data, not vehicle OBD data. Check the actual license text before any use, and assume nothing about commercial use until checked.
+
+| Source | Possible use | Limitation / license note |
 |---|---|---|
-| Project recordings and labels | Real-input evaluation and reviewed cases | Nine planned fault cases plus baselines cannot establish broad generalization; reserve independent holdouts |
-| [Pocket Mechanic distilled](https://huggingface.co/datasets/MindFreakGamer/pocket-mechanic-distilled) | Related instruction-tuning format | Tagged synthetic/distillation; card lists CC-BY-NC-4.0; not real-world ground truth or assumed suitable for a paid app |
-| [Vehicle Diagnostics LLM Training Sample](https://huggingface.co/datasets/CJJones/Vehicle_Diagnostics_LLM_Training_Sample) | Synthetic report-generation examples | Broad configuration-to-report task differs from diagnosis of supplied measurements; card lists CC-BY-NC-4.0 |
-| [UCI APS Failure at Scania Trucks](https://archive.ics.uci.edu/dataset/421/aps%2Bfailure%2Bat%2Bscania%2Btrucks) | Optional separate tabular classification exercise | Truck air-pressure-system classification, not passenger-car diagnostic instructions |
-| [NHTSA complaints](https://www.nhtsa.gov/nhtsa-datasets-and-apis) | Optional symptom extraction/retrieval research | Owner complaints are not verified root-cause labels |
+| [CALCE battery data](https://calce.umd.edu/battery-data) | Method practice on cell aging curves | Reported as attribution license; publications must cite the CALCE papers |
+| [Severson et al. cycle-life data](https://data.matr.io/1/) | Early-life capacity prediction practice | LFP 18650 cells, not Ultium NMC(A); data license to check; modeling code needs an academic license |
+| [NASA battery datasets](https://data.nasa.gov/dataset/randomized-and-recommissioned-battery-dataset) | Method practice | License listed as "other"; check before use |
+| [Open-source battery data list](https://github.com/lappemic/open-source-battery-data) | Index for further sources | An index, not a dataset |
 
-The UCI and NHTSA exercises are optional research directions, not additional committed milestones. Sourced signal definitions such as OBDb describe decoding; they are not labeled diagnostic outcomes.
+## BM5: evaluating the in-app LLM
 
-## Training and serving
+The summary (T2.10) and assistant (T2.11) ship as an opt-in feature (ADR-012); the template report is always the fallback. BM5 is the evidence that they are safe to show.
 
-Use a small open-weight instruction model and supervised LoRA training as the first experiment. LoRA trains adapter parameters with the base weights frozen; QLoRA adds a quantized base to reduce training memory. Candidate tooling is Hugging Face Transformers, PEFT, and TRL. These are proposals, not installed or approved dependencies; the implementation spec lists exact versions and reasons.
+- **Faithfulness.** A deterministic checker extracts every number and unit from the output and matches it against the report or the tool results the model received. A mismatch is a hard fail, and in the app it triggers the template fallback. Unsupported claims and omitted flagged items (for example, high cell spread) are counted.
+- **LLM-as-judge.** Semantic questions (is the explanation correct, is uncertainty stated) are graded by a judge model. The judge is calibrated against the owner's own labels on a sample; report agreement with n, and do not trust the judge beyond what that agreement supports.
+- **Assistant question set.** Scripted questions over replayed data, including questions the data cannot answer; the correct behavior there is to say so.
+- **Prompt injection.** Imported files and beta-tester notes are untrusted. Test cases place instructions in those fields and check that tool use and answers do not change.
+- **Regression in CI.** Prompts are versioned. CI replays saved model responses through the checkers, so a prompt or parser change that breaks faithfulness fails `pnpm check` without paid API calls. Live model runs happen in `pnpm eval` only.
+- **Cost and latency.** Tokens, cached tokens, cost, and latency per report and per question, per model, with dated rates; these numbers set the usage cap at store time (ADR-009).
 
-Select the exact model, license, context length, training settings, compute target, and spending cap in the experiment spec before execution. Record dataset/model revisions, chat template, truncation policy, assistant-target loss masking, batch settings, learning rate, adapter configuration, seed, and checkpoint selection. Inspect examples after tokenization to ensure targets and critical evidence survive. Use validation quality alongside loss to detect overfitting; report training/validation behavior and dataset size.
+Model IDs and prices are verified and dated in the spec. BYOK keys in `.env` only.
 
-Use an isolated Python workspace planned at `tools/ml/`; do not add training dependencies to the bridge or mobile app. An experimental serving endpoint connects through the existing `LlmClient` boundary. Hosted inference stays the app baseline until quality and operational evidence supports a change. Bind a local experiment service to loopback; any remote deployment needs explicit access and credential handling in its spec, not an unauthenticated public endpoint.
+## BM7 (stretch): distillation
 
-Compare higher-precision and quantized inference independently from training quantization. Benchmark shared-prefix caching off/on with identical requests, cold and warm states, and documented cache resets. Vary concurrency and case/output lengths in separate experiments. Prefix caching saves shared prompt-processing work; it does not eliminate output generation. Quantization may reduce memory without improving speed on a particular workload. Concurrency tests are serving experiments, not claims of real app traffic.
-
-Record hardware, runtime versions, context/output limits, decoding settings, precision, adapter loading/merging, warm-up, request count, concurrency, cache state, and errors. Report time to first token separately from time to a complete validated diagnosis, total p50/p95 latency, throughput, peak GPU memory, and quality. If an interface does not expose first-token timing, report it as unavailable rather than approximating it from total latency. Include API usage or rental duration, dated rates, training expense, and idle/startup costs; distinguish marginal request cost from total experimental cost.
+Fine-tune a small open-weight model with LoRA on summaries the hosted model produced and the owner reviewed in BM5, then compare with the hosted model on the BM5 suite (faithfulness, judge scores, cost, latency). Split by source report before generating any training variants; never train on BM5 test items. Check the hosted provider's terms on using outputs for training before generating data. Select model, license, compute, and a spending cap in the spec; record revisions, settings, seeds, and losses. A small model that fails the faithfulness check more often than the hosted one is a valid, reportable result.
 
 ## Completion and portfolio evidence
 
-Use [EVAL.md](EVAL.md) for scoring. Report real, synthetic, and external benchmarks separately, with denominators and every real case visible. Record unsupported conclusions as well as invalid references. Self-reported confidence is not a calibrated probability; measure calibration only when sample size supports it and otherwise state that limitation.
-
-Publish reproducible commands/configurations, permitted data manifests, model and dataset cards, measured tradeoffs, representative failures, and what was NOT RUN. No invented benchmark numbers or claims of mechanical expertise. Required training and serving runs cannot be waived as hardware-only vehicle checks; missing compute leaves the affected milestone incomplete. Normal CI remains fixture-based and does not require GPUs or paid APIs.
-
-## Primary technical references
-
-- [PEFT quantization and QLoRA](https://huggingface.co/docs/peft/developer_guides/quantization)
-- [TRL supervised fine-tuning trainer](https://huggingface.co/docs/trl/sft_trainer)
-- [vLLM automatic prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
-
-Recheck model/runtime compatibility and provider pricing when writing an implementation spec. These links describe techniques; they are not evidence that this project has run them.
+Use [EVAL.md](EVAL.md) for scoring. Report real and synthetic results separately, with denominators and per-vehicle rows. No test-set tuning. Publish reproducible commands, dataset manifests (without private data), measured tradeoffs, representative failures, and what was NOT RUN. Model training and evaluation runs are separate from normal CI; a missing required run leaves the milestone incomplete and cannot use the vehicle hardware-only exception. Training runs on CPU; if a spec ever needs a GPU or paid compute, it states the cost before execution.

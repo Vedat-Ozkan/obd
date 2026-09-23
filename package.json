@@ -15,6 +15,7 @@
     "test": "pnpm --filter './packages/*' -r test"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
     "eslint": "^10.10.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",

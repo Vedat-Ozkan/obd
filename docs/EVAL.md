@@ -1,77 +1,60 @@
 # Evaluation and ground truth
 
-The claim this project wants to make is not "it diagnoses cars" but "on these labeled cases, it ranked the true fault first N times out of M, at this cost, and here is every case." That requires real labeled data, which means inducing real faults.
+The claim this project wants to make is not "it knows your battery's health" but "on these vehicles and sessions, the estimate was within X of the reference, the interval covered the reference N times out of M, and here is every session." That requires real logged charges, not synthetic curves.
 
 ## Fixtures
 
 ```
 fixtures/
   recordings/<car>/<date>-<slug>.jsonl          immutable transcript (see ARCHITECTURE.md format)
-  recordings/<car>/<date>-<slug>.label.json     label, when the recording is a labeled case
-  recordings/<car>/<date>-<slug>.log.jsonl      drive log (Phase 1), same naming
-  synthetic/<slug>.jsonl + .label.json          hand-written; always labeled synthetic: true
+  recordings/<car>/<date>-<slug>.label.json     label, when the recording is a labeled session
+  recordings/<car>/<date>-<slug>.log.jsonl      charge-session log (Phase 2), same naming
+  synthetic/<slug>.jsonl + .label.json          hand-written or injected; always labeled synthetic: true
   README.md                                     format + label schema
 ```
 
-Label schema (zod in `obd-eval`):
+`<car>` for a vehicle the owner does not own (beta tester, inspection customer, borrowed car) is make-model-year plus a short anonymous id; the meta line records consent and provenance, never the VIN.
+
+Label schema (zod in `obd-eval`), one per labeled session:
 
 ```json
 {
-  "car": "chrysler-200-2013",
+  "car": "chevrolet-equinox-ev-2024",
+  "session": "charge" | "snapshot",
   "condition": "healthy" | "fault",
-  "fault": { "id": "vacuum-leak", "detail": "brake booster hose disconnected", "induced_at_s": 412 },
-  "expected_dtcs": ["P0171"],
-  "acceptable_hypotheses": ["vacuum leak", "unmetered air"],
-  "notes": "ambient 6 °C, cold start, 22 min drive",
+  "reference": { "method": "integrated-energy" | "charger-kwh", "capacity_kwh": 0, "soc_start": 0, "soc_end": 0 },
+  "fault": { "id": "cell-imbalance", "detail": "injected +40 mV on one cell group", "injected_at_s": 1200 },
+  "notes": "ambient 6 °C, Level 2 charger",
   "synthetic": false
 }
 ```
 
-`acceptable_hypotheses` is a short list of phrasings the grader accepts as a match for top-k; the grader normalizes and matches on these, and the report shows the raw hypothesis text so a human can check the grader.
+`reference` is present for charge sessions with enough ΔSOC to compute one; `fault` only for injected (synthetic) faults. The numbers above are placeholders for the shape, not data.
 
 ## Scoring
 
-Per case: top-1 hit, top-3 hit, whether the top hypothesis's evidence references exist in the case (an evidence pointer to a feature that is not there is a hard fail), tokens in/out/cached, cost, latency, model, effort. Per run: the per-case table, plus aggregates with n shown next to every percentage. No single headline number without its n.
+**Deterministic report (T2.4–T2.7).** Replay tests assert every report field against the recording. A report number that does not trace to a logged value fails.
 
-Healthy baselines are scored too: a run that hallucinates a fault on a healthy log is a false positive and counts.
+**Capacity estimates (T2.4 baseline, BM2 models).** Per session: estimate, reference, absolute and relative error, interval and whether it covers the reference, reference method. Per run: the per-session table plus per-vehicle aggregates with n next to every number, and empirical coverage of the nominal interval. Split by vehicle and session before any windowing (see [ML.md](ML.md)); calibration sessions never appear in the test split. When there are few vehicles, report leave-one-vehicle-out results.
 
-Compare arms by changing one factor at a time: model, supported effort setting, prompt version, fine-tuning, or serving configuration. Exact model IDs and provider capabilities are verified in the task spec. Results go to `docs/eval-results.md` with git SHA, date, model revision, prompt version, and dataset/split identity. A synthetic case never counts toward the real-case headline table; it appears in a separate table.
+**Imbalance anomaly detection (BM3).** Detection rate and time to detection on injected faults; false positives on healthy real sessions. Injected-fault results are synthetic and always in a separate table from healthy real sessions.
 
-## ML training and evaluation contract
+**12 V (T2.5).** Deterministic thresholds with sources; tested on recordings, not scored as a model.
 
-ML1–ML6 follow the Phase 1 baseline; see [ML.md](ML.md). Compare the tuned model with the same untuned model using matched inputs and decoding settings, plus a larger hosted reference. Record all attempted configurations; select prompts/checkpoints on validation data and evaluate the frozen selection on held-out test data.
+**In-app LLM (T2.10, T2.11; BM5).** Per generated summary or answer: every number checked against the report or tool results (mismatch is a hard fail and the app falls back to the template), unsupported claims counted, omissions of flagged items counted, citations resolve, correct refusal when data is missing, tokens, cost, latency, model, prompt version. Semantic grading by an LLM judge is reported with its agreement against the owner's labels and n. Prompt-injection cases are pass/fail. A CI suite replays saved responses through the checkers; live model runs are `pnpm eval` only. See [ML.md](ML.md).
 
-Split by independent source case/session before producing windows, paraphrases, or teacher-generated variants. Audit duplicates across datasets and keep each parent and its derivatives together. Keep labels out of model inputs. Hold out vehicles/fault families when coverage permits and state when it does not. Real, synthetic, and external-domain results have separate denominators and tables. Nine fault sessions do not become thousands of independent test cases by slicing them into windows.
+**Agent-driven discovery (T2.3).** Proposal precision: candidates the agent proposed that the owner verified, over all it proposed; plus candidates the owner found that the agent missed, session cost, and time. Blocked commands logged by the MCP allowlist are listed.
 
-Score top-1/top-3 ranking, healthy-case false positives, schema validity, reference resolution, unsupported conclusions, missing-evidence handling, and appropriate abstention. Review whether cited evidence actually supports each claim: a valid pointer alone is insufficient. Record the rubric and human adjudication for semantic judgments, including any model-assisted grading. Self-reported confidence is not calibrated probability; report calibration as unestablished unless there is enough independent evidence to assess it.
+Results go to `docs/eval-results.md` with git SHA, date, model or code revision, dataset version, and split identity. A synthetic case never counts toward a real-data table.
 
-Required scenarios include healthy baselines, known faults, ambiguous evidence, missing sensors, conflicting observations, and out-of-coverage cases. Synthetic scenarios test behavior but cannot substitute for required real recordings. Report denominators and per-case failures; quantify uncertainty only with methods appropriate to independent cases, not correlated windows.
+## Signal verification
 
-## Serving experiments
+A signal is `verified` for a vehicle only when a recording from that vehicle shows it and a plausibility check passes (for example, current sign flips between charge and drive; temperature tracks ambient at rest; SOC agrees with the dash). The recording path goes in the vehicle profile. Everything else is `community` and labeled so in the app.
 
-For ML5, independently vary prefix caching, inference precision, concurrency, and input/output size. Repeat quality evaluation after configuration changes. Record cold/warm state, hardware/runtime, exact model/adapter, workload and request count, output limits, errors, time to first token where exposed, time to complete validated output, p50/p95 latency, throughput, peak GPU memory, and cost. Do not infer first-token timing from a non-streaming response.
+## Faults and safety
 
-Include dated rates, training/rental expense, idle/startup cost, and marginal request cost separately. Load tests are laboratory workloads, not evidence of production demand. Publish reproducible commands/configurations and raw permitted measurements with the report; a regression or lack of improvement is a result, not a failed learning milestone.
-
-Normal CI uses fixtures and does not require GPUs or paid API calls. Mocked unit tests are not model evaluation. Required training/serving runs marked NOT RUN leave the relevant milestone incomplete; they cannot use the vehicle hardware-only exception. Every report lists PASS, FAIL, and NOT RUN with reasons.
-
-## Induced-fault protocol
-
-Performed by the owner on the owner's cars. Each session: baseline read → induce → drive (or idle) → capture → restore → clear codes (Mode 04, confirmed) → drive to confirm baseline → next fault another day. One fault per session so labels are unambiguous. Record ambient temperature and whether the engine was cold.
-
-| # | Fault | How | Car(s) | Expected signature | Stop condition / safety |
-|---|---|---|---|---|---|
-| 1 | Vacuum leak | Disconnect a small vacuum hose (PCV or brake-booster-adjacent line); leave others intact | Both | STFT/LTFT strongly positive at idle, normalizing under load; P0171 possible; rough idle | Do not disconnect the brake booster line itself while driving. Idle plus a short low-speed loop only. |
-| 2 | MAF unplugged | Unplug the MAF connector, engine off, then start | Both | P0101/P0102; ECU falls back to speed-density; fuel trims odd; MAF reading zero or fixed | Short drive; some cars go into limp. Restore before any highway. |
-| 3 | Single-cylinder misfire | Unplug one coil connector at idle | Chrysler only | P030x, misfire counts (Mode 06) if supported; RPM roughness; STFT swings | **Seconds, not minutes.** Unburned fuel reaches the catalytic converter. Idle only, then reconnect and clear. |
-| 4 | Coolant temp sensor unplugged | Unplug ECT sensor, engine off, then start | Both | P0117/P0118; default coolant value (often −40 or 90 °C); rich cold-start behavior; fan may run | Short idle session only; the ECU may run the fan constantly. |
-| 5 | Upstream O2 sensor unplugged | Unplug bank 1 sensor 1 | Chrysler only | P0131/P0134 family; open loop; LTFT frozen | Short session; stays in open loop, so fuel economy is poor but safe. |
-| 6 | EVAP leak | Loosen or remove the gas cap; drive normally for several days | Chrysler only | P0455/P0456; slow; needs EVAP monitor to complete | No safety issue; calendar cost. Start early in Phase 1. |
-
-Not done: anything requiring removal of fuel, ignition, or emissions hardware beyond a connector; anything on the EV; anything while a passenger is in the car; anything that would leave the car undrivable overnight.
-
-Each fault gets, at minimum: the PPI-style read before and after, a drive log with the anchor pressed when the symptom is felt, and a label file. The Elantra does faults 1, 2, and 4 only.
+No faults are induced on any vehicle. The EV's high-voltage system is never touched; battery faults exist in this project only as synthetic injections into real logs. The only write the software sends is Mode 04 (clear codes) after an explicit confirmation, used when recording the "recently cleared" fixture on the Chrysler (T0.7).
 
 ## What the eval cannot claim
 
-Nine fault cases on two cars, plus baselines, is a small set. The report shows every case. It can show that the engine is confidently wrong on a type of fault; it cannot support an accuracy percentage as a product claim. If this ever ships to other people, the honest label is "tested on N cases from two cars, listed here."
+One owned EV, a handful of beta vehicles, and a few charge sessions each is a small set. The reference capacity is itself an estimate. The report shows every session and vehicle. It can show that an estimate is biased or that an interval is too narrow; it cannot support a certified state-of-health claim. If this ships to other people, the honest label is "observed data; estimate compared against N logged charges on M vehicles, listed here."

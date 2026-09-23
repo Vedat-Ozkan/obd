@@ -77,3 +77,34 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 **Data and verification.** Review provenance, licenses, and intended use before imports or teacher-data generation. Separate real and synthetic results and split by source case/session before augmentation. Keep labels out of model inputs and test data out of adaptation. Required training and serving runs need actual evidence; missing compute cannot be waived as vehicle hardware-only verification. Ordinary CI stays fixture-based and free of GPU/paid-API requirements.
 
 **Unchanged boundaries.** Vehicle safety, immutable recordings, sourced protocol constants, core purity, and the eventual paid-app intent remain in force. Retrieval is optional. Training completion or good formatting alone does not establish diagnostic accuracy.
+
+## ADR-012: Battery health is the product; the gas-car diagnosis engine and LLM fine-tuning are withdrawn (2026-09-22)
+
+**Decision.** The product is a battery-health app for hybrids, PHEVs, and EVs, with a deeper experience for GM Ultium vehicles (Equinox EV first). Delivery order is Phase 0 → Phase 2 (battery health) → BM1–BM6 (battery ML) → Phase 3. Specifically:
+
+- **One app now, two listings later.** A single `apps/mobile` treats Ultium as a vehicle profile with extra screens. At store time, one codebase ships two listings (a general battery app and an Ultium app) through EAS build variants. No duplicate maintenance before there are users.
+- **A basic, opt-in LLM in the app.** Every report renders from templates in code first: free, offline, deterministic, and always available. On top, an opt-in LLM writes a plain-language summary of the report and answers questions about the user's own data ("is my battery degrading?") by calling tools over their logs and citing the values it used. Every number in LLM output is checked against the data before display (BM5); a failed check falls back to the template. During development and beta the user supplies their own API key (BYOK, ADR-007); a paid release needs the thin proxy with a usage cap built into the price (ADR-007 amendment) before the LLM feature ships to buyers.
+- **Two signal tiers.** Signals imported from OBDb signalsets are shown as "community, unverified". A vehicle is promoted to "verified" only when a recording from that vehicle is in the repo (own car, beta testers, inspection customers with consent, borrowed cars). Hard rule 1 still applies to every signal.
+- **The Chrysler 200 and Elantra stay as core test cars.** They exercise the session, standard decoding, and the codes / "recently cleared" section that every battery report includes. The drive logger, feature extraction, diagnostic turn, and induced-fault protocol (T1.1–T1.8) are withdrawn.
+- **ML1–ML6 are withdrawn and replaced by BM1–BM7**: dataset pipeline, partial-charge capacity estimation with calibrated intervals, imbalance anomaly detection, on-device deployment with drift monitoring, the LLM faithfulness and assistant eval, write-ups, and (stretch) distilling the hosted summary model into a small fine-tuned one. See [ML.md](ML.md).
+- The report is written so it can be shown to a used-EV buyer and used in a paid inspection: "observed data", never "certified battery health".
+
+**Why.** A market review (FEASIBILITY.md, Market check) found the AI gas-car diagnosis space crowded, while no consumer tool exists for Ultium battery health. The general hybrid/PHEV/EV app has more reach but faces incumbents; the Ultium experience is the differentiated one. Battery-focused ML (time series, uncertainty, anomaly detection, edge deployment) is applied ML that ships inside the product, instead of a fine-tuning track attached to a feature that was not going to be sold.
+
+**Supersedes ADR-011.** Fine-tuning and serving experiments are withdrawn; the delivery order changes.
+**Amends ADR-004.** EV work follows Phase 0 directly, still gated by T0.2 (Gate A) and now also by Ultium signal discovery in T2.3 (Gate B: a pack current or energy signal).
+**Amends ADR-006 and ADR-007.** The LLM turn is now the report summary and the battery assistant instead of the gas-car diagnosis; model and effort remain eval parameters. BYOK for development and beta; the proxy remains a prerequisite for selling the LLM feature.
+**Amends ADR-009.** The template report has zero marginal cost and can be sold one-time; the LLM feature has a per-use cost, so it needs a usage cap or small plan, decided at store time from measured cost per report and per question. Store work stays in Phase 3 and covers two listings.
+**Restores ADR-002 for training by default.** Battery models are small and train on CPU. The BM7 stretch (distillation) states any GPU or rental cost in its spec before execution.
+
+**Unchanged.** Read-only toward the vehicle, immutable recordings, sourced constants, core purity, BYOK for any development LLM use, the OBDb license handling in ADR-010.
+
+## ADR-013: The phone is the hardware bridge; agents reach the car through an MCP server (2026-09-22)
+
+**Decision.** After T0.8, the app gets a debug console (send a command, see the reply, record in the standard `.jsonl` format) and a relay mode: the app opens a WebSocket to a small relay in WSL2, and the relay exposes the dongle to agents as an MCP server. Tools include `send_command`, `start_recording` / `stop_recording`, and `list_signals`. The MCP server enforces a read-only allowlist in code: Mode 04 needs an explicit confirmation on the phone, and UDS writes (`2E`, `31`, `2F`) and anything outside the allowlist are rejected, regardless of what the agent asks. The Python laptop bridge is kept only for the T0.2 spike and as a fallback.
+
+**Why.** Data gathering moves to the phone anyway (charging logs, beta testers, inspections), and nobody leaves a laptop in the car for a multi-hour charge. The phone already has a working BLE transport, React Native has WebSocket built in (no new native dependency), and WSL2 mirrored networking lets the phone reach the desktop. Exposing the car through MCP lets any agent drive signal discovery (T2.3) against real hardware, with safety enforced by the server rather than by the prompt.
+
+**Costs.** The app must stay open in the car with the screen on during a relay session; the dongle accepts one connection at a time. The relay is a new component with its own tests.
+
+**Amends ADR-003.** Takes the "phone as bridge" option now instead of later. **Unchanged:** ADR-008 (read-only toward the vehicle), which the allowlist now enforces in code.

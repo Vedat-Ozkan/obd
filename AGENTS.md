@@ -4,9 +4,9 @@ Instructions for coding agents (Claude Code, Cursor, Codex, and humans in a hurr
 
 ## What this project is
 
-A transport-agnostic OBD-II library in TypeScript (`obd-core`), an Android app built on it (Expo), a hardware-in-the-loop bridge so agents can test against the real dongle, and an evaluated diagnostic engine that turns logged vehicle data into ranked, evidence-cited hypotheses. Test fleet: 2013 Chrysler 200 (ICE), 2019 Hyundai Elantra (ICE), 2024 Chevrolet Equinox EV (Ultium). Dongle: Veepeak OBDCheck BLE.
+A battery-health toolkit for hybrids, PHEVs, and EVs with a deeper GM Ultium tool: a transport-agnostic OBD-II library in TypeScript (`obd-core`), battery analysis (`obd-battery`), an opt-in LLM summary and assistant checked against the data (`obd-assist`), an Android app built on them (Expo), and a phone relay that exposes the car to agents through an MCP server with a read-only allowlist. Test fleet: 2013 Chrysler 200 (ICE), 2019 Hyundai Elantra (ICE), 2024 Chevrolet Equinox EV (Ultium). Dongle: Veepeak OBDCheck BLE.
 
-It is a portfolio and personal-use project first, including a planned applied-ML showcase: small-model fine-tuning and inference engineering after the diagnostic baseline, before EV delivery. Correctness and honest verification matter more than feature count. See ADR-011; compute and spending are undecided.
+It is a portfolio and personal-use project first, showcasing applied AI engineering: battery ML with calibrated uncertainty, on-device inference, LLM evals, MCP tooling, and the agentic build process. Correctness and honest verification matter more than feature count. See ADR-012 and ADR-013; the gas-car diagnosis engine and ML1–ML6 are withdrawn.
 
 ## Read before working
 
@@ -16,8 +16,8 @@ It is a portfolio and personal-use project first, including a planned applied-ML
 | Packages, interfaces, data formats | `docs/ARCHITECTURE.md` |
 | ELM327 / dongle / vehicle quirks | `docs/ELM327.md` |
 | Risks, research findings, decisions on tooling | `docs/FEASIBILITY.md` |
-| Ground truth, fixtures, eval scoring, induced faults | `docs/EVAL.md` |
-| Fine-tuning, datasets, serving experiments, ML verification | `docs/ML.md` |
+| Fixtures, labels, eval scoring (battery, LLM, discovery) | `docs/EVAL.md` |
+| Battery ML (BM1–BM7), datasets, LLM eval, ML verification | `docs/ML.md` |
 | How the architect/implementer/reviewer loop runs | `docs/WORKFLOW.md` |
 | Why things were decided | `docs/DECISIONS.md` |
 | Spec template | `docs/specs/README.md` |
@@ -26,11 +26,13 @@ It is a portfolio and personal-use project first, including a planned applied-ML
 
 ```
 packages/obd-core/      pure TS: transports, ELM327 session, PID/DTC decoding, vehicle profiles
-packages/obd-diagnose/  pure TS: case object, feature extraction, LLM diagnostic turn (Anthropic SDK)
+packages/obd-battery/   pure TS: charge sessions, capacity, imbalance, 12 V, reports, templates, on-device models
+packages/obd-assist/    pure TS: opt-in LLM summary and assistant, faithfulness check (replaces obd-diagnose)
 packages/obd-eval/      Node: eval harness over labeled fixtures, scoring, reports
-apps/mobile/            Expo (Android): BLE transport, drive logger, PPI + case screens
-tools/hil-bridge/       Python (runs on a laptop near the car, not WSL2): bleak + FastAPI, exposes dongle over HTTP
-tools/ml/               planned isolated Python training and serving experiments (not implemented)
+apps/mobile/            Expo (Android): BLE transport, console, relay mode, charge logger, report + assistant screens
+tools/relay/            Node in WSL2: phone relay and car MCP server with a read-only allowlist
+tools/hil-bridge/       Python (laptop near the car): spike and fallback bridge
+tools/ml/               planned isolated Python battery modeling (not implemented)
 fixtures/recordings/    recorded ELM327 transcripts (never hand-edited)
 fixtures/synthetic/     hand-written fixtures, labeled synthetic
 docs/                   the documents above
@@ -45,9 +47,9 @@ pnpm check          # typecheck + lint + test across all packages; must be green
 pnpm test           # vitest across packages
 pnpm -F obd-core test
 pnpm replay <recording.jsonl>      # run a recording through obd-core and print decoded output
-pnpm hil:smoke      # send 0100 through the HIL bridge and save a recording (needs bridge + car)
-pnpm eval           # run the diagnostic engine over labeled fixtures and print scores
-cd tools/hil-bridge && uv run hil-bridge   # on the laptop near the car; URL in docs/ARCHITECTURE.md
+pnpm hil:smoke      # send 0100 through the phone relay and save a recording (needs phone + car)
+pnpm eval           # run battery models and the LLM suite over labeled fixtures and print scores
+cd tools/hil-bridge && uv run hil-bridge   # laptop fallback bridge; URL in docs/ARCHITECTURE.md
 ```
 
 ## Hard rules
@@ -60,9 +62,9 @@ cd tools/hil-bridge && uv run hil-bridge   # on the laptop near the car; URL in 
 6. **Scope is the spec.** Do only what the spec says. Adjacent improvements go in a note, not in the diff.
 7. **No new dependencies** unless the spec lists them with a reason.
 8. **No secrets in the repo.** API keys live in the app's secure store (BYOK) or in `.env` files that are gitignored.
-9. **Tests run against fixtures, not the dongle.** CI has no Bluetooth. Tests that need hardware are tagged and skipped in CI, and the spec says how to run them via the HIL bridge.
+9. **Tests run against fixtures, not the dongle.** CI has no Bluetooth. Tests that need hardware are tagged and skipped in CI, and the spec says how to run them via the phone relay (or the laptop bridge fallback).
 10. **Simplicity.** Minimum code for the task. No single-use abstractions. If a senior engineer would call it overbuilt, rewrite it smaller.
-11. **ML evidence.** Track data/model provenance and intended-use licensing; separate synthetic and real results; split by source case/session before augmentation. No test-set tuning or invented benchmark results. Required training/serving runs cannot be waived as vehicle hardware-only checks. Exact compute, spending, dependencies, and model choices belong in the experiment spec before execution.
+11. **ML evidence.** Track data/model provenance, consent, and intended-use licensing; separate synthetic and real results; split by vehicle and session before augmentation. No test-set tuning or invented benchmark results. Required model training and evaluation runs cannot be waived as vehicle hardware-only checks. Exact compute, spending, dependencies, and model choices belong in the experiment spec before execution. LLM output shown to users passes the deterministic number check.
 
 ## ELM327 quick facts (full detail in `docs/ELM327.md`)
 
@@ -80,5 +82,5 @@ Architect writes a spec, implementer builds to it, reviewer gates it. `/feature 
 ## Style
 
 - TypeScript: strict, ESM, named exports only, `zod` at package boundaries, `vitest`. Small files, small functions. Comments explain why, not what.
-- Python (HIL bridge and planned isolated ML workspace): `uv`, `ruff`, type hints, `pytest`. Training/serving dependencies stay out of the bridge and normal fixture-based CI.
+- Python (laptop bridge and planned isolated ML workspace): `uv`, `ruff`, type hints, `pytest`. Training dependencies stay out of the bridge and normal fixture-based CI.
 - Commit messages: imperative subject, body says what was verified. No commits unless the user asks.
