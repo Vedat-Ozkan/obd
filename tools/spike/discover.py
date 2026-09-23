@@ -116,11 +116,11 @@ class Elm:
         self.buf.clear()
         self.prompt.clear()
         payload = (cmd + "\r").encode(CODEC)
-        for i in range(0, len(payload), CHUNK):
-            await self.client.write_gatt_char(self.write_char, payload[i:i + CHUNK],
-                                              response=not self.without_response)
-        self.rec.event("tx", cmd + "\r")
+        self.rec.event("tx", cmd + "\r")  # first: a reply can arrive while write_gatt_char awaits (T2.3b)
         try:
+            for i in range(0, len(payload), CHUNK):
+                await self.client.write_gatt_char(self.write_char, payload[i:i + CHUNK],
+                                                  response=not self.without_response)
             await asyncio.wait_for(self.prompt.wait(), CMD_TIMEOUT_S)
         except TimeoutError:
             self.rec.meta(note=f"timeout waiting for '>' after {cmd}")

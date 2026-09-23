@@ -117,17 +117,20 @@ async def main() -> None:
             buf.clear()
             prompt.clear()
             payload = (cmd + "\r").encode(CODEC)
-            for i in range(0, len(payload), CHUNK):
-                await client.write_gatt_char(write_char, payload[i:i + CHUNK],
-                                             response=not without_response)
-            rec.event("tx", cmd + "\r")
+            rec.event("tx", cmd + "\r")  # first: a reply can arrive while write_gatt_char awaits (T2.3b)
             line, sent = rec.lines, time.monotonic()
             try:
+                for i in range(0, len(payload), CHUNK):
+                    await client.write_gatt_char(write_char, payload[i:i + CHUNK],
+                                                 response=not without_response)
                 await asyncio.wait_for(prompt.wait(), args.timeout)
                 ms: object = round((time.monotonic() - sent) * 1000)
             except TimeoutError:
                 rec.meta(note=f"timeout waiting for '>' after {cmd}")
                 ms = "timeout"
+            except BaseException as e:
+                rec.meta(note=f"timeout waiting for '>' after {cmd} (interrupted: {type(e).__name__})")
+                raise
             print(f"| {line} | {cmd} | {ms} | {''.join(buf)!r} |")
 
         await client.start_notify(notify_char, on_rx)

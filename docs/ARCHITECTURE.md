@@ -113,7 +113,7 @@ Runs the deterministic report and models over labeled fixtures (capacity error a
 src/
   ble/BleTransport.ts    react-native-ble-plx → Transport (MTU chunking, notify reassembly)
   relay/                 relay mode: WebSocket to tools/relay, forwards one command at a time (ADR-013)
-  screens/Connect, Console, VehiclePicker, BatteryReport, UsedEvReport, ChargeLogger, Assistant, Settings
+  screens/Garage, AddVehicle (supported models only), Connect, Console, BatteryReport, UsedEvReport, ChargeLogger, Assistant, Settings
   logger/                 foreground service for multi-hour charge logging (T2.4)
   storage/                recordings, charge logs, consent records, secure key store
 ```

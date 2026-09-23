@@ -1,6 +1,6 @@
 # obd
 
-> Working title. An open, transparent battery-health toolkit for hybrids, PHEVs, and EVs, with a deeper tool for GM Ultium vehicles: a pure-TypeScript OBD library, an Android app that logs charges and produces battery and used-EV reports, an opt-in LLM that explains them without inventing numbers, and battery ML with measured uncertainty. Built full-time as a portfolio project using an architect / implementer / reviewer agent workflow, with every claim checked against recordings from real cars.
+> Working title. An open, transparent used-EV battery health check, verified first on GM Ultium vehicles and extended to other makes through beta testers: a pure-TypeScript OBD library, an Android app that logs charges and produces battery and used-EV reports, an opt-in LLM that explains them without inventing numbers, and battery ML with measured uncertainty. Built full-time as a portfolio project using an architect / implementer / reviewer agent workflow, with every claim checked against recordings from real cars.
 
 **Status:** Phase 0 in progress. Started 2026-09-16. The workspace scaffold, the hello-world HIL service, the spike script, and the first `obd-core` transport code (T0.3, in review) exist; vehicle functionality, the battery reports, the LLM features, and ML remain planned. Direction revised 2026-09-22 (ADR-012, ADR-013). See [docs/PLAN.md](docs/PLAN.md).
 
@@ -8,11 +8,11 @@
 
 Consumer OBD apps are a crowded market, and the AI gas-car diagnosis corner is already occupied (OBDAI, MECH AI, Skanyx and others). This project does not compete there. It exists for three reasons:
 
-1. **A real gap.** LeafSpy became the canonical Nissan Leaf battery tool as a solo-developer app. No consumer equivalent exists for GM's Ultium platform (Equinox EV, Blazer EV, Silverado EV, Lyriq, Optiq, Prologue). The Ultium tool is the differentiated product; a general hybrid/PHEV/EV battery app on the same core reaches more people but has incumbents. The report is written so a used-EV buyer can show it to a seller, and so it can be used in a paid pre-purchase inspection.
+1. **A real gap.** Used-EV buyers want an independent battery check, and the off-lease wave is growing. LeafSpy became the canonical Nissan Leaf battery tool as a solo-developer app. No consumer equivalent exists for GM's Ultium platform (Equinox EV, Blazer EV, Silverado EV, Lyriq, Optiq, Prologue). The Ultium tool is the differentiated product; a general hybrid/PHEV/EV battery app on the same core reaches more people but has incumbents. The report is written so a used-EV buyer can show it to a seller, and so it can be used in a paid pre-purchase inspection.
 2. **Applied AI engineering, shown with evidence.** Battery ML with calibrated uncertainty, anomaly detection, on-device inference, and drift monitoring; an opt-in LLM summary and tool-calling assistant guarded by a deterministic faithfulness check and a CI eval suite; an MCP server that lets agents work against a real car under a read-only allowlist; and the agentic build process itself (architect / implementer / reviewer, Claude and Codex). Every claim comes with measurements, including failures.
 3. **Personal use.** An EV whose battery health nobody will tell me about without a dealer visit, and two gas cars that serve as the test bench.
 
-The longer-term intent is to sell the app at a modest price, as two store listings from one codebase. The template report has no per-use cost; the LLM feature does, so it gets a usage cap. See [docs/DECISIONS.md](docs/DECISIONS.md) ADR-009 through ADR-013.
+The longer-term intent is to sell the app at a modest price, as one "used-EV battery health check" listing (an Ultium-specific listing is optional; ADR-014). The template report has no per-use cost; the LLM feature does, so it gets a usage cap. See [docs/DECISIONS.md](docs/DECISIONS.md) ADR-009 through ADR-014.
 
 ## What it does, by phase
 

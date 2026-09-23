@@ -58,31 +58,31 @@ The `.jsonl` file, copied to the desktop as a file (USB, cloud drive, or similar
 
 | Item | Value |
 |---|---|
-| Recording path | NOT RUN |
-| Date | NOT RUN |
-| Laptop OS (meta `platform`) | NOT RUN |
-| `bleak` version (meta `bleak`) | NOT RUN |
-| Write / notify characteristic (meta) | NOT RUN |
-| MTU (meta `mtu`) | NOT RUN |
-| Dash SOC % (meta `note`) | NOT RUN |
-| Ambient C (meta `note`) | NOT RUN |
-| Replay (`pnpm -F obd-core test` with the file in the tree) | NOT RUN |
+| Recording path | `fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-23-discovery.jsonl` (local only, gitignored; SHA-256 `520fc8fb…c53`, 71,898 lines, 16,882 tx) |
+| Date | 2026-09-23 (run length 1,282 s) |
+| Laptop OS (meta `platform`) | Windows-11-10.0.26200-SP0 |
+| `bleak` version (meta `bleak`) | 3.0.2 |
+| Write / notify characteristic (meta) | `FFF2` / `FFF1` |
+| MTU (meta `mtu`) | 247 (as reported by bleak; not authoritative) |
+| Dash SOC % (meta `note`) | 85 |
+| Ambient C (meta `note`) | 15 |
+| Replay (`pnpm -F obd-core test` with the file in the tree) | **FAIL**: `no '>' after "ATRV\r" (line 49776)`. Line 49775 (the `ATRV` reply, t 869.744) was recorded before its tx line 49776 (same t): the tool writes the tx line after the BLE write returns, and this one write stalled ~1 s at the start of phase C. Only occurrence in the file (0 in the T0.2 spike files). Tool fix needed; the recording stays as is. Update 2026-09-23: fixed in the tools by T2.3b; this file now replays with one SHA-256-keyed exemption for tx line 49776 (`packages/obd-core/test/recordings.test.ts`). |
 
 ## 2. Phase A: standard sweep
 
 | Item | Value |
 |---|---|
-| Mode 01 responders (`0100`) | NOT RUN |
-| Bitmaps walked | NOT RUN |
-| Mode 01 PIDs requested (meta `mode01_pids`, count) | NOT RUN |
+| Mode 01 responders (`0100`) | `17`, `28`, `40`, `45`, `CB` |
+| Bitmaps walked | `0100`–`01C0` as flagged (`01A0` answered by `17` only) |
+| Mode 01 PIDs requested (meta `mode01_pids`, count) | 50 (line 75). Decoded with docs/ELM327.md formulas: `31` 7,922 km since codes cleared; `30` 149/150 warm-ups; `42` 13.2–14.0 V per module; `21` 0 km; `0D` 0 km/h. `A6` raw `0004F8A9` (scaling not in the repo yet; 32,580.1 km if ×0.1 km, check against the dash). `46` flagged but not answered. |
 
 | Module | `0900` bitmap | Infotypes requested | `090A` name | Notes |
 |---|---|---|---|---|
-| `17` | NOT RUN | NOT RUN | NOT RUN | |
-| `28` | NOT RUN | NOT RUN | NOT RUN | |
-| `40` | NOT RUN | NOT RUN | NOT RUN | |
-| `45` | NOT RUN | NOT RUN | NOT RUN | |
-| `CB` | NOT RUN | NOT RUN | NOT RUN | |
+| `17` | `54400000` | 04, 06, 0A | DMCM-DriveMotorCtrl | lines 227–256 |
+| `28` | `55600000` | 04, 06, 08, 0A, 0B | CHCM-ChassisCtrl | lines 271–335 |
+| `40` | `14400000` | 04, 06, 0A | BCM-BodyControl | lines 353–451 |
+| `45` | `14400000` | 04, 06, 0A | GWM-Gateway | lines 466–491 |
+| `CB` | `14400000` | 04, 06, 0A | BECM-B+EnergyCtrl | lines 506–528 |
 
 ## 3. Phase B: coverage
 
@@ -90,32 +90,32 @@ From the phase-B end meta line (`stopped_early`, `last`, `counts`, `positives`).
 
 | Module | Range | Requests | Positive | Negative | NO DATA | Other | Covered / cut |
 |---|---|---|---|---|---|---|---|
-| `CB` | 2000–2FFF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `CB` | 4000–43FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `CB` | 8300–83FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `17` | 2000–2FFF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `17` | 4000–43FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `17` | F180–F1FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `28` | F180–F1FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `40` | F180–F1FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `45` | F180–F1FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| `CB` | F180–F1FF | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
+| `CB` | 2000–2FFF | 4096 | 752 | 3343 | 1 | 0 | covered |
+| `CB` | 4000–43FF | 1024 | 1 | 1023 | 0 | 0 | covered |
+| `CB` | 8300–83FF | 256 | 0 | 256 | 0 | 0 | covered |
+| `17` | 2000–2FFF | 4096 | 291 | 3805 | 0 | 0 | covered |
+| `17` | 4000–43FF | 1024 | 7 | 1017 | 0 | 0 | covered |
+| `17` | F180–F1FF | 127 | 15 | 112 | 0 | 0 | covered |
+| `28` | F180–F1FF | 127 | 16 | 111 | 0 | 0 | covered |
+| `40` | F180–F1FF | 127 | 16 | 111 | 0 | 0 | covered |
+| `45` | F180–F1FF | 127 | 14 | 113 | 0 | 0 | covered |
+| `CB` | F180–F1FF | 127 | 16 | 111 | 0 | 0 | covered |
 
-`stopped_early`: NOT RUN. Uncut remainder for a follow-up session (if stopped early): NOT RUN.
+`stopped_early`: false (line 49772); every range covered in 848 s. Uncut remainder: none. Classification here is recomputed from the replies (per-range counts); the tool's own per-module totals are in line 49772.
 
 ## 4. Phase C: watch
 
-Watch list (meta `watch`) and dropped DIDs (meta `dropped`): NOT RUN.
+Watch list (line 49773): 201 single-frame DIDs on `CB` (`2023`–`29C4`); **0 on `17`**. Dropped: 881 (every multi-frame `CB` DID, `CB` single-frame DIDs from `29C5`, all of `17`), because the cap stops at the first DID that overflows 15 s. Cycle ≈ 15.3 s.
 
 | State | Start line | Cycles | Notes |
 |---|---|---|---|
-| idle baseline | NOT RUN | NOT RUN | |
-| heater max on | NOT RUN | NOT RUN | |
-| heater off | NOT RUN | NOT RUN | |
-| plugged in and charging | NOT RUN | NOT RUN | |
-| unplugged | NOT RUN | NOT RUN | |
+| idle baseline | 49774 | 5 | heater already switching on in the last cycle |
+| heater max on | 53873 | 5 | heater off during the last cycle |
+| heater off | 57969 | 5 |  |
+| plugged in and charging | 62067 | 7 | charging actually ran from about t 1125 to t 1190 (about 60 s) |
+| unplugged | 67800 | 5 | HV load values read 0: car was off |
 
-Did charging start while the car was in Ready, or was the car switched off (spec Decision 6)? NOT RUN
+Did charging start while the car was in Ready, or was the car switched off (spec Decision 6)? The data points to the car being switched off: `27C8` goes 4 → 3 when charging starts and 10 after unplug, and the load-like values (`2979`, `297D`, `2982`) drop to 0–1 after unplug. The owner confirms.
 
 ## 5. Candidate table
 
@@ -123,7 +123,20 @@ A candidate changes with heater load and flips sign when charging. The recording
 
 | DID | Module | Reply length | Changes with heater (yes/no) | Sign flip on charge (yes/no) | Lines |
 |---|---|---|---|---|---|
-| NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
+| `2979` / `297D` / `2982` | `CB` | 1 | yes (≈3 → 22–35) | no; rises to 56–79 on charge (magnitude, unsigned) | 49773–71898 (watch) |
+| `2984`, `2985`, `2988`, `2989` | `CB` | 1–2 | yes, rise and slow decay | no (thermal-looking: lag and exponential decay) | watch |
+| `270C` / `2707` | `CB` | 1–2 | yes (4000 → 12599–15138; 5 → 11–20) | no; back to baseline on charge | watch |
+| `27CD` | `CB` | 2 | no | charge-only (0 → 44–49 → 0) | watch |
+| `27CE` | `CB` | 2 | no | charge-only (0 → 30, then 1254/1249 after charge) | watch |
+| `27AF` | `CB` | 2 | falls 1 count | rises 7486 → 7500 during charge (energy-like) | watch |
+| `276D` | `CB` | 2 | falls slowly | rises 55508 → 55602 (84.7% of 65535; dash 85%: SOC-like) | watch |
+
+Not watched but decoded from phase B (single snapshot, idle):
+- `2AE1`–`2AE7` (`CB`, 36 bytes each): 80 records of [u16 cell-group voltage ×0.0001 V][module 1–10]; 10 modules × 8 groups; min 4.0769 V, max 4.0796 V, average 4.0777 V. The average and minimum equal `2AF5`'s exactly.
+- `2AF5` tail `09 02 22 05`: record index and module of the minimum (9, module 2) and maximum (34, module 5), matching the records.
+- `2B43` (26 bytes): pack SOC (0xD8, 84.7%) then 10 per-module SOC bytes (module 5: 85.1%, the rest 84.7%).
+- `2AF7` (`CB`, 8 bytes `7F62 0000 7F6D 0000`): 326.10 V and 326.21 V at 0.01 V; 80 × 4.0777 V = 326.2 V. Pack-voltage candidate; its scaling is inferred, not sourced.
+- Single-byte triples `2771`–`277F`, `2793`–`27A1`: first and third byte equal; 0x38–0x39 at idle (16–17 °C if raw−40, ambient 15 °C). `2793`–`27A1` barely move with the heater (battery-like); `2771`–`277F` move fast (coolant-like). Scaling inferred, not sourced.
 
 ## 6. Gate B
 
@@ -131,4 +144,99 @@ Decision: `NOT DECIDED`
 
 Criteria (`docs/PLAN.md` T2.3 and Gate B): a pack current or energy-counter signal is found and passes plausibility (current changes with load; its sign flips on charge). If not, T2.4 uses the charger-reported-kWh fallback and states its wider error band. The owner approves every signal before it counts; this card only proposes candidates.
 
-Justification (citing recording line numbers): NOT RUN
+Justification (citing recording line numbers): no watched value flips sign on charge, so no pack-current signal passes plausibility yet. The best load candidate, `2979`/`297D`/`2982`, behaves like an unsigned power magnitude (roughly 0.3 → 2–3.5 → 5.6–7.9 in units that fit 0.1 kW), not a signed current. Charging ran only about 60 s, and every multi-frame `CB` DID plus all of `17` went unwatched (cap), so current may still be in the unwatched set. Proposal for the owner: keep Gate B open and run a short targeted watch (the phase-B positives on `17`, the `CB` multi-frame DIDs, and `2AF7`) with a charge of at least 5 minutes, after fixing the tx-ordering bug.
+
+## 7. Targeted watch (T2.3b)
+
+Run card for `tools/spike/targeted.py`. Spec: `docs/specs/T2.3b-targeted-watch.md`. The tool records one file, `fixtures/recordings/chevrolet-equinox-ev-2024/<date>-discovery-targeted.jsonl`, which stays **local only** (same `.gitignore` pattern as above). It runs no phase-B scan. It re-runs phase A, then polls the checked-in list `tools/spike/targeted_watch.json`:
+- **core**, every cycle (~8 s): the 17 `CB` DIDs `2979`, `297D`, `2982`, `27CD`, `27CE`, `27AF`, `276D`, `2AF7`, `2AF5`, `2AE1`–`2AE7`, `2B43`;
+- **rotate**, time-sliced 6 s per cycle: 839 DIDs (`CB` multi-frame positives, the 336 `CB` single-frame positives T2.3a never watched, and every `17` positive; no `F180`–`F1FF`, no `2E8E`).
+
+Every entry cites its phase-B tx line in the 2026-09-23 recording (§1). The recorder now writes each tx line before the BLE write, so the §1 replay defect cannot recur.
+
+### Desk prep (once, with internet)
+
+1. Get the current `tools/spike/` onto the laptop: `discover.py`, `go.py`, `spike.py`, **`targeted.py`, and `targeted_watch.json`**. Use `git pull` once it is pushed, or copy the files.
+2. `uv run tools/spike/targeted.py --help`. This downloads Python and `bleak` now, so the car session needs no downloads.
+3. If the Veepeak is paired in the OS Bluetooth settings, remove it. Charge the laptop.
+
+### At the car (about 15 min)
+
+Safety: as in T2.3a. The tool only reads (`01`, `09`, `22`, and the same fixed AT list). Park, parking brake on, the whole time.
+
+1. Park within reach of the home charger. Plug in the dongle. Car in **Ready**, **Park**, **HVAC off**.
+2. Note the battery % on the dash and the outside temperature.
+3. Run `uv run tools/spike/targeted.py`. Type the battery % and the temperature. It prints the plan, finds the dongle, and prints the file name.
+4. Phase A runs on its own (~20 s). **Do not press Enter during it.**
+5. The watch prints one instruction per state and a status line after every cycle: time in state, cycles, rotation progress, and `full rotation done` once every rotating DID was read in that state. **The tool refuses an early Enter**: before `full rotation done` in any state, and before 5:00 of charging. It then prints what is still missing (DIDs or time left) and keeps polling; press Enter again when done. **Press Enter only once per attempt, and only after the status line says you may.** Extra presses stay queued and would end the next stage early (reviewer finding, T2.3b round 1).
+   1. idle baseline: HVAC off. After `full rotation done`, heater to max (hot, fan high); press Enter once hot air flows.
+   2. heater max on: after `full rotation done`, heater off; press Enter.
+   3. heater off: after `full rotation done`, plug in the home charger; press Enter once the car or charger shows charging. **If charging does not start within about 1 minute in Ready, switch the car off, wait for charging, then press Enter.** Leave the laptop in the car.
+   4. plugged in and charging: the console shows `charging m:ss of 5:00, do not unplug yet`. Once it says 5:00 reached and `full rotation done`, unplug and press Enter.
+   5. unplugged: after `full rotation done`, press Enter to finish.
+6. The tool prints `Done` and disconnects. **Unplug the dongle.**
+7. If the run stops early (BLE drop, the car powering off, Ctrl+C, or `aborted: UNABLE TO CONNECT` / `aborted: LV RESET`), keep the partial file; it is still valid. A rerun goes to `-discovery-targeted-2.jsonl`.
+
+### Time plan
+
+Basis: spec Time budget (phase-B times from the 2026-09-23 recording). Cycle ≈ 7.8 s; full rotation ≈ 101 s (13 cycles); ≈ 131 s+ if `17` goes silent with the car off.
+
+| Step | Estimate |
+|---|---|
+| Prompts, BLE scan, connect | ~1 min |
+| Phase A (reused sweep) | 0.3 min |
+| idle baseline (1 rotation) | 1.7 min |
+| heater max on (1 rotation) | 1.7 min |
+| heater off (1 rotation, plus walking and plugging in) | ~2 min |
+| plugged in and charging (≥ 5 min, ≥ 2 rotations) | 5–5.5 min |
+| unplugged (1 rotation; slower if the car is off) | 1.7–2.7 min |
+| Total | ≈ 13.5–15 min |
+
+### What to bring back
+
+The `-discovery-targeted.jsonl` file, copied as a file (never re-saved in an editor) into `fixtures/recordings/chevrolet-equinox-ev-2024/`. Say where it landed and whether the car was switched off to charge. It stays out of git.
+
+### 7.1 Session setup
+
+| Item | Value |
+|---|---|
+| Recording path, SHA-256, lines | NOT RUN |
+| Date, run length | NOT RUN |
+| Laptop OS, `bleak` version, characteristics, MTU (meta) | NOT RUN |
+| Dash SOC %, ambient C (meta `note`) | NOT RUN |
+| `watch_list_sha256` (phase-C meta) | NOT RUN |
+| Replay (`pnpm -F obd-core test`, no exemption) | NOT RUN |
+
+### 7.2 Phase A delta vs T2.3a
+
+| Item | T2.3a (§2) | T2.3b |
+|---|---|---|
+| Mode 01 responders, PIDs requested | `17`, `28`, `40`, `45`, `CB`; 50 | NOT RUN |
+| `0900` bitmaps and `090A` names | §2 table | NOT RUN |
+| Differences | — | NOT RUN |
+
+### 7.3 States
+
+| State | Start line | Cycles | Rotations | Ignored marks | Notes |
+|---|---|---|---|---|---|
+| idle baseline | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
+| heater max on | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
+| heater off | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
+| plugged in and charging | NOT RUN | NOT RUN | NOT RUN | NOT RUN | duration (≥ 300 s): NOT RUN |
+| unplugged | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
+
+Car switched off to charge (yes/no): NOT RUN.
+
+### 7.4 Candidate table
+
+A candidate changes with heater load and flips sign when charging. The recording line numbers are its citation.
+
+| DID | Module | Reply length | Changes with heater (yes/no) | Sign flip on charge (yes/no) | Lines |
+|---|---|---|---|---|---|
+| NOT RUN | | | | | |
+
+### 7.5 Gate B
+
+Decision: `NOT DECIDED`
+
+Justification: NOT RUN. The owner decides from the candidate table.

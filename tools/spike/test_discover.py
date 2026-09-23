@@ -61,8 +61,11 @@ class FakeCar:
 
 
 class FakeClient:
-    def __init__(self, silent: tuple[str, ...] = ()) -> None:
+    def __init__(self, silent: tuple[str, ...] = (), reply_during_write: bool = False,
+                 raise_on: tuple[str, ...] = ()) -> None:
         self.car, self.silent, self.pending, self.writes, self.cb = FakeCar(), silent, b"", [], None
+        # reply_during_write: the whole reply is delivered before the last write_gatt_char returns (D line 49775).
+        self.reply_during_write, self.raise_on, self.replies = reply_during_write, raise_on, []
 
     async def start_notify(self, char: object, cb: object) -> None:
         self.cb = cb
@@ -76,9 +79,15 @@ class FakeClient:
         if not self.pending.endswith(b"\r"):
             return
         cmd, self.pending = self.pending[:-1].decode("iso-8859-1"), b""
+        if cmd in self.raise_on:
+            raise OSError("synthetic BLE write failure")
         if cmd in self.silent:
             return
         reply = self.car(cmd).encode("iso-8859-1")
+        self.replies.append((cmd, reply.decode("iso-8859-1")))
+        if self.reply_during_write:
+            self.cb(None, bytearray(reply))
+            return
         loop = asyncio.get_running_loop()
         loop.call_soon(self.cb, None, bytearray(reply[: len(reply) // 2]))
         loop.call_soon(self.cb, None, bytearray(reply[len(reply) // 2:]))
@@ -243,6 +252,32 @@ def test_interrupted_run_leaves_timeout_note(tmp_path, monkeypatch) -> None:
     asyncio.run(run())
     lines = read(path)
     assert lines[-1]["note"] == "timeout waiting for '>' after 22 27C6 (interrupted: CancelledError)"
+    assert replay_ok(lines, strict=False)
+
+
+def test_tx_recorded_before_a_reply_that_arrives_during_the_write(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(discover, "SCAN", SMALL_SCAN)
+    path, client = tmp_path / "rec.jsonl", FakeClient(reply_during_write=True)
+    asyncio.run(full_run(path, client))
+    lines = read(path)
+    got = []
+    for i, x in enumerate(lines):
+        if x["dir"] == "tx":
+            rest = [y for y in lines[i + 1:] if y["dir"] != "meta"]
+            n = next((k for k, y in enumerate(rest) if y["dir"] == "tx"), len(rest))
+            got.append((x["data"][:-1], "".join(y["data"] for y in rest[:n])))
+    assert got == client.replies
+    assert replay_ok(lines, strict=True)
+
+
+def test_write_error_leaves_interrupted_note(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(discover, "SCAN", SMALL_SCAN)
+    path = tmp_path / "rec.jsonl"
+    with pytest.raises(OSError):
+        asyncio.run(full_run(path, FakeClient(raise_on=("22 27C6",))))
+    lines = read(path)
+    assert lines[-2] == {"t": lines[-2]["t"], "dir": "tx", "data": "22 27C6\r"}
+    assert lines[-1]["note"] == "timeout waiting for '>' after 22 27C6 (interrupted: OSError)"
     assert replay_ok(lines, strict=False)
 
 
