@@ -47,7 +47,7 @@ Goal: a used-EV battery health check a buyer can show a seller, verified first o
 Gates:
 
 - **Gate A (T0.2):** the EV answers Mode 22 under 29-bit CAN. GO → T2.1 as planned; RE-SCOPE → start with T2.3; NO-GO → blocked pending a different dongle or approach.
-- **Gate B (T2.3):** a pack current or energy-counter signal is found and passes plausibility. If not, T2.4 uses the charger-reported-kWh fallback and states its wider error band.
+- **Gate B (T2.3):** a pack current or energy-counter signal is found and passes plausibility. If not, T2.4 uses the charger-reported-kWh fallback and states its wider error band. **Result 2026-09-23: GO** (owner): pack current `17`/`2414` flips sign on charge, and I × V with `17`/`2885` matches the `CB`/`27AF` energy slope (`docs/discovery-2026-09.md` §7.5). T2.4 uses the energy counter and integrated current; the charger-kWh fallback is not needed.
 
 Milestone check (Dec 4): report on own car covering SOC, cell min/max/spread, pack voltage if T2.3 finds it, and a capacity estimate with an error band from logged charges; a used-EV report on own car; beta testers from Ultium owners' forums have run it; at least one other Ultium model (for example Blazer EV or Lyriq) promoted to verified by a beta recording.
 

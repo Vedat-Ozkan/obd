@@ -140,7 +140,7 @@ Not watched but decoded from phase B (single snapshot, idle):
 
 ## 6. Gate B
 
-Decision: `NOT DECIDED`
+Decision: superseded by §7.5 (**GO**, owner, 2026-09-23). This session alone did not pass: no watched value flipped sign.
 
 Criteria (`docs/PLAN.md` T2.3 and Gate B): a pack current or energy-counter signal is found and passes plausibility (current changes with load; its sign flips on charge). If not, T2.4 uses the charger-reported-kWh fallback and states its wider error band. The owner approves every signal before it counts; this card only proposes candidates.
 
@@ -200,32 +200,32 @@ The `-discovery-targeted.jsonl` file, copied as a file (never re-saved in an edi
 
 | Item | Value |
 |---|---|
-| Recording path, SHA-256, lines | NOT RUN |
-| Date, run length | NOT RUN |
-| Laptop OS, `bleak` version, characteristics, MTU (meta) | NOT RUN |
-| Dash SOC %, ambient C (meta `note`) | NOT RUN |
-| `watch_list_sha256` (phase-C meta) | NOT RUN |
-| Replay (`pnpm -F obd-core test`, no exemption) | NOT RUN |
+| Recording path, SHA-256, lines | `fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-23-discovery-targeted.jsonl` (local, gitignored); SHA-256 `4df9d9352c6aedadbe023d94fd789f2182b0e7ed952bd2e7db00d9094715d6cc`; 84,154 lines, 10,434 tx |
+| Date, run length | 2026-09-23, 916.5 s |
+| Laptop OS, `bleak` version, characteristics, MTU (meta) | Windows-11-10.0.26200-SP0, 3.0.2, write `FFF2` / notify `FFF1`, 247 (not authoritative) |
+| Dash SOC %, ambient C (meta `note`) | 86, 18 |
+| `watch_list_sha256` (phase-C meta) | `3e4e6e01c4931a2d27a81dd368f2473fe856b9758a5b6fa31b6b5377520b4481` (line 542; 17 core, 839 rotate) |
+| Replay (`pnpm -F obd-core test`, no exemption) | PASS (`recordings.test.ts`, 8/8, 2026-09-23) |
 
 ### 7.2 Phase A delta vs T2.3a
 
 | Item | T2.3a (§2) | T2.3b |
 |---|---|---|
-| Mode 01 responders, PIDs requested | `17`, `28`, `40`, `45`, `CB`; 50 | NOT RUN |
-| `0900` bitmaps and `090A` names | §2 table | NOT RUN |
-| Differences | — | NOT RUN |
+| Mode 01 responders, PIDs requested | `17`, `28`, `40`, `45`, `CB`; 50 | same five; same 50 PIDs (line 75) |
+| `0900` bitmaps and `090A` names | §2 table | same (phase A reused) |
+| Differences | — | none in the PID set; `31` still 7,922 km, `A6` raw `0004F8A9` unchanged |
 
 ### 7.3 States
 
 | State | Start line | Cycles | Rotations | Ignored marks | Notes |
 |---|---|---|---|---|---|
-| idle baseline | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| heater max on | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| heater off | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| plugged in and charging | NOT RUN | NOT RUN | NOT RUN | NOT RUN | duration (≥ 300 s): NOT RUN |
-| unplugged | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
+| idle baseline | 543 | 31 | ≥ 1 (enforced) | 0 | |
+| heater max on | 23031 | 14 | ≥ 1 | 0 | |
+| heater off | 33280 | 16 | ≥ 1 | 0 | plugged in a few seconds before the mark (current already −26.35 A at line 44364, t 484) |
+| plugged in and charging | 44553 | 42 | ≥ 3 | 0 | duration 322 s (t 487 → 809) |
+| unplugged | 74351 | 14 | ≥ 1 | 0 | |
 
-Car switched off to charge (yes/no): NOT RUN.
+Car switched off to charge (yes/no): no. The owner confirms it stayed in Ready throughout.
 
 ### 7.4 Candidate table
 
@@ -233,10 +233,23 @@ A candidate changes with heater load and flips sign when charging. The recording
 
 | DID | Module | Reply length | Changes with heater (yes/no) | Sign flip on charge (yes/no) | Lines |
 |---|---|---|---|---|---|
-| NOT RUN | | | | | |
+| `2414` | `17` | 2 | yes: +0.9 / +1.2 A idle → **+12.9 A** heater (line 26002) | **yes: −26.35 / −26.35 / −25.75 / −25.45 A** charging (lines 44364, 53458, 62601, 71935); +1.2 A unplugged (81233) | 7620–81233 (rotating, 9 samples) |
+| `2885` | `17` | 2 | slight sag 327.4 → 326.1 V | no sign; rises 328.2 → 329.3 V while charging | 8072–81688 (9 samples) |
+| `27AF` | `CB` | 2 | falls 0.01 kWh per ~8 s | rises 74.76 → 75.52 kWh while charging | core, every cycle |
+| `2AF7` | `CB` | 8 | sags 326.0 → 325.3 V | rises 327.0 → 328.2 V while charging | core |
+| `2429` | `17` | 2 | no (0x5806 constant) | no | rotating |
+
+Scalings used (from the public captures in `reports/Ultium battery app trajectory review.md`; not yet in a checked-in signalset): `2414` s16 ÷ 20 A (negative = into the pack), `2885` u16 ÷ 100 V, `27AF` u16 ÷ 100 kWh, `276D` u16 × 100/65535 %.
+
+Cross-checks inside this recording:
+- **Power, two ways.** Charging: I × V = −26.0 A × 328.7 V ≈ **8.5 kW** into the pack; `27AF` rose 0.74 kWh from t 488 to t 802 (314 s) ≈ **8.5 kW**. Heater: 12.9 A × 326.1 V ≈ **4.2 kW**; `27AF` fell 0.12 kWh from t 250 to t 350 ≈ **4.3 kW**. They agree.
+- **First idle disagrees; likely explained.** `2414` read about 0.3–0.4 kW at two instants (t 92, t 190), while `27AF` (0.07 kWh over 230 s ≈ 1.1 kW) and the `276D` SOC drop (≈ 0.95 kW) both say about 1 kW on average. `ATRV` climbed 12.7 → 13.6 V during that idle: the DC-DC converter recharging the 12 V battery after wake-up, plus wake-up loads (owner: it was a true idle). The likely explanation is a varying load between two sparse current samples, not a sensor fault; not verified. The last idle (fan on, per owner) agrees: I × V ≈ 0.39 kW against ≈ 0.44 kW from SOC. Consequence for T2.4: poll `2414` every cycle, not in rotation.
+- **12 V observation.** The owner confirms the car stayed in Ready for the whole recording. `ATRV` held 13.6 V from t 119 (line 9703) through the first ~220 s of charging, then stepped down at t 710 (13.6 → 12.6 → 11.7 V, lines 64960–65440) and ran a slow sawtooth (11.7 → 12.2 V, then back to 11.7 V) until the end, including after unplug. Module `17` kept answering, and pack current stayed +1.2 A after unplug, so the car was awake. Cause unverified: a DC-DC low-voltage regulation mode after the 12 V battery was topped up fits the shape; an internal power-state change or a dongle measurement quirk are the alternatives. Consequence for T2.5: a single `ATRV` value is not a health verdict; record the context and judge only under a defined condition.
+- **Capacity proxy.** `27AF` ÷ SOC(`276D`) = **88.4 kWh** at the start, 88.36 at charge start, 88.45 at charge end, and 88.45 at the end (four points, 15 minutes). The same ratio from `2B43` SOC gives 88.5–88.7. The T2.3a single sample gave ~88. This is the BMS's own energy figure scaled to 100 %, not a measured capacity; compare with GM's published figure once it is sourced.
+- **Charge in amp-hours.** −26 A for 314 s ≈ 2.27 Ah for 0.754 % SOC (`276D`), so ≈ 301 Ah per 100 %. 301 Ah × 327 V ≈ 98 kWh, which matches the incremental ΔE/ΔSOC (0.74 kWh / 0.754 % ≈ 98 kWh). The average E/SOC (88.4) is lower because the pack sits well above its average voltage at 85 %. Four current samples only; provisional.
 
 ### 7.5 Gate B
 
-Decision: `NOT DECIDED`
+Decision: **GO** (owner, 2026-09-23).
 
-Justification: NOT RUN. The owner decides from the candidate table.
+Justification: `17`/`2414` flips sign on charge (+12.9 A heater at line 26002; −26.35 A charging at line 53458; +1.2 A after unplug at line 81233), and I × V with `2885` matches the `27AF` energy slope within about 1 % both charging and heating. That passes the PLAN Gate B plausibility criterion. An energy counter (`27AF`) is also present, so T2.4 does not need the charger-kWh fallback. Caveats: the scalings come from other Ultium owners' public captures and become hard-rule-1 sources only once this recording is cited in a checked-in profile (T2.1); and the idle mismatch above is unexplained.
