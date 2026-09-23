@@ -120,7 +120,7 @@ describe("ElmLineReader", () => {
     const reader = new ElmLineReader();
     const raws = reader.push(latin1Encode("\r>"));
     expect(raws).toEqual(["\r"]);
-    const r = parseElmResponse(raws[0]);
+    const r = parse(raws[0]);
     expect(r.status).toEqual({ kind: "data" });
     expect(r.lines).toEqual([]);
   });
@@ -132,7 +132,7 @@ describe("ElmLineReader", () => {
     expect(reader.push(latin1Encode("ING...\rNO DATA\r"))).toEqual([]);
     const raws = reader.push(latin1Encode("\r>"));
     expect(raws).toEqual(["SEARCHING...\rNO DATA\r\r"]);
-    const r = parseElmResponse(raws[0]);
+    const r = parse(raws[0]);
     expect(r.status).toEqual({ kind: "nodata" });
     expect(r.searching).toBe(true);
   });
@@ -142,16 +142,20 @@ describe("ElmLineReader", () => {
     const reader = new ElmLineReader();
     const raws = reader.push(latin1Encode("OK\r\r>NO DATA\r\r>ELM"));
     expect(raws).toEqual(["OK\r\r", "NO DATA\r\r"]);
-    expect(parseElmResponse(raws[0]).status).toEqual({ kind: "ok" });
-    expect(parseElmResponse(raws[1]).status).toEqual({ kind: "nodata" });
-    expect(reader.push(latin1Encode("327 v1.5\r\r>"))).toEqual(["ELM327 v1.5\r\r"]);
+    expect(parse(raws[0]).status).toEqual({ kind: "ok" });
+    expect(parse(raws[1]).status).toEqual({ kind: "nodata" });
+    const completed = reader.push(latin1Encode("327 v1.5\r\r>"));
+    expect(completed).toEqual(["ELM327 v1.5\r\r"]);
+    expect(parse(completed[0]).status).toEqual({ kind: "data" });
   });
 
   it("19. reset() discards the buffered partial", () => {
     const reader = new ElmLineReader();
     expect(reader.push(latin1Encode("SEARCH"))).toEqual([]);
     reader.reset();
-    expect(reader.push(latin1Encode("OK\r\r>"))).toEqual(["OK\r\r"]);
+    const raws = reader.push(latin1Encode("OK\r\r>"));
+    expect(raws).toEqual(["OK\r\r"]);
+    expect(parse(raws[0]).status).toEqual({ kind: "ok" });
   });
 
   // §Clone quirks (garbage bytes after ATZ); latin1 decoding is exact
@@ -162,6 +166,6 @@ describe("ElmLineReader", () => {
     expect(raws[0]).toHaveLength(4);
     expect(raws[0]).toContain("ÿ");
     expect(raws[0]).toBe("ÿþ\u0000\r");
-    expect(parseElmResponse(raws[0]).status).toEqual({ kind: "data" });
+    expect(parse(raws[0]).status).toEqual({ kind: "data" });
   });
 });
