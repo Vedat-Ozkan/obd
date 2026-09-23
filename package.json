@@ -10,9 +10,9 @@
     "check": "pnpm check:ts && pnpm check:bridge",
     "check:ts": "pnpm typecheck && pnpm lint && pnpm test",
     "check:bridge": "cd tools/hil-bridge && uv run ruff check . && uv run pytest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm --filter './apps/*' -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter './packages/*' -r test"
+    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

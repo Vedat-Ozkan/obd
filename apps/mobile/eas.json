@@ -1,0 +1,10 @@
+{
+  "cli": { "version": "24.7.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    }
+  }
+}

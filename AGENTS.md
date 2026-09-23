@@ -4,9 +4,9 @@ Instructions for coding agents (Claude Code, Cursor, Codex, and humans in a hurr
 
 ## What this project is
 
-A used-EV battery health check, verified first on GM Ultium vehicles, with other makes added through beta testers (ADR-014): a transport-agnostic OBD-II library in TypeScript (`obd-core`), battery analysis (`obd-battery`), an opt-in LLM summary and assistant checked against the data (`obd-assist`), an Android app built on them (Expo), and a phone relay that exposes the car to agents through an MCP server with a read-only allowlist. Test fleet: 2013 Chrysler 200 (ICE), 2019 Hyundai Elantra (ICE), 2024 Chevrolet Equinox EV (Ultium). Dongle: Veepeak OBDCheck BLE.
+A used-EV battery health check, verified first on GM Ultium vehicles, with other makes added through beta testers (ADR-014): a transport-agnostic OBD-II library in TypeScript (`obd-core`), battery analysis (`obd-battery`), an opt-in LLM summary and assistant checked against the data (`obd-assist`), an Android app built on them (Expo), and a phone relay that exposes the car to agents through an MCP server with a read-only allowlist. Required Phase 0 vehicle: 2024 Chevrolet Equinox EV (Ultium). The 2013 Chrysler 200 and 2019 Hyundai Elantra are optional bench cars, not recording or app acceptance gates (ADR-015). Dongle: Veepeak OBDCheck BLE.
 
-It is a portfolio and personal-use project first, showcasing applied AI engineering: battery ML with calibrated uncertainty, on-device inference, LLM evals, MCP tooling, and the agentic build process. Correctness and honest verification matter more than feature count. See ADR-012 to ADR-014; the gas-car diagnosis engine and ML1–ML6 are withdrawn.
+It is a portfolio and personal-use project first, showcasing applied AI engineering: battery ML with calibrated uncertainty, on-device inference, LLM evals, MCP tooling, and the agentic build process. Correctness and honest verification matter more than feature count. See ADR-012 to ADR-015; the gas-car diagnosis engine and ML1–ML6 are withdrawn.
 
 ## Read before working
 

@@ -6,7 +6,7 @@ Hardware findings reviewed 2026-09-16; product and ML scope revised 2026-09-22 (
 
 | Area | Status | Risk | Mitigation |
 |---|---|---|---|
-| Generic OBD-II on the two ICE cars | Verified by protocol (both are 2008+ CAN); hardware unverified | Low | T0.2 spike |
+| Generic OBD-II on the two ICE cars (optional bench) | Verified by protocol (both are 2008+ CAN); hardware unverified | Low | No Phase 0 acceptance depends on an ICE session (ADR-015) |
 | Veepeak BLE from an app | Reported working (BLE service FFF0) | Low | T0.2 discovers characteristics rather than assuming |
 | Equinox EV via ELM327 | Reported working with Car Scanner and a Veepeak BLE+ | Medium | T0.2 spike on this exact car and dongle |
 | Equinox EV battery signals | Six community signals in OBDb; upstream 2024 test data (2026-09-22) shows the three `DACB` commands (SOC, SOC high-res, cell min/avg/max) answering on a 2024 and `33E5` not; `33E5` is ≤25.5 V, not HV pack voltage; no temps, current, pack voltage, SOH | **High** | Gate A (T0.2); verify on hardware; port Bolt PIDs as candidates (T2.3) |
@@ -43,6 +43,8 @@ Consequence: the EV battery report is a Phase 2 item with a hardware spike as it
 ### Generic OBD-II on the ICE cars
 
 Both cars are post-2008 US-market and therefore ISO 15765-4 CAN. Mode 01/02/03/07/09/0A and readiness monitors are mandated. Mode 06 is optional in practice; Chrysler generally supports it over CAN, Hyundai varies. Freeze frame is one record per stored DTC on most ECUs. Nothing exotic is expected. The "recently cleared" heuristic depends on PIDs 30 (warm-ups since clear), 31 (distance since clear), and 4E (time since clear), which are widely supported on this era.
+
+ADR-015 makes these cars optional bench vehicles. These protocol expectations are historical research, not evidence of a completed car session or a requirement for the supported-vehicle app.
 
 ### The dongle
 

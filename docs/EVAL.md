@@ -53,7 +53,7 @@ A signal is `verified` for a vehicle only when a recording from that vehicle sho
 
 ## Faults and safety
 
-No faults are induced on any vehicle. The EV's high-voltage system is never touched; battery faults exist in this project only as synthetic injections into real logs. The only write the software sends is Mode 04 (clear codes) after an explicit confirmation, used when recording the "recently cleared" fixture on the Chrysler (T0.7).
+No faults are induced on any vehicle. The EV's high-voltage system is never touched; battery faults exist in this project only as synthetic injections into real logs. T0.7 uses synthetic fixtures for the "recently cleared" branches and requires no vehicle code clear. Mode 04 remains behind explicit user confirmation if that capability is ever used.
 
 ## What the eval cannot claim
 

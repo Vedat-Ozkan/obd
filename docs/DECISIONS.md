@@ -121,3 +121,13 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 
 **Amends ADR-012.** "One app now, two listings later" becomes one primary listing, with the Ultium listing optional. The general hybrid/PHEV scope stays possible but follows EVs; T2.8 becomes the garage and supported-vehicle picker; profiles for other makes are added per make as beta data arrives rather than as a bulk import, and only then become addable.
 **Unchanged.** Signal tiers, the verification rule (hard rule 1), read-only toward the vehicle, templates first with the opt-in LLM, the phone relay and MCP (ADR-013), BM1–BM7.
+
+## ADR-015: Equinox EV is the required Phase 0 vehicle; ICE cars are optional bench vehicles (2026-09-23)
+
+**Decision.** Phase 0 hardware acceptance and recording-backed checks use the 2024 Equinox EV. The Chrysler 200 and Hyundai Elantra are available as optional BLE and generic OBD bench vehicles, but no task or milestone requires recordings or app runs on them. T0.8 proves the phone console with one successful `0100` and one exported, replayable recording from the Equinox EV. Future supported EV makes bring their own consented recordings through beta testing.
+
+**Why.** ADR-014 limits the garage to supported vehicles, initially Ultium. Neither ICE car can be added to the product, so mandatory ICE sessions would test a path users cannot take. The two tracked Equinox spike recordings already exercise real ELM framing and replay. T0.4 and T0.5 use them for vehicle-backed checks and labeled synthetic fixtures for branches absent from those recordings; 11-bit CAN behavior needs a real recording when a supported vehicle using it is added. T0.7 tests the "recently cleared" branches with synthetic fixtures and does not require clearing codes on a car.
+
+**Amends ADR-012.** Its statement that the Chrysler and Elantra are core test cars is historical, superseded here. **Amends the Phase 0 plan.** T0.2's ICE sessions, T0.3's ICE replay follow-up, T0.4/T0.5's three-car checks, T0.7's Chrysler clear, T0.8's ICE baseline collection, T0.9's two ICE app runs, and T0.10's three-car fixture requirement are replaced by Equinox and synthetic verification as stated in `docs/PLAN.md`. Existing specs, review findings, and recordings remain historical evidence; no hardware verification is retroactively claimed.
+
+**Unchanged.** Source every protocol constant, keep recordings immutable, keep `obd-core` pure, and require explicit confirmation before any Mode 04 write. The optional ICE bench does not expand the supported-vehicle garage.

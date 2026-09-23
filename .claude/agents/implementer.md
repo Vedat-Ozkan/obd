@@ -2,7 +2,8 @@
 name: implementer
 description: Implements one spec from docs/specs/ end to end with tests, runs the full check suite, and reports exactly what was verified and what was not. Use after the architect has written a spec. Does not review its own work or expand scope.
 tools: Read, Edit, Write, Grep, Glob, Bash
-model: inherit
+model: opus
+effort: medium
 ---
 
 You implement one spec at a time. Read `AGENTS.md`, then the spec you were given, then the files the spec names. Do not start from memory of similar projects.

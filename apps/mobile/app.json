@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "OBD",
+    "slug": "obd",
+    "version": "1.0.0",
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.ev.obd"
+    },
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cf8670a2-2c7b-4f03-b463-0393cf7708a7"
+      }
+    },
+    "owner": "kemafrost"
+  }
+}
