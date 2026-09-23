@@ -1,0 +1,173 @@
+{"t": 2.45, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "ready, park, dash SOC 70%, ambient 14 C", "script": "tools/spike/spike.py", "bleak": "3.0.2", "platform": "Windows-11-10.0.26200-SP0", "write_char": "0000fff2-0000-1000-8000-00805f9b34fb", "notify_char": "0000fff1-0000-1000-8000-00805f9b34fb", "mtu": 247}
+{"t": 2.485, "dir": "tx", "data": "ATZ\r"}
+{"t": 2.506, "dir": "rx", "data": "\u00fc"}
+{"t": 3.312, "dir": "rx", "data": "\r\rELM327 v1.5\r\r>"}
+{"t": 3.321, "dir": "tx", "data": "ATI\r"}
+{"t": 3.342, "dir": "rx", "data": "ATI\r"}
+{"t": 3.343, "dir": "rx", "data": "ELM327 v1.5\r\r>"}
+{"t": 3.348, "dir": "tx", "data": "ATE0\r"}
+{"t": 3.372, "dir": "rx", "data": "ATE0\r"}
+{"t": 3.373, "dir": "rx", "data": "OK\r\r>"}
+{"t": 3.379, "dir": "tx", "data": "ATL0\r"}
+{"t": 3.402, "dir": "rx", "data": "OK\r\r>"}
+{"t": 3.411, "dir": "tx", "data": "ATS0\r"}
+{"t": 3.432, "dir": "rx", "data": "OK\r\r>"}
+{"t": 3.439, "dir": "tx", "data": "ATH1\r"}
+{"t": 3.462, "dir": "rx", "data": "OK\r\r>"}
+{"t": 3.469, "dir": "tx", "data": "ATSP0\r"}
+{"t": 3.492, "dir": "rx", "data": "OK\r\r>"}
+{"t": 3.499, "dir": "tx", "data": "ATDPN\r"}
+{"t": 3.523, "dir": "rx", "data": "A0\r\r>"}
+{"t": 3.532, "dir": "tx", "data": "ATRV\r"}
+{"t": 3.568, "dir": "rx", "data": "13.1V\r\r>"}
+{"t": 3.574, "dir": "tx", "data": "0100\r"}
+{"t": 3.598, "dir": "rx", "data": "SEA"}
+{"t": 3.598, "dir": "rx", "data": "R"}
+{"t": 3.599, "dir": "rx", "data": "CH"}
+{"t": 3.612, "dir": "rx", "data": "I"}
+{"t": 3.613, "dir": "rx", "data": "NG"}
+{"t": 3.613, "dir": "rx", "data": ".."}
+{"t": 3.614, "dir": "rx", "data": "."}
+{"t": 3.615, "dir": "rx", "data": "\r"}
+{"t": 5.864, "dir": "rx", "data": "18DAF14506410080"}
+{"t": 5.864, "dir": "rx", "data": "000001\r18DAF1400"}
+{"t": 5.865, "dir": "rx", "data": "6410080000001\r18"}
+{"t": 5.866, "dir": "rx", "data": "DAF1170641008008"}
+{"t": 5.878, "dir": "rx", "data": "0013\r18DAF128064"}
+{"t": 5.879, "dir": "rx", "data": "100BFFFF997\r18DA"}
+{"t": 5.879, "dir": "rx", "data": "F1CB064100800000"}
+{"t": 5.88, "dir": "rx", "data": "01\r"}
+{"t": 5.881, "dir": "rx", "data": "\r"}
+{"t": 5.907, "dir": "rx", "data": ">"}
+{"t": 5.913, "dir": "tx", "data": "0120\r"}
+{"t": 5.937, "dir": "rx", "data": "18DAF14506412000"}
+{"t": 5.952, "dir": "rx", "data": "000001\r18DAF1CB0"}
+{"t": 5.953, "dir": "rx", "data": "6412000000001\r18"}
+{"t": 5.954, "dir": "rx", "data": "DAF128064120801F"}
+{"t": 5.955, "dir": "rx", "data": "E019\r18DAF140064"}
+{"t": 5.967, "dir": "rx", "data": "12000000001\r18DA"}
+{"t": 5.968, "dir": "rx", "data": "F117064120800180"}
+{"t": 5.968, "dir": "rx", "data": "01\r"}
+{"t": 6.012, "dir": "rx", "data": "\r>"}
+{"t": 6.018, "dir": "tx", "data": "0140\r"}
+{"t": 6.042, "dir": "rx", "data": "18DAF14506414040"}
+{"t": 6.057, "dir": "rx", "data": "000000\r18DAF1CB0"}
+{"t": 6.058, "dir": "rx", "data": "6414040000000\r18"}
+{"t": 6.059, "dir": "rx", "data": "DAF1400641404000"}
+{"t": 6.059, "dir": "rx", "data": "0000\r18DAF128064"}
+{"t": 6.072, "dir": "rx", "data": "140FED04001\r18DA"}
+{"t": 6.073, "dir": "rx", "data": "F117064140400000"}
+{"t": 6.073, "dir": "rx", "data": "01\r"}
+{"t": 6.117, "dir": "rx", "data": "\r>"}
+{"t": 6.124, "dir": "tx", "data": "0101\r"}
+{"t": 6.148, "dir": "rx", "data": "18DAF14506410100"}
+{"t": 6.163, "dir": "rx", "data": "040000\r18DAF1280"}
+{"t": 6.163, "dir": "rx", "data": "6410100040000\r18"}
+{"t": 6.164, "dir": "rx", "data": "DAF1170641010004"}
+{"t": 6.165, "dir": "rx", "data": "0000\r18DAF140064"}
+{"t": 6.177, "dir": "rx", "data": "10100040000\r18DA"}
+{"t": 6.178, "dir": "rx", "data": "F1CB064101000400"}
+{"t": 6.179, "dir": "rx", "data": "00\r"}
+{"t": 6.223, "dir": "rx", "data": "\r>"}
+{"t": 6.233, "dir": "tx", "data": "0902\r"}
+{"t": 6.267, "dir": "rx", "data": "18DAF11710144902"}
+{"t": 6.268, "dir": "rx", "data": "0133474E\r18DAF12"}
+{"t": 6.269, "dir": "rx", "data": "8101449020133474"}
+{"t": 6.282, "dir": "rx", "data": "E\r18DAF117213744"}
+{"t": 6.283, "dir": "rx", "data": "4E52503952\r18DAF"}
+{"t": 6.284, "dir": "rx", "data": "1282137444E52503"}
+{"t": 6.285, "dir": "rx", "data": "952\r18DAF1172253"}
+{"t": 6.298, "dir": "rx", "data": "323031343038\r18D"}
+{"t": 6.299, "dir": "rx", "data": "AF12822533230313"}
+{"t": 6.299, "dir": "rx", "data": "43038\r"}
+{"t": 6.312, "dir": "rx", "data": "\r>"}
+{"t": 6.318, "dir": "tx", "data": "090A\r"}
+{"t": 6.342, "dir": "rx", "data": "18DAF1451017490A"}
+{"t": 6.357, "dir": "rx", "data": "0147574D\r18DAF14"}
+{"t": 6.358, "dir": "rx", "data": "521002D476174657"}
+{"t": 6.359, "dir": "rx", "data": "7\r18DAF145226179"}
+{"t": 6.36, "dir": "rx", "data": "0000000000\r18DAF"}
+{"t": 6.373, "dir": "rx", "data": "1452300000000000"}
+{"t": 6.373, "dir": "rx", "data": "000\r18DAF1CB1017"}
+{"t": 6.374, "dir": "rx", "data": "490A01424543\r18D"}
+{"t": 6.388, "dir": "rx", "data": "AF1401017490A014"}
+{"t": 6.389, "dir": "rx", "data": "2434D\r18DAF12810"}
+{"t": 6.39, "dir": "rx", "data": "17490A01434843\r1"}
+{"t": 6.391, "dir": "rx", "data": "8DAF1171017490A0"}
+{"t": 6.402, "dir": "rx", "data": "1444D43\r18DAF140"}
+{"t": 6.403, "dir": "rx", "data": "21002D426F647943"}
+{"t": 6.404, "dir": "rx", "data": "\r18DAF1CB214D2D4"}
+{"t": 6.417, "dir": "rx", "data": "22B456E65\r18DAF1"}
+{"t": 6.417, "dir": "rx", "data": "28214D2D43686173"}
+{"t": 6.418, "dir": "rx", "data": "73\r18DAF117214D2"}
+{"t": 6.419, "dir": "rx", "data": "D4472697665\r18DA"}
+{"t": 6.432, "dir": "rx", "data": "F140226F6E7\rBUFF"}
+{"t": 6.433, "dir": "rx", "data": "ER FULL\r\r>"}
+{"t": 6.441, "dir": "tx", "data": "03\r"}
+{"t": 6.462, "dir": "rx", "data": "18DAF11723726C00"}
+{"t": 6.478, "dir": "rx", "data": "00000000\r18DAF14"}
+{"t": 6.48, "dir": "rx", "data": "5024300\r18DAF140"}
+{"t": 6.481, "dir": "rx", "data": "024300\r18DAF1170"}
+{"t": 6.483, "dir": "rx", "data": "24300\r18DAF12802"}
+{"t": 6.492, "dir": "rx", "data": "4300\r18DAF1CB024"}
+{"t": 6.493, "dir": "rx", "data": "300\r"}
+{"t": 6.507, "dir": "rx", "data": "\r>"}
+{"t": 6.513, "dir": "tx", "data": "07\r"}
+{"t": 6.537, "dir": "rx", "data": "18DAF145024700\r1"}
+{"t": 6.552, "dir": "rx", "data": "8DAF140024700\r18"}
+{"t": 6.553, "dir": "rx", "data": "DAF117024700\r18D"}
+{"t": 6.554, "dir": "rx", "data": "AF128024700\r18DA"}
+{"t": 6.555, "dir": "rx", "data": "F1CB024700\r"}
+{"t": 6.567, "dir": "rx", "data": "\r>"}
+{"t": 6.574, "dir": "tx", "data": "0A\r"}
+{"t": 6.598, "dir": "rx", "data": "18DAF145024A00\r1"}
+{"t": 6.612, "dir": "rx", "data": "8DAF140024A00\r18"}
+{"t": 6.613, "dir": "rx", "data": "DAF128024A00\r18D"}
+{"t": 6.614, "dir": "rx", "data": "AF117037F0A11\r18"}
+{"t": 6.627, "dir": "rx", "data": "DAF1CB037F0A11\r"}
+{"t": 6.658, "dir": "rx", "data": "\r>"}
+{"t": 6.665, "dir": "tx", "data": "ATSP7\r"}
+{"t": 6.688, "dir": "rx", "data": "OK\r\r"}
+{"t": 6.717, "dir": "rx", "data": ">"}
+{"t": 6.727, "dir": "tx", "data": "ATCP 18\r"}
+{"t": 6.748, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.755, "dir": "tx", "data": "ATSH DA1DF1\r"}
+{"t": 6.777, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.788, "dir": "tx", "data": "ATCRA 18DAF11D\r"}
+{"t": 6.808, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.816, "dir": "tx", "data": "ATFCSH 18DA1DF1\r"}
+{"t": 6.837, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.844, "dir": "tx", "data": "ATFCSD 300000\r"}
+{"t": 6.868, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.874, "dir": "tx", "data": "ATFCSM 1\r"}
+{"t": 6.897, "dir": "rx", "data": "OK\r\r>"}
+{"t": 6.904, "dir": "tx", "data": "22 33E5\r"}
+{"t": 7.138, "dir": "rx", "data": "NO DATA\r\r>"}
+{"t": 7.144, "dir": "tx", "data": "ATSH DACBF1\r"}
+{"t": 7.167, "dir": "rx", "data": "OK\r\r>"}
+{"t": 7.174, "dir": "tx", "data": "ATCRA 18DAF1CB\r"}
+{"t": 7.197, "dir": "rx", "data": "OK\r\r>"}
+{"t": 7.206, "dir": "tx", "data": "ATFCSH 18DACBF1\r"}
+{"t": 7.228, "dir": "rx", "data": "OK\r\r>"}
+{"t": 7.235, "dir": "tx", "data": "22 27C6\r"}
+{"t": 7.273, "dir": "rx", "data": "18DAF1CB056227C6"}
+{"t": 7.273, "dir": "rx", "data": "B236\r"}
+{"t": 7.287, "dir": "rx", "data": "\r>"}
+{"t": 7.293, "dir": "tx", "data": "22 2AF5\r"}
+{"t": 7.332, "dir": "rx", "data": "18DAF1CB100D622A"}
+{"t": 7.334, "dir": "rx", "data": "F5997899\r"}
+{"t": 7.335, "dir": "rx", "data": "18DAF1CB216E998C"}
+{"t": 7.348, "dir": "rx", "data": "09022505\r"}
+{"t": 7.362, "dir": "rx", "data": "\r>"}
+{"t": 7.369, "dir": "tx", "data": "22 2B43\r"}
+{"t": 7.407, "dir": "rx", "data": "18DAF1CB101D622B"}
+{"t": 7.408, "dir": "rx", "data": "43B200B2\r"}
+{"t": 7.409, "dir": "rx", "data": "18DAF1CB21B2B2B2"}
+{"t": 7.422, "dir": "rx", "data": "B3B2B2B2\r18DAF1C"}
+{"t": 7.423, "dir": "rx", "data": "B22B2B2000000000"}
+{"t": 7.424, "dir": "rx", "data": "0\r18DAF1CB230000"}
+{"t": 7.425, "dir": "rx", "data": "0000000000"}
+{"t": 7.426, "dir": "rx", "data": "\r18DAF"}
+{"t": 7.437, "dir": "rx", "data": "1CB2400000000000"}
+{"t": 7.438, "dir": "rx", "data": "000\r"}
+{"t": 7.452, "dir": "rx", "data": "\r>"}

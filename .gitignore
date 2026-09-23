@@ -18,3 +18,5 @@ __pycache__/
 .DS_Store
 # eval run outputs are large and regenerable; keep the labeled inputs only
 eval/runs/
+# T2.3a discovery recordings stay local until the redaction ADR (spec Decision 3)
+fixtures/recordings/**/*-discovery*.jsonl

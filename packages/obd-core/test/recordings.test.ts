@@ -31,6 +31,7 @@ function timedOut(lines: ReturnType<typeof parseRecording>, from: number): boole
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function replayTest(file: string): void {
+  // Timeout: discovery recordings hold ~18k tx lines at ~1.15 ms per tx, well above vitest's 5 s default.
   it(`replays ${relative(repoRoot, file)}`, async () => {
     const lines = parseRecording(readFileSync(file, "latin1"));
     const transport = new ReplayTransport(lines);
@@ -47,7 +48,7 @@ function replayTest(file: string): void {
       const cmd = line.data.endsWith("\r") ? line.data.slice(0, -1) : line.data;
       for (const raw of completed) expect(parseElmResponse(raw, cmd).status.kind).toBeTypeOf("string");
     }
-  });
+  }, 120_000);
 }
 
 describe("fixtures/synthetic", () => {

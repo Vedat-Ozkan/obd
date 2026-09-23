@@ -21,9 +21,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 
 
-def next_out_path(car: str, day: str) -> str:
-    """First free <day>-spike.jsonl, then -spike-2, -spike-3...: an existing recording is never reused."""
-    base = os.path.join(REPO, "fixtures", "recordings", car, f"{day}-spike")
+def next_out_path(car: str, day: str, slug: str = "spike") -> str:
+    """First free <day>-<slug>.jsonl, then -<slug>-2, -<slug>-3...: an existing recording is never reused."""
+    base = os.path.join(REPO, "fixtures", "recordings", car, f"{day}-{slug}")
     path, n = base + ".jsonl", 2
     while os.path.exists(path):
         path, n = f"{base}-{n}.jsonl", n + 1
