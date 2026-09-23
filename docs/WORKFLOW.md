@@ -37,7 +37,7 @@ A task is done when all of these hold:
 
 ## ML task verification
 
-For BM1–BM7 and the LLM features (T2.10, T2.11), read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, consent, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
+For BM1–BM9 and the LLM features (T2.10, T2.11), read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, consent, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
 
 Normal `pnpm check` stays fixture-based, including the LLM regression suite over saved responses. Model training and paid model evaluations run separately when a spec requires them. The reviewer reruns required checks or marks them NOT RUN; absent compute does not qualify for the vehicle hardware-only exception and leaves the experiment incomplete. A reproducible negative result can pass; an unrun experiment cannot. No model is promoted to the app merely because training completed.
 

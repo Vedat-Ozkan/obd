@@ -221,7 +221,7 @@ Each week has a goal, reading, one hands-on exercise with a definition of done, 
 **Self-check. Can you explain:**
 - [ ] why gradient boosting is the default for tabular data?
 - [ ] what a Gaussian process gives you that boosting doesn't?
-- [ ] how split conformal prediction works, and what it assumes?
+- [ ] how split conformal prediction works, and what it assumes? (Exchangeability: why one car's sessions over seasons break it, and why ADR-016 leads with a Bayesian interval instead.)
 - [ ] what coverage is, and what an overconfident interval looks like?
 - [ ] why you split by cell or vehicle, and what leakage looked like in your run?
 
@@ -285,8 +285,9 @@ Each week has a goal, reading, one hands-on exercise with a definition of done, 
 | T2.10 LLM summary | Structured output, faithfulness check, prompt caching | 1, 2 | Battery report (T2.6) exists |
 | T2.11 assistant | Tool calling, prompt injection, refusing when data is missing | 2 | Stored charge sessions |
 | BM1 dataset pipeline | pandas, resampling, grouped splits, provenance | 3 | Charge logs (T2.4) and beta data (T2.9) |
-| BM2 capacity with intervals | Boosting, GPs, conformal prediction, coverage | 3 | Several real charges; a reference method per charge |
+| BM2 independent capacity + Bayesian trend | Coulomb counting, OCV curves, error budgets, Kalman filters/GPs, rolling-origin coverage (conformal as a check; exchangeability) | 3 | Several real charges; a reference method per charge |
 | BM3 imbalance anomalies | Fault injection, detection metrics, false positives | 4 | Healthy real sessions to inject into |
+| BM8 resistance + circuit model | Equivalent-circuit models, ΔV/ΔI at current steps, small residual networks trained on voltage (self-labelling) | 3, 4 | Current and group voltages polled every cycle (T2.4); driving and charging sessions |
 | BM4 on-device and drift | Model export, parity checks, drift detection | 4 | A BM2 or BM3 model worth shipping; runtime chosen in the spec |
 | BM5 LLM eval infrastructure | Evals, judge calibration, CI regression suites | 2 | T2.10 and T2.11 built |
 | BM6 write-ups | Writing with numbers and failures | 5 | BM2–BM5 evidence exists |

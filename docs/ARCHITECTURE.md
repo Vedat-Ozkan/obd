@@ -152,7 +152,7 @@ A read-only allowlist is enforced in the relay, not in prompts: Mode 04 requires
 
 ### `tools/ml/` (planned, isolated Python experiments)
 
-Battery modeling for BM1–BM4 (dataset builds, capacity models, conformal calibration, anomaly detection, export to the on-device format) and the BM7 distillation stretch. Separate from the relay, bridge, TypeScript packages, and phone. Datasets and models are derived artifacts with manifests pointing back to recordings; private data and large checkpoints stay out of git. See [ML.md](ML.md).
+Battery modeling for BM1–BM4 and BM8 (dataset builds and the OCV curve, the independent capacity estimator and Bayesian trend, resistance and circuit models, per-group fault detection with injected faults, export to the on-device format) and the BM7 distillation stretch. Separate from the relay, bridge, TypeScript packages, and phone. Datasets and models are derived artifacts with manifests pointing back to recordings; private data and large checkpoints stay out of git. See [ML.md](ML.md).
 
 ## What is deliberately not here
 

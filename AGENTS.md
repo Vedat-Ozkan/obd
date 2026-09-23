@@ -17,7 +17,7 @@ It is a portfolio and personal-use project first, showcasing applied AI engineer
 | ELM327 / dongle / vehicle quirks | `docs/ELM327.md` |
 | Risks, research findings, decisions on tooling | `docs/FEASIBILITY.md` |
 | Fixtures, labels, eval scoring (battery, LLM, discovery) | `docs/EVAL.md` |
-| Battery ML (BM1–BM7), datasets, LLM eval, ML verification | `docs/ML.md` |
+| Battery ML (BM1–BM9, measurement-first per ADR-016), datasets, LLM eval, ML verification | `docs/ML.md` |
 | How the architect/implementer/reviewer loop runs | `docs/WORKFLOW.md` |
 | Why things were decided | `docs/DECISIONS.md` |
 | Spec template | `docs/specs/README.md` |

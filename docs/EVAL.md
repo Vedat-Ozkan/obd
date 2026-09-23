@@ -35,9 +35,11 @@ Label schema (zod in `obd-eval`), one per labeled session:
 
 **Deterministic report (T2.4–T2.7).** Replay tests assert every report field against the recording. A report number that does not trace to a logged value fails.
 
-**Capacity estimates (T2.4 baseline, BM2 models).** Per session: estimate, reference, absolute and relative error, interval and whether it covers the reference, reference method. Per run: the per-session table plus per-vehicle aggregates with n next to every number, and empirical coverage of the nominal interval. Split by vehicle and session before any windowing (see [ML.md](ML.md)); calibration sessions never appear in the test split. When there are few vehicles, report leave-one-vehicle-out results.
+**Capacity estimates (T2.4, BM2; ADR-016).** Per session: the independent estimate (current integrated between OCV-anchored SOC points), its error budget, the BMS figure (`27AF` ÷ SOC) for comparison, ΔSOC, rest durations, temperature, and whether the session passed the selection rules. Per run: repeatability (spread of estimates across similar sessions), agreement with the BMS figure, the Bayesian trend with its interval, and **rolling-origin coverage** (intervals checked forward in time), with n next to every number. Comparison rows (lab-prior gradient boosting, small time-series foundation model) at the same data budget. With a fleet: leave-one-vehicle-out results and conformal coverage by vehicle; calibration sessions never appear in the test split.
 
-**Imbalance anomaly detection (BM3).** Detection rate and time to detection on injected faults; false positives on healthy real sessions. Injected-fault results are synthetic and always in a separate table from healthy real sessions.
+**Resistance and circuit model (BM8).** Effective resistance per step event with its window, temperature and SOC; stability across sessions at matched conditions; circuit-model voltage error on held-out sessions.
+
+**Per-group analytics and faults (BM3).** Group rankings with the evidence behind them. For injected faults (by type: internal short, capacity fade, resistance or connection rise, sensor offset/drift): detection probability versus severity and lead time. False alarms per vehicle-day on untouched real data. Injected-fault results are synthetic and always in a separate table from healthy real sessions.
 
 **12 V (T2.5).** Deterministic thresholds with sources; tested on recordings, not scored as a model.
 
