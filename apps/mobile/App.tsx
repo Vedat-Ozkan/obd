@@ -2,7 +2,7 @@ import { BleManager } from "react-native-ble-plx";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useEffect, useRef, useState } from "react";
-import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { ConsoleSession } from "./src/console.js";
 import { RecordingBuffer } from "./src/recording.js";
@@ -21,7 +21,15 @@ async function requestBlePermission(): Promise<boolean> {
   return permissions.every((permission) => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
 }
 
+// Explicit colors per scheme: without them, Android dark mode draws default dark text on the dark system background.
+const palettes = {
+  light: { background: "#FFFFFF", text: "#111111", muted: "#555555", border: "#767676", inputBackground: "#FFFFFF", inputText: "#111111", placeholder: "#595959", consoleBackground: "#F2F2F2", consoleText: "#000000" },
+  dark: { background: "#121212", text: "#EDEDED", muted: "#B3B3B3", border: "#8A8A8A", inputBackground: "#1E1E1E", inputText: "#EDEDED", placeholder: "#A0A0A0", consoleBackground: "#000000", consoleText: "#E6E6E6" },
+};
+
 export function App() {
+  const colors = palettes[useColorScheme() === "dark" ? "dark" : "light"];
+  const inputColors = { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.inputText };
   const [manager] = useState(() => new BleManager());
   const [recording] = useState(() => new RecordingBuffer());
   const [connection, setConnection] = useState<BleConnection>();
@@ -112,20 +120,20 @@ export function App() {
     } catch (error) { setStatus(`Export error: ${error instanceof Error ? error.message : String(error)}`); }
   };
 
-  return <View style={styles.container}>
-    <Text>{status}</Text>
-    <Text>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
+  return <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Text style={{ color: colors.text }}>{status}</Text>
+    <Text style={{ color: colors.muted }}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
     <Button title="Scan" disabled={!permitted || !!connection || connecting} onPress={startScan} />
     <Button title="Disconnect" disabled={!connection || pending} onPress={() => { teardown("Disconnected by user."); }} />
     <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} disabled={!!connection || connecting} onPress={() => void connect(item)} />} />
-    <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="Vehicle-state note" editable={!recordingActive} />
+    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!recordingActive} />
     <Button title={recordingActive ? "Stop recording" : "Start recording"} disabled={pending || (!recordingActive && !connection)} onPress={recordingActive ? stopRecording : startRecording} />
-    <TextInput style={styles.input} value={command} onChangeText={setCommand} placeholder="Read-only command" autoCapitalize="characters" />
+    <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" />
     <Button title="Send" disabled={!connection || !recordingActive || pending} onPress={() => void send()} />
     <Button title="Export recording" disabled={!frozenJsonl} onPress={() => void exportRecording()} />
-    <ScrollView style={styles.console}>{transcript.map((line, index) => <Text key={index}>{line}</Text>)}</ScrollView>
+    <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
   </View>;
 }
 
-const styles = StyleSheet.create({ container: { flex: 1, gap: 8, padding: 16 }, input: { borderColor: "#999", borderWidth: 1, padding: 8 }, console: { borderColor: "#999", borderWidth: 1, flex: 1, padding: 8 } });
+const styles = StyleSheet.create({ container: { flex: 1, gap: 8, padding: 16 }, input: { borderWidth: 1, padding: 8 }, console: { borderWidth: 1, flex: 1, padding: 8 }, consoleText: { fontFamily: "monospace" } });
 export default App;
