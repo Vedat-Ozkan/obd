@@ -18,31 +18,39 @@ describe("OBDb Equinox recording replay", () => {
     ["2026-09-22-spike-2.redacted.jsonl", [3.9288, 3.9278, 3.9308]],
   ] as const) {
     it(`decodes answered Mode 22 signals in ${name}`, async () => {
-      const output = await replayRecording(recording(name), { signals });
+      expect(signals).toHaveLength(6);
+      expect(signals.every((signal) => signal.tier === "community")).toBe(true);
+      const lines = recording(name);
+      expect(lines[0]).toMatchObject({ dir: "meta", car: "chevrolet-equinox-ev-2024", note: "ready, park, dash SOC 70%, ambient 14 C" });
+      const output = await replayRecording(lines, { signals });
       const text = output.join("\n");
       expect(text).toMatch(/22 33E5 -> nodata/);
       expect(text).not.toContain("EQUINOXEV_HVBAT_V ");
-      expect(text).not.toContain("tier=verified");
-      for (const [id, value, unit] of [
-        ["EQUINOXEV_SOC_HD", 69.615, "percent"],
-        ["EQUINOXEV_HVBAT_C_V_AVG", voltages[0], "volts"],
-        ["EQUINOXEV_HVBAT_C_V_MIN", voltages[1], "volts"],
-        ["EQUINOXEV_HVBAT_C_V_MAX", voltages[2], "volts"],
-        ["EQUINOXEV_SOC", 69.804, "percent"],
+      for (const [id, value, unit, tier] of [
+        ["EQUINOXEV_SOC_HD", 69.615, "percent", "verified"],
+        ["EQUINOXEV_HVBAT_C_V_AVG", voltages[0], "volts", "community"],
+        ["EQUINOXEV_HVBAT_C_V_MIN", voltages[1], "volts", "community"],
+        ["EQUINOXEV_HVBAT_C_V_MAX", voltages[2], "volts", "community"],
+        ["EQUINOXEV_SOC", 69.804, "percent", "verified"],
       ] as const) {
         const line = output.find((s) => s.includes(`decoded CB ${id} `));
         expect(line, id).toBeDefined();
-        expect(line).toContain(`${unit} tier=community ecu=CB`);
+        expect(line).toContain(`${unit} tier=${tier} ecu=CB`);
         const actual = Number(line?.split(`${id} `)[1]?.split(" ")[0]);
         expect(actual).toBeCloseTo(value, 3);
+        if (tier === "verified") expect(Math.round(actual)).toBe(70);
       }
-      expect(output.filter((s) => s.includes("tier=community"))).toHaveLength(5);
+      expect(output.filter((s) => s.includes("tier=community"))).toHaveLength(3);
+      expect(output.filter((s) => s.includes("tier=verified"))).toHaveLength(2);
     });
   }
 
-  it("preserves replay output for an unrelated synthetic recording", async () => {
-    const lines = parseRecording(readFileSync(new URL("fixtures/synthetic/standard-decoding.jsonl", root), "latin1"));
-    expect(await replayRecording(lines, { signals })).toEqual(await replayRecording(lines));
+  it("has no Mode 22 reading in the phone-console recording", async () => {
+    const lines = recording("2026-09-24-phone-console.redacted.jsonl");
+    expect(lines.some((line) => line.dir === "tx" && line.data.startsWith("22"))).toBe(false);
+    const output = await replayRecording(lines, { signals });
+    expect(output).toEqual(await replayRecording(lines));
+    expect(output.some((line) => line.includes("tier="))).toBe(false);
   });
 });
 

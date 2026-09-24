@@ -16,6 +16,7 @@ import { decodeCalIds, decodeEcuName, decodeVin } from "../src/obd/vin.js";
 import { parseRecording, type RecordingLine } from "../src/recording/format.js";
 import { ReplayTransport } from "../src/transport/replay.js";
 import { decodeObdbMode22 } from "../src/vehicles/obdb/decode.js";
+import { withEquinoxEv2024Evidence } from "../src/vehicles/obdb/equinox.js";
 import { importObdbMode22, type ObdbMode22Signal } from "../src/vehicles/obdb/import.js";
 
 const hex = (bytes: Iterable<number>) =>
@@ -138,6 +139,9 @@ function decodeText(cmd: string, frame: Frame): string | undefined {
 /** Runs every tx of a recording through Elm327Session.send (retry: false, timeoutMs: 500) and formats the result. */
 export async function replayRecording(lines: readonly RecordingLine[], options: { signals?: readonly ObdbMode22Signal[] } = {}): Promise<string[]> {
   const session = new Elm327Session(new ReplayTransport(lines));
+  const signals = lines.some((line) => line.dir === "meta" && line.car === "chevrolet-equinox-ev-2024")
+    ? withEquinoxEv2024Evidence(options.signals ?? [])
+    : options.signals ?? [];
   const out: string[] = [];
   const kinds = new Map<string, number>();
   const errors = new Map<string, number>();
@@ -160,7 +164,7 @@ export async function replayRecording(lines: readonly RecordingLine[], options: 
       count(kinds, "timeout");
       continue;
     }
-    out.push(...formatBlock(i + 1, cmd, r, redactDropped, options.signals ?? []));
+    out.push(...formatBlock(i + 1, cmd, r, redactDropped, signals));
     count(kinds, r.kind);
     if (r.kind === "error") count(errors, r.error.kind);
     frames += r.frames.length;
