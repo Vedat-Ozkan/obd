@@ -8,5 +8,5 @@
     // TypeScript 6 no longer auto-includes @types/*; test files under packages/*/test read fixtures with node:fs.
     "types": ["node"]
   },
-  "include": ["packages/**/*.ts"]
+  "include": ["packages/**/*.ts", "tools/relay/**/*.ts"]
 }

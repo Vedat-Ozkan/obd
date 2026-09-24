@@ -12,15 +12,23 @@
     "check:bridge": "cd tools/hil-bridge && uv run ruff check . && uv run pytest",
     "typecheck": "tsc --noEmit && pnpm --filter './apps/*' -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test",
-    "replay": "tsx packages/obd-core/scripts/replay.ts"
+    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test && vitest run tools/relay/server.test.ts",
+    "replay": "tsx packages/obd-core/scripts/replay.ts",
+    "relay": "tsx tools/relay/server.ts",
+    "hil:smoke": "tsx tools/relay/hil-smoke.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "@types/ws": "8.18.1",
     "eslint": "^10.10.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "ws": "8.21.3",
+    "zod": "4.6.5"
   }
 }
