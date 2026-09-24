@@ -7,13 +7,14 @@ const upstreamResolveRequest = config.resolver.resolveRequest;
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const resolve = upstreamResolveRequest ?? context.resolveRequest;
-  if (moduleName.startsWith('.') && moduleName.endsWith('.js')) {
+  const fromDependency = /(?:^|[\\/])node_modules(?:[\\/]|$)/.test(context.originModulePath);
+  if (!fromDependency && moduleName.startsWith('.') && moduleName.endsWith('.js')) {
     const base = moduleName.slice(0, -'.js'.length);
     for (const ext of ['.ts', '.tsx']) {
       try {
         return resolve(context, base + ext, platform);
-      } catch {
-        // Not a TypeScript source; try the next extension or the original specifier.
+      } catch (error) {
+        if (error?.constructor?.name !== 'FailedToResolvePathError') throw error;
       }
     }
   }

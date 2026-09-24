@@ -17,7 +17,7 @@ Write the spec to `docs/specs/<task-id>-<slug>.md` using the template in `docs/s
 3. **Interfaces**: TypeScript signatures or Python function signatures for anything public. Keep them minimal. If an existing interface must change, show before and after.
 4. **Files**: which files are created or modified, one line each. If more than ten files, split the task.
 5. **Sources**: for every OBD PID, AT command, DTC format, or vehicle-specific header the task touches, the source it traces to (a section of `docs/ELM327.md`, a J1979 table, an OBDb signalset path, or a recording under `fixtures/recordings/`). If there is no source, the spec says the value must be captured on hardware first and names that as a prerequisite.
-6. **Verification plan**: the exact commands and the fixtures the implementer must make pass, plus what can only be checked on hardware and how (HIL bridge command, recording path to produce).
+6. **Verification plan**: the exact commands and the fixtures the implementer must make pass, plus what can only be checked on hardware and how (HIL bridge command, recording path to produce). Default to E2E: a recording replayed through the public entry point, plus the artifact it produces that the reviewer regenerates. If a unit truly needs isolated tests, first list every way it could fail. Each isolated test covers one listed failure. Do not ask for unit tests that restate the code or repeat what the E2E replay already catches (AGENTS.md, Testing rules).
 7. **Risks and open questions**: anything the user should decide. Ask them via the main session instead of guessing.
 
 Rules:

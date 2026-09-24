@@ -5,7 +5,7 @@ model_reasoning_effort = "medium"
 developer_instructions = """
 Read only AGENTS.md, the supplied spec, task baseline, relevant decisions, permitted files, and affected files. Build exactly the spec. Preserve pre-existing edits and Claude's setup. Do not edit the spec, plan, or decisions, mark tasks done, commit, or delegate further. Return conflicts or missing prerequisites to the parent.
 
-Use fixture-driven tests where the spec requires them, then implement the minimum behavior. Source every OBD value from the spec's allowed references. Keep obd-core pure, recordings immutable, and dependencies limited to those listed with reasons in the spec. Synthetic tests do not replace required real recordings. Respect the project's vehicle read-only rule and explicit confirmation for clearing codes.
+Write tests before the code, never after. Prefer E2E tests that replay recordings through the public entry point and produce the artifact the spec names. Write isolated tests only for the failure modes the spec lists, one per failure, and add no unit tests the spec does not ask for. Then implement the minimum behavior. Source every OBD value from the spec's allowed references. Keep obd-core pure, recordings immutable, and dependencies limited to those listed with reasons in the spec. Synthetic tests do not replace required real recordings. Respect the project's vehicle read-only rule and explicit confirmation for clearing codes.
 
 Run focused checks, then pnpm check. For Python changes also run uv run pytest and uv run ruff check in the package. Follow sandbox approvals when commands require them; report unavailable checks honestly. Run hardware checks only during an owner-arranged session. Cite the recording for any hardware claim.
 

@@ -64,21 +64,10 @@ describe("MODE01_PIDS against the vendored OBDb SAEJ1979 signalset", () => {
 });
 
 describe("decodePid (synthetic vectors)", () => {
+  // Only PID 46 has a nonzero offset (add -40); the replay of standard-decoding.jsonl covers the mul/div paths.
   it.each([
-    [0x1c, [0x05], 5, "enum"],
-    [0x1c, [0xff], 255, "enum"],
-    [0x21, [0x00, 0x2a], 42, "km"],
-    [0x30, [0x0a], 10, "count"],
-    [0x31, [0x03, 0xe8], 1000, "km"],
-    [0x42, [0x31, 0x2d], 12.589, "V"],
     [0x46, [0x3c], 20, "degC"],
     [0x46, [0x00], -40, "degC"],
-    [0x4d, [0x00, 0x1e], 30, "min"],
-    [0x4e, [0x01, 0x2c], 300, "min"],
-    [0x5b, [0xb2], 69.804, "percent"],
-    [0x5b, [0xff], 100, "percent"],
-    [0xa6, [0x00, 0x01, 0x86, 0xa0], 10000, "km"],
-    [0xb2, [0xe6], 90.196, "percent"],
   ] as const)("pid %i bytes %j -> %f %s", (pid, bytes, value, unit) => {
     const r = decodePid(pid, frame(0x41, pid, ...bytes));
     if (!r.ok) throw new Error(`decode failed: ${r.reason}`);
@@ -94,7 +83,6 @@ describe("decodePid (synthetic vectors)", () => {
 
 describe("decodePid failures", () => {
   it.each([
-    ["41 30 0A as pid 31", 0x31, [0x41, 0x30, 0x0a], { reason: "echo" }],
     ["41 42 31", 0x42, [0x41, 0x42, 0x31], { reason: "length" }],
     ["41 42 31 2D 00 (trailing byte)", 0x42, [0x41, 0x42, 0x31, 0x2d, 0x00], { reason: "length" }],
     ["pid 0C", 0x0c, [0x41, 0x0c, 0x0b, 0xb8], { reason: "unknown-pid" }],
@@ -107,8 +95,5 @@ describe("decodePid failures", () => {
 describe("checkEcho", () => {
   it("empty data -> echo", () => {
     expect(checkEcho(frame(), [0x41, 0x00])).toEqual({ ok: false, ecu: "7E8", reason: "echo" });
-  });
-  it("matching prefix -> undefined", () => {
-    expect(checkEcho(frame(0x41, 0x00, 0x80), [0x41, 0x00])).toBeUndefined();
   });
 });

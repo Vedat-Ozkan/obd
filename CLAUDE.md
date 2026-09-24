@@ -47,9 +47,11 @@ The test: Every changed line should trace directly to the user's request.
 **Define success criteria. Loop until verified.**
 
 Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+- "Add validation" → "List every invalid input it must reject, write tests for those, then the code"
+- "Fix the bug" → "Reproduce it end to end (a recording or fixture replay) first, then make it pass"
+- "Refactor X" → "Ensure the E2E tests pass before and after"
+
+Tests come before the code, never after. See AGENTS.md, Testing rules.
 
 For multi-step tasks, state a brief plan:
 ```

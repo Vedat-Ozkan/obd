@@ -1,0 +1,69 @@
+diff --git a/.claude/agents/implementer.md b/.claude/agents/implementer.md
+index e804703..8304c3d 100644
+--- a/.claude/agents/implementer.md
++++ b/.claude/agents/implementer.md
+@@ -9,7 +9,7 @@ effort: medium
+ You implement one spec at a time. Read `AGENTS.md`, then the spec you were given, then the files the spec names. Do not start from memory of similar projects.
+ 
+ Work in this order:
+-1. Restate the spec's verification plan as a checklist at the top of your scratch notes. That checklist is your definition of done.
++1. The spec's verification plan is your definition of done.
+ 2. Write or extend tests first when the spec gives fixtures. Tests run against `fixtures/recordings/` replays or table-driven J1979 values, never against a live dongle.
+ 3. Implement the minimum that makes those tests pass. Match existing style in the package. No drive-by refactors, no renamed adjacent code, no reformatting of files you did not need to touch.
+ 4. Run `pnpm check` (typecheck, lint, tests) until green. If a Python package is touched, also run `uv run pytest` and `uv run ruff check` in that package.
+diff --git a/.claude/agents/recording-analyst.md b/.claude/agents/recording-analyst.md
+index 2ccfa41..97d2185 100644
+--- a/.claude/agents/recording-analyst.md
++++ b/.claude/agents/recording-analyst.md
+@@ -15,4 +15,4 @@ Hard rules:
+ - Every claim cites the recording path and line numbers. Separate what the bytes show from your interpretation, and label any scaling you did not find in `docs/ELM327.md`, a checked-in signalset, or the spec you were given as "unsourced".
+ - Replies are `\r`-separated lines; classify a reply by checking every line, not just the first. Track the module from the most recent `ATSH` command. Reassemble ISO-TP multi-frame replies (PCI 0 single, 1 first, 2 consecutive) before decoding a `62 <DID>` payload.
+ 
+-Output: a short summary, then compact tables (value per state or per time, with line numbers), then open questions. No more than about 60 lines unless asked.
++Output: a short summary, then compact tables (value per state or per time, with line numbers), then open questions. Keep it compact: this agent exists so raw recording data never reaches the main conversation.
+diff --git a/.claude/agents/test-runner.md b/.claude/agents/test-runner.md
+index 15e654a..36bec95 100644
+--- a/.claude/agents/test-runner.md
++++ b/.claude/agents/test-runner.md
+@@ -7,7 +7,7 @@ model: haiku
+ effort: low
+ ---
+ 
+-You run the check or test command you are given, from the repo root `/home/kema/projects/obd`, and report the outcome. You do not fix anything.
++You run the check or test command you are given, from the repository root (`git rev-parse --show-toplevel`), and report the outcome. You do not fix anything.
+ 
+ Report format, nothing else:
+ 
+diff --git a/.claude/skills/feature/SKILL.md b/.claude/skills/feature/SKILL.md
+index 58fa8ec..8a3cad5 100644
+--- a/.claude/skills/feature/SKILL.md
++++ b/.claude/skills/feature/SKILL.md
+@@ -7,7 +7,7 @@ Run the three-agent loop for the task given in the arguments. You are the orches
+ 
+ 0. **Record.** Read `docs/task-runs/<task-id>.md` if it exists (for free-text requests the id is `X-<date>-<slug>`). If it exists, reconcile it against the spec, `git status --short`, and the recorded evidence, and resume at the first incomplete or invalidated stage; do not redo valid stages, and do not inherit an approval. If it does not exist, create it with the headings of an existing record (`docs/task-runs/T0.1.md`) and the minimum contents listed in `docs/WORKFLOW.md`, Handoff section, starting from the baseline `git status --short`. Update the record after every step below, on every blocker, and before you stop. Codex uses the same record; it is the only handoff between the two tools.
+ 1. **Architect.** Spawn the `architect` subagent with the task id or text. When it returns, read the spec it wrote. If it lists open questions, put them to the user now with AskUserQuestion and record the answers in the spec's "Decisions" section before continuing. If the user is not available and a question is material, stop here and report.
+-2. **Confirm scope.** Show the user the spec's Goal, Non-goals, and Files sections in under 15 lines and ask whether to proceed. Skip this step only if the user said "no confirmation" in the arguments.
++2. **Confirm scope.** Show the user a condensed version of the spec's Goal, Non-goals, and Files sections and ask whether to proceed. Skip this step only if the user said "no confirmation" in the arguments.
+ 3. **Implementer.** Spawn the `implementer` subagent with the spec path. Relay its report verbatim to the user.
+ 4. **Reviewer.** Spawn the `reviewer` subagent with the spec path. Relay its verdict and findings verbatim.
+ 5. **Loop.** On REQUEST_CHANGES, spawn a fresh `implementer` with the spec path plus the reviewer's findings, then review again. At most two loops in total across tools and resumptions (the record holds the count). If still not approved, stop and give the user the remaining findings; do not merge by fiat.
+diff --git a/docs/WORKFLOW.md b/docs/WORKFLOW.md
+index 098f24a..25242cc 100644
+--- a/docs/WORKFLOW.md
++++ b/docs/WORKFLOW.md
+@@ -4,11 +4,11 @@ Three roles, three subagents in `.claude/agents/`, one orchestrating skill (`/fe
+ 
+ ## The roles
+ 
+-**Architect** reads the plan, the architecture doc, and the actual code, then writes a spec to `docs/specs/`. The spec's most important section is *Sources*: every OBD constant the task will introduce, and where it comes from. If a constant has no source, the spec says "capture on hardware first" and that becomes a prerequisite. The architect never writes code. It runs on the strongest model available because a bad spec wastes two more agents' time.
++**Architect** reads the plan, the architecture doc, and the actual code, then writes a spec to `docs/specs/`. The spec's most important section is *Sources*: every OBD constant the task will introduce, and where it comes from. If a constant has no source, the spec says "capture on hardware first" and that becomes a prerequisite. The architect never writes code. A bad spec wastes two more agents' time, so this is the stage to spend care on.
+ 
+-**Implementer** builds exactly the spec, tests first against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. It can run on a cheaper model because the spec has already done the thinking, and the reviewer catches what it misses.
++**Implementer** builds exactly the spec, tests first against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. The spec has already done the thinking, and the reviewer catches what it misses.
+ 
+-**Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, and any test that mocks the thing under test. It returns APPROVE or REQUEST_CHANGES with ranked findings. It runs on the strongest model available because review is where guessing gets caught.
++**Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, and any test that mocks the thing under test. It returns APPROVE or REQUEST_CHANGES with ranked findings. Review is where guessing gets caught. Model and effort per role are set in the agent definitions (`.claude/agents/*.md` frontmatter, `.codex/agents/*.toml`), not here.
+ 
+ ## The loop
+
+ 

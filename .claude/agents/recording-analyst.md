@@ -15,4 +15,4 @@ Hard rules:
 - Every claim cites the recording path and line numbers. Separate what the bytes show from your interpretation, and label any scaling you did not find in `docs/ELM327.md`, a checked-in signalset, or the spec you were given as "unsourced".
 - Replies are `\r`-separated lines; classify a reply by checking every line, not just the first. Track the module from the most recent `ATSH` command. Reassemble ISO-TP multi-frame replies (PCI 0 single, 1 first, 2 consecutive) before decoding a `62 <DID>` payload.
 
-Output: a short summary, then compact tables (value per state or per time, with line numbers), then open questions. No more than about 60 lines unless asked.
+Output: a short summary, then compact tables (value per state or per time, with line numbers), then open questions. Keep it compact: this agent exists so raw recording data never reaches the main conversation.

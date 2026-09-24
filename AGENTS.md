@@ -52,6 +52,14 @@ pnpm eval           # run battery models and the LLM suite over labeled fixtures
 cd tools/hil-bridge && uv run hil-bridge   # laptop fallback bridge; URL in docs/ARCHITECTURE.md
 ```
 
+## Testing rules
+
+A test written to fit code that already exists restates that code. It always passes, catches nothing, and breaks on every refactor.
+
+- **Never write unit tests after you write code.**
+- **Prefer E2E tests as the only testing mechanism.** Use them to verify that complex features work. Here, E2E means a recording under `fixtures/recordings/` goes through the public entry point (`Elm327Session`, `pnpm replay`, the report builders, `pnpm eval`), and the test asserts what a user or agent would see. A labeled synthetic fixture stands in only for a branch that no recording has. On hardware, the E2E test is `pnpm hil:smoke` through the phone relay. Every E2E test ends by producing an artifact that can be checked and regenerated the same way, such as a replay summary, a rendered report, a recording path, or an eval score file. The reviewer regenerates it and compares.
+- **If you must test a unit in isolation, first write down every way it could fail, and only then write the code.** Put that list in the spec's Verification section. The write guard and the J1979 decode tables are typical cases. Each isolated test covers one failure on the list. A test that covers no listed failure should not exist.
+
 ## Hard rules
 
 1. **Source every constant.** Every PID, AT command, CAN header, scaling formula, and DTC decode must trace to `docs/ELM327.md`, a J1979 table checked into the repo, an OBDb signalset under `packages/obd-core/vehicles/`, or a file under `fixtures/recordings/`. If you cannot cite it, do not write it; capture it on hardware first. Values from memory are the main way wrong PID tables spread.

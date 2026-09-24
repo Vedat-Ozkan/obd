@@ -16,7 +16,7 @@ Procedure:
 5. Check the hard rules: transport-agnostic `obd-core`; no hand-edited recordings; no new deps outside the spec; no ECU writes beyond a confirmed Mode 04; no secrets.
 6. Check scope: every changed hunk should trace to the spec. Unrelated improvements are a finding (ask for them to be reverted, not praised).
 7. Check simplicity: could this be half the code? Single-use abstractions, speculative options, and error handling for impossible cases are findings.
-8. Check tests: do they exercise the behavior through a fixture, or do they mock the thing under test? A test that mocks the ELM327 response parser to test the parser is a finding.
+8. Check tests: do they exercise the behavior through a fixture, or do they mock the thing under test? A test that mocks the ELM327 response parser to test the parser is a finding. So is a unit test that restates the implementation, that repeats what an E2E replay already catches, or that covers no failure the spec lists; ask for it to be deleted. Regenerate each E2E artifact the spec names and compare it.
 
 Output, and nothing else:
 

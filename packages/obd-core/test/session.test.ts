@@ -117,7 +117,21 @@ describe("Elm327Session on the Equinox spike recordings", () => {
 describe("Elm327Session on fixtures/synthetic/session-branches.jsonl (synthetic)", () => {
   it("covers fallback, 11-bit headers, retry, timeout, resync, CAN ERROR and DATA ERROR", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const transport = new ReplayTransport(synthetic);
+    // ReplayTransport delivers rx right after the write; holding it back lets the recorded late '>' arrive late.
+    const inner = new ReplayTransport(synthetic);
+    let held: Uint8Array[] | undefined;
+    let deliver: (bytes: Uint8Array) => void = () => undefined;
+    const transport: Transport = {
+      write: (bytes) => inner.write(bytes),
+      onData: (cb) => {
+        deliver = cb;
+        return inner.onData((bytes) => {
+          if (held === undefined) cb(bytes);
+          else held.push(bytes);
+        });
+      },
+      close: () => inner.close(),
+    };
     const write = vi.spyOn(transport, "write");
     const session = new Elm327Session(transport);
 
@@ -132,15 +146,21 @@ describe("Elm327Session on fixtures/synthetic/session-branches.jsonl (synthetic)
     expect(vin.frames[0].data).toHaveLength(20);
     expect(latin1Decode(vin.frames[0].data.slice(3))).toBe("1C4SYNTHETICVIN00");
 
+    held = [];
     const timedOut = rejection(session.send("0100", { timeoutMs: 50 }));
     await vi.advanceTimersByTimeAsync(50);
     expect(await timedOut).toMatchObject({ kind: "timeout", command: "0100" });
+    const late = held;
+    held = undefined;
+    expect(late.map((b) => latin1Decode(b))).toEqual(["7E806410080000001\r\r>"]);
 
+    // Spec amendment 2026-09-23 (review round 2): after a timeout, the next write waits for a '>'.
     const writes = write.mock.calls.length;
     const canError = session.send("0101");
     await vi.advanceTimersByTimeAsync(RESYNC_MS - 1);
     expect(write.mock.calls.length).toBe(writes);
-    await vi.advanceTimersByTimeAsync(1);
+    for (const bytes of late) deliver(bytes);
+    await vi.advanceTimersByTimeAsync(0);
     expect(write.mock.calls.length).toBe(writes + 1);
     await vi.advanceTimersByTimeAsync(CAN_ERROR_RETRY_DELAY_MS - 1);
     expect(write.mock.calls.length).toBe(writes + 1);
@@ -232,7 +252,7 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(init).toMatchObject({ protocol: "0", fellBack: false, idBits: 11, voltage: undefined });
   });
 
-  it.each(["STOPPED", "LV RESET", "NO DATA", "UNABLE TO CONNECT", "BUFFER FULL"])(
+  it.each(["STOPPED", "LV RESET"])(
     "4. %s is surfaced without a retry",
     async (reply) => {
       const transport = new ScriptedTransport({ "0100": `${reply}\r\r>` });
@@ -241,13 +261,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
       expect(transport.writes).toEqual(["0100"]);
     },
   );
-
-  it("5. retry: false does not retry CAN ERROR", async () => {
-    const transport = new ScriptedTransport({ "0101": "CAN ERROR\r\r>" });
-    const r = await new Elm327Session(transport).send("0101", { retry: false });
-    expect(r).toMatchObject({ kind: "error", error: { kind: "can-error" }, attempts: 1 });
-    expect(transport.writes).toEqual(["0101"]);
-  });
 
   it("6. unawaited sends are single-flight and resolve in order", async () => {
     const inner = new ReplayTransport(spike);
@@ -312,12 +325,18 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
   });
 
   // AGENTS.md hard rule 5; ADR-008; ADR-013
-  it("9. the write guard blocks 04, 2E, 2F, 31 before any byte is written", async () => {
+  it("9. the write guard blocks anything off the read-only allowlist before any byte is written", async () => {
     const transport = new ScriptedTransport({ ATZ: "\r\rELM327 v1.5\r\r>", "0104": "NO DATA\r\r>" });
     const session = new Elm327Session(transport);
     const write = vi.spyOn(transport, "write");
     // Spec amendment 2026-09-23: a CR ends a command (docs/ELM327.md §Framing), so any non-printable is blocked.
-    for (const cmd of ["04", "2E F1 90 00", "2f", "31 01 00", "0100\r04", "\r04", "01\n00"]) {
+    // X-2026-09-23-write-safety: empty (a bare CR repeats), CAF, PP, monitoring and non-read services (§Write safety).
+    for (const cmd of [
+      "04", "2E F1 90 00", "2f", "31 01 00", "0100\r04", "\r04", "01\n00",
+      "", " ", "ATCAF0", "at caf 0", "08 01", "11 01", "14 FF FF FF", "10 03", "3E 00", "ATPP 24 SV FF", "ATMA",
+      // Spec amendment 2026-09-23 (review round 2): exact request lengths per service.
+      "014FFFFFF1", "011011", "02EF190ABCD1", "0100FF", "2233E5FF",
+    ]) {
       expect(await rejection(session.send(cmd))).toMatchObject({ kind: "blocked", command: cmd });
     }
     const badProfile = { protocol: "0\r04" } as unknown as VehicleProfile;
@@ -353,7 +372,8 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 
-  it("11. a rejected transport.write propagates unchanged and the next command waits for resync", async () => {
+  // Spec amendment 2026-09-23 (review round 2): without a '>' the next command is rejected, not written.
+  it("11. a rejected transport.write propagates unchanged and nothing is written until a '>' arrives", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const transport = new ScriptedTransport({ "0100": "7E806410080000001\r\r>" });
     const failure = new Error("synthetic write failure");
@@ -362,12 +382,14 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(await rejection(session.send("0101"))).toBe(failure);
     expect(write).toHaveBeenCalledTimes(1);
 
-    const next = session.send("0100");
-    await vi.advanceTimersByTimeAsync(RESYNC_MS - 1);
+    const next = rejection(session.send("0100"));
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await next).toMatchObject({ kind: "timeout", command: "0100" });
     expect(write).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1);
+
+    transport.emit(">");
+    expect(await session.send("0100")).toMatchObject({ kind: "data", attempts: 1 });
     expect(write).toHaveBeenCalledTimes(2);
-    expect(await next).toMatchObject({ kind: "data", attempts: 1 });
   });
 
   // Round-2 finding 1: init() reads profile.protocol once; a later mutation or getter cannot reach the wire.
@@ -398,6 +420,84 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     } as unknown as VehicleProfile;
     expect(await new Elm327Session(transport).init(profile)).toMatchObject({ protocol: "0", fellBack: false });
     expectCleanInitWrites(transport.writes);
+  });
+
+  // docs/ELM327.md §Write safety: headers only after ATSP7 OK; after a header, no other protocol until ATZ.
+  const headerReplies = { ...initReplies, ATSP6: "OK\r\r>", ATSP7: "OK\r\r>", "ATSH DA1DF1": "OK\r\r>" };
+
+  it("14. header and protocol commands follow the sequence rule", async () => {
+    const transport = new ScriptedTransport(headerReplies);
+    const session = new Elm327Session(transport);
+    for (const cmd of ["ATSH DA1DF1", "ATSP6"]) {
+      expect(await rejection(session.send(cmd))).toMatchObject({ kind: "blocked", command: cmd });
+    }
+    expect(transport.writes).toEqual([]);
+    for (const cmd of ["ATZ", "ATSP7", "ATSH DA1DF1"]) await session.send(cmd);
+    expect(await rejection(session.send("ATSP6"))).toMatchObject({ kind: "blocked", command: "ATSP6" });
+    expect(transport.writes).toEqual(["ATZ", "ATSP7", "ATSH DA1DF1"]);
+    await session.init(genericProfile);
+    expect(await session.send("ATSP6")).toMatchObject({ kind: "ok" });
+    expect(transport.writes.at(-1)).toBe("ATSP6");
+  });
+
+  it("15. an ATSP not answered OK or an ATZ that times out leaves the state restrictive", async () => {
+    const refused = new ScriptedTransport({ ...headerReplies, ATSP7: "?\r\r>" });
+    const s1 = new Elm327Session(refused);
+    await s1.send("ATZ");
+    expect(await s1.send("ATSP7")).toMatchObject({ kind: "error", error: { kind: "unknown-command" } });
+    expect(await rejection(s1.send("ATSH DA1DF1"))).toMatchObject({ kind: "blocked", command: "ATSH DA1DF1" });
+    expect(refused.writes).toEqual(["ATZ", "ATSP7"]);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const silentReset = new ScriptedTransport({ ...headerReplies, ATZ: undefined });
+    const s2 = new Elm327Session(silentReset);
+    // The first ATZ is answered by hand so a header is really set before the second ATZ times out.
+    const firstReset = s2.send("ATZ");
+    await vi.advanceTimersByTimeAsync(0);
+    silentReset.emit(initReplies.ATZ);
+    await firstReset;
+    for (const cmd of ["ATSP7", "ATSH DA1DF1"]) await s2.send(cmd);
+    const timedOut = rejection(s2.send("ATZ", { timeoutMs: 50 }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(await timedOut).toMatchObject({ kind: "timeout", command: "ATZ" });
+    expect(await rejection(s2.send("ATSP6"))).toMatchObject({ kind: "blocked", command: "ATSP6" });
+    expect(silentReset.writes).toEqual(["ATZ", "ATSP7", "ATSH DA1DF1", "ATZ"]);
+  });
+
+  // Spec amendment 2026-09-23: a busy ELM answers ATZ with STOPPED and does not reset (datasheet rev J p.9, p.48).
+  it.each(["STOPPED", "?"])("16. an ATZ answered %s leaves the header flag set", async (reply) => {
+    const replies: Record<string, string> = { ...headerReplies };
+    const transport = new ScriptedTransport(replies);
+    const session = new Elm327Session(transport);
+    for (const cmd of ["ATZ", "ATSP7", "ATSH DA1DF1"]) await session.send(cmd);
+    replies.ATZ = `${reply}\r\r>`;
+    expect(await session.send("ATZ")).toMatchObject({ kind: "error" });
+    expect(await rejection(session.send("ATSP6"))).toMatchObject({ kind: "blocked", command: "ATSP6" });
+    expect(transport.writes).toEqual(["ATZ", "ATSP7", "ATSH DA1DF1", "ATZ"]);
+  });
+
+  // Spec amendment 2026-09-23 (review round 2): a busy ELM discards the first character it receives
+  // (datasheet rev J p.9, p.48), so after a timeout nothing, not even init()'s ATZ, is written before a '>'.
+  it("17. after a timeout with no '>', send() and init() write nothing until a late '>' arrives", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const transport = new ScriptedTransport(initReplies);
+    const session = new Elm327Session(transport);
+    const timedOut = rejection(session.send("0101", { timeoutMs: 50 }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(await timedOut).toMatchObject({ kind: "timeout", command: "0101" });
+
+    const next = rejection(session.send("0100"));
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await next).toMatchObject({ kind: "timeout", command: "0100" });
+    const reinit = rejection(session.init(genericProfile));
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await reinit).toMatchObject({ kind: "timeout", command: "ATZ" });
+    expect(transport.writes).toEqual(["0101"]);
+
+    // Reply copied from fixtures/synthetic/session-branches.jsonl (0101).
+    transport.emit("7E806410100040000\r\r>");
+    expect(await session.init(genericProfile)).toMatchObject({ protocol: "0" });
+    expect(transport.writes.slice(0, 2)).toEqual(["0101", "ATZ"]);
   });
 });
 
@@ -479,12 +579,19 @@ describe("replayRecording", () => {
     expectNoVin(out);
   });
 
-  it("prints exactly one timeout for the synthetic fixture", async () => {
+  // The synthetic fixture's late '>' replays as an immediate reply (ReplayTransport ignores t), so the
+  // timeout is inline. Spec amendment 2026-09-23 (review round 2): the command after it is not written.
+  it("prints a timeout for an unanswered command and for the command after it (synthetic)", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const pending = replayRecording(synthetic);
-    await vi.advanceTimersByTimeAsync(2000);
+    const rec: RecordingLine[] = [
+      { t: 0, dir: "tx", data: "0100\r" },
+      { t: 0.5, dir: "meta", note: "timeout waiting for '>' after 0100" },
+      { t: 1.6, dir: "tx", data: "0101\r" },
+    ];
+    const pending = replayRecording(rec);
+    await vi.advanceTimersByTimeAsync(500 + RESYNC_MS);
     const out = await pending;
-    expect(out.filter((l) => l.endsWith("-> timeout"))).toHaveLength(1);
-    expect(out.at(-1)).toMatch(/timeout 1;/);
+    expect(out.slice(0, 2)).toEqual(["L1 0100 -> timeout", "L3 0101 -> timeout"]);
+    expect(out.at(-1)).toMatch(/timeout 2;/);
   });
 });

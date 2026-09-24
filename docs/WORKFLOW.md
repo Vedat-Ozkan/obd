@@ -4,11 +4,11 @@ Three roles, three subagents in `.claude/agents/`, one orchestrating skill (`/fe
 
 ## The roles
 
-**Architect** reads the plan, the architecture doc, and the actual code, then writes a spec to `docs/specs/`. The spec's most important section is *Sources*: every OBD constant the task will introduce, and where it comes from. If a constant has no source, the spec says "capture on hardware first" and that becomes a prerequisite. The architect never writes code. It runs on the strongest model available because a bad spec wastes two more agents' time.
+**Architect** reads the plan, the architecture doc, and the actual code, then writes a spec to `docs/specs/`. The spec's most important section is *Sources*: every OBD constant the task will introduce, and where it comes from. If a constant has no source, the spec says "capture on hardware first" and that becomes a prerequisite. The architect never writes code. A bad spec wastes two more agents' time, so this is the stage to spend care on.
 
-**Implementer** builds exactly the spec, tests first against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. It can run on a cheaper model because the spec has already done the thinking, and the reviewer catches what it misses.
+**Implementer** builds exactly the spec, writes tests first (E2E replays of recordings by default, never unit tests after the code), runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. The spec has already done the thinking, and the reviewer catches what it misses.
 
-**Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, and any test that mocks the thing under test. It returns APPROVE or REQUEST_CHANGES with ranked findings. It runs on the strongest model available because review is where guessing gets caught.
+**Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, any test that mocks the thing under test, and any unit test that restates the code or covers no failure the spec lists. It returns APPROVE or REQUEST_CHANGES with ranked findings. Review is where guessing gets caught. Model and effort per role are set in the agent definitions (`.claude/agents/*.md` frontmatter, `.codex/agents/*.toml`), not here.
 
 ## The loop
 
@@ -33,7 +33,8 @@ A task is done when all of these hold:
 2. Every verification item in the spec is PASS, or is explicitly hardware-only with the command to run and no recording yet.
 3. Every new OBD constant has a cited source in the spec.
 4. The reviewer returned APPROVE.
-5. The implementer's report lists what was not run. "Everything passed" without a NOT RUN section is treated as suspicious, not as good news.
+5. Each E2E verification item produces its named artifact (replay summary, report, recording path, eval scores), and the reviewer regenerated it.
+6. The implementer's report lists what was not run. "Everything passed" without a NOT RUN section is treated as suspicious, not as good news.
 
 ## ML task verification
 

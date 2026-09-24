@@ -1,449 +1,360 @@
-# Learning guide: from full-stack web dev to applied AI engineering
-
-This is the owner's personal study plan, written 2026-09-22 and revised the same day for ADR-012 and ADR-013. It isn't a project spec, and nothing in it counts as evidence for any task in [PLAN.md](PLAN.md). The guide assumes you can build web apps well but know almost nothing about how AI models work. It gives you an order to learn things in, explains each concept from zero, and ties every step to this repo: battery ML (BM1–BM4), the in-app LLM and its evals (T2.10, T2.11, BM5), agents working against the car through MCP (T0.6, T2.3), and distillation as a stretch (BM7). See [ML.md](ML.md).
+# Learning guide: build and understand this project
 
-## 1. Purpose and honest target
-
-**Goal.** In about six weeks of full-time study, be able to hold a credible technical conversation in applied-ML and AI-engineering interviews, and back it with work you built and measured yourself.
-
-**What's realistic.** Six weeks won't make you a research scientist. It *can* make you someone who has:
-
-- called models through an API, controlled their context and tools, and validated their output against real data;
-- built an eval, checked an LLM judge against your own labels, and wired a regression suite into CI;
-- trained tabular and time-series models, put honest uncertainty intervals on their predictions, and measured whether those intervals hold;
-- detected anomalies when real labels don't exist, by injecting faults and measuring detection;
-- shipped a model to a phone and noticed when its inputs drifted;
-- built an MCP server and let an agent use it safely against real hardware;
-- written up each of these with real numbers, failures included.
+Revised 2026-09-24 for ADR-014–ADR-017 and the current testing rules. This is the owner's personal study guide, not a project spec or evidence that a task is complete. [PLAN.md](PLAN.md), [ML.md](ML.md), and approved task specs define the work; this guide defines what to learn to understand and contribute to it.
 
-That profile is rarer than it sounds. Most candidates can describe these ideas, but few have measured them.
+## 1. Goal and boundaries
 
-**What practice runs are and aren't.** The exercises below use public or synthetic data and throwaway notebooks. They teach the skills BM1–BM7 need, but they are **not** BM1–BM7. The real milestones need recordings from real cars and a spec (AGENTS.md hard rules 3 and 11). In interviews, describe practice runs as practice runs.
+**Goal:** learn enough to build, debug, evaluate, and explain the used-EV battery health check in its currently planned form. Start with the Equinox EV; add fleet methods when beta vehicles provide the data. Interview stories should grow out of this work, with measured results and honest limitations.
 
-**Time split.** Spend about one-third of your time reading and two-thirds building. If a week's reading runs long, cut reading, not building.
+The central learning problem is measurement: extracting trustworthy battery estimates from imperfect recordings, understanding their uncertainty, and checking them over time. The app also needs reliable phone logging, safe agent access through MCP, and an optional LLM that explains computed results with checks and fallbacks.
 
-## 2. The map: five layers of AI work
+You do not need a general AI curriculum before contributing. Learn a topic when a task needs it, to the depth needed to explain the implementation and diagnose a failure. There is no six-week completion promise: charge sessions, rested measurements, and beta data arrive on their own schedule.
 
-Think of it like a web stack. Most AI jobs sit in one or two layers but talk to the neighbours.
+**How to use the guide:**
 
-| Layer | Web-dev analogy | What you learn | For this repo |
-|---|---|---|---|
-| **Model fundamentals** | Knowing how HTTP and the browser work, even though you use a framework | Tokens, embeddings, attention, training vs. inference, why models make confident mistakes | Required. Everything else builds on it |
-| **Application engineering** ("AI engineering") | Building the app on top of an API | Prompts, context, tool calling, structured output, retrieval, guardrails, evals | Required. T2.10 summary, T2.11 assistant, BM5 |
-| **Agents and tooling** | Designing an API other programs call | Agent loops, MCP servers, tool design, sandboxing and permissions | Required. T0.6 car MCP server, T2.3 agent-driven discovery, the repo's own agent workflow |
-| **Classical and time-series ML** | Writing the business logic and its tests | Features, gradient boosting, Gaussian processes, uncertainty, anomaly detection, drift, on-device inference | Required. BM1–BM4 |
-| **Training and serving LLMs** | Writing a database engine | Fine-tuning, LoRA, serving, quantization | Stretch. BM7 distillation only |
+- Use the week-by-week schedule in section 11 alongside the topic blocks and relevant project tasks. The LLM block can proceed independently once suitable reports exist; it does not require finishing battery ML first.
+- Start with the smallest exercise that resolves a gap in your understanding. Skip an exercise if you can already explain and demonstrate its outcome.
+- Spend more time inspecting data, building, and diagnosing failures than collecting courses.
+- Keep scratch notebooks and synthetic practice data in a personal scratch directory or separate repo. Never hand-edit `fixtures/recordings/`.
+- A practice artifact teaches a skill. Project evidence additionally needs the approved spec, permitted data, reproducible verification, and review. Never present practice results as vehicle verification.
 
-Your advantage as a web dev: applied AI work is mostly software engineering, meaning APIs, validation, testing, latency, cost, and debugging. The model is a new, unreliable dependency that you learn to measure and contain.
+## 2. What to learn, and when
 
-## 3. Glossary from zero
+| Area | Depth and timing | Project use |
+|---|---|---|
+| MCP, tool contracts, permissions, asynchronous failures | Practical understanding now, alongside relay work | T0.6, T2.3 |
+| BLE/ELM session boundaries, recording and replay, Android logging lifecycle | Understand the paths you operate and debug; consult protocol sources for details | Phase 0, T2.4 |
+| Python, NumPy/pandas, plots, dataset manifests | Learn enough to inspect and transform recordings reproducibly | BM1 and later experiments |
+| Battery measurements, units, OCV, integration, error budgets | Core study with worked examples | T2.4, BM1, BM2 |
+| Statistical uncertainty, time-ordered validation, Kalman filters/GPs | Core study when session estimates exist; exact model selected in the spec | BM2 |
+| Resistance, simple circuit models, group comparisons, fault evaluation | Core study after usable current and group-voltage logs exist | BM8, BM3 |
+| Hosted LLM APIs, structured output, tool calling, faithfulness and evals | Practical understanding when building the summary and assistant | T2.10, T2.11, BM5 |
+| Gradient boosting, lab-data priors, small time-series foundation models | Bounded comparison experiments when BM2 reaches them | BM2; these comparison rows remain planned |
+| Model export, phone parity, latency, battery cost and drift | Learn after choosing something to deploy | BM4 |
+| Fleet validation and conformal calibration by vehicle | Understand the distinction now; implement when beta data supports it | Later battery experiments |
+| LoRA/distillation, LLM serving, quantization, battery simulation | Outside the main checklist; study only for an approved stretch experiment | BM7, simulation stretch |
+| Transformer/tokenizer implementation, vector databases and broad RAG stacks | Optional background; no current task requires building these | Revisit only if the plan changes |
 
-Read this once now and come back to it. Each entry gives what the term is, an analogy where one helps, and where it shows up in obd.
+The gas-car diagnosis engine and original ML1–ML6 LLM training track are withdrawn. ICE cars are optional benches. Do not study those historical tasks as prerequisites for the EV product.
 
-### How models work
+## 3. Just enough foundations
 
-- **Model.** A very large function: text in, a probability for every possible next token out. It's "large" because it has billions of adjustable numbers inside.
-- **Parameters / weights.** Those adjustable numbers. Training sets them, and after that they're fixed. *Analogy:* a compiled binary. You don't edit it by talking to it.
-- **Token.** The unit a model reads and writes, usually a word fragment. Pricing, speed, and context limits are all counted in tokens. *In obd:* a battery report full of numbers can use surprisingly many tokens.
-- **Tokenizer.** The code that turns text into token IDs and back. Each model family has its own.
-- **Embedding.** A vector that represents a piece of text, where similar meanings end up close together. It powers semantic search and retrieval.
-- **Transformer / attention.** The architecture behind modern LLMs; attention lets each token "look at" other tokens and decide which matter.
-- **Context window.** The maximum number of tokens the model can see at once. Everything outside it doesn't exist to the model.
-- **Training vs. inference.** Training changes the weights; inference runs the fixed model. **Prompting never changes weights.**
-- **Sampling and temperature.** How the next token gets picked. Low temperature is more repeatable. For evals, fix these settings and record them.
-- **Hallucination.** Fluent, confident output that is false. *In obd:* this is why every number in LLM output is checked against the data before display, with the template as fallback (T2.10).
+Use these as a gap check, not a second curriculum.
 
-### Building applications
+**Python and data tools:** functions, collections, file I/O, environments with `uv`, NumPy arrays, pandas time indexing and grouping, basic plots, and a command that regenerates an output. A notebook is useful for exploration; its important results should be reproducible without manual cell-order tricks. Colab is optional, not a requirement.
 
-- **Prompt / system prompt.** The text you send. The system prompt sets rules and role. *Analogy:* config plus request.
-- **Structured output.** Asking the model for JSON matching a schema, then validating it in code. *Analogy:* zod at the boundary, which you already do.
-- **Tool calling.** You describe functions; the model replies "call `get_capacity_estimate` with these args"; **your code** decides whether to run it and returns the result. The model never executes anything itself. *In obd:* the assistant (T2.11).
-- **Context engineering.** Deciding what goes into the context window. Most quality problems turn out to be context problems.
-- **Grounding and faithfulness.** Output that only states what the supplied data supports. A **faithfulness check** verifies that in code. *In obd:* the number checker in `obd-assist`.
-- **Guardrail.** A code-level check around a model: input filtering, output validation, fallbacks. Guardrails belong in code, not in prompts.
-- **Prompt injection.** Untrusted text (a file, a note, a web page) containing instructions the model then follows. *In obd:* imported beta files and notes are untrusted.
-- **Retrieval / RAG.** Searching a knowledge source and pasting relevant pieces into the prompt. It adds knowledge without training.
-- **Prompt caching.** The provider reuses processing of a stable prompt prefix across calls, cutting cost and latency. *In obd:* the cached system block (T2.10 verify line).
+**Math and statistics:** units and dimensional checks, numerical integration, interpolation, basic algebra, mean/median/percentiles, variance and measurement noise, precision/recall, intervals and empirical coverage. Learn the probability and linear algebra needed for the chosen Kalman/GP or residual model when its spec is written.
 
-### Agents and tooling
+**Battery concepts:** voltage, current, charge (Ah), energy (Wh/kWh), SOC, capacity and SOH; cell groups and the BMS; rested versus loaded voltage; temperature and relaxation. Learn what each observable can support before interpreting it as health.
 
-- **Workflow vs. agent.** A workflow runs fixed steps written in code; an agent lets the model choose its next step in a loop. Start with workflows. Use agents when the path can't be known in advance, like signal discovery (T2.3).
-- **MCP (Model Context Protocol).** An open protocol for exposing tools and data to any agent. You write a server once; Claude Code, Codex, and others can call it. *Analogy:* a REST API with a standard shape that agents know how to discover. *In obd:* the relay's car MCP server (T0.6).
-- **Allowlist / sandboxing.** Permissions enforced by the server, not by asking the model nicely. *In obd:* the relay rejects UDS writes no matter what the agent sends.
-- **Human in the loop.** A person approves an agent's result before it counts. *In obd:* the owner approves every discovered signal.
-- **Agentic engineering.** Using agents to build software: specs, implementers, reviewers, handoffs. *In obd:* the architect / implementer / reviewer loop and the Claude/Codex handoff in `docs/task-runs/`.
+**LLM concepts:** tokens, context limits, inference versus training, sampling, and why fluent output needs validation. Be able to explain attention at a high level. Implementing GPT or a tokenizer is optional; neither is a prerequisite for this app's hosted API features.
 
-### Classical and time-series ML
+## 4. Block A: reliable capture and safe agent access
 
-- **Feature.** A number computed from raw data that a model uses, such as cell spread at 50% SOC. *In obd:* built in BM1 from charge logs.
-- **Resampling.** Putting irregular measurements on a regular time grid. BLE polling is irregular, so this comes first.
-- **Gradient-boosted trees.** Many small decision trees added together, each fixing the previous ones' errors. The strongest default for tabular data.
-- **Gaussian process.** A model that predicts a value *and* its own uncertainty, well suited to small datasets.
-- **Incremental capacity (dQ/dV).** How much charge goes in per unit of voltage rise; its peaks shift as a battery ages. Needs current data (Gate B).
-- **Uncertainty / prediction interval.** A range the true value should fall in, such as "58–62 kWh".
-- **Conformal prediction.** A method that turns any model's errors on held-out data into intervals with a coverage guarantee, as long as new data resembles the calibration data. *In obd:* BM2.
-- **Coverage.** How often the interval actually contained the true value. A 90% interval that covers 70% of the time is overconfident.
-- **Anomaly detection.** Flagging data that looks unlike normal data. Methods include residuals against a model of normal behaviour and isolation forests. *In obd:* BM3.
-- **Fault injection.** Adding a known, synthetic problem to real data so you can measure detection without waiting for real failures. Results stay labeled synthetic.
-- **Drift.** Inputs or relationships changing after deployment, for example after a software update. *In obd:* BM4.
-- **On-device / edge inference.** Running the model on the phone instead of a server. Costs: model size, latency, battery. *In obd:* BM4.
+**Tasks:** T0.6, T2.3, and the capture/replay foundations used by T2.4.
 
-### Evaluation
+**Learn:**
 
-- **Eval.** A repeatable test suite for model behaviour: fixed inputs, known good answers, a scoring rule. *Analogy:* unit tests with rates instead of pass/fail.
-- **Train / validation / test split.** Train is what the model learns from, validation is for choices, test is touched **once**.
-- **Grouped split.** Keeping everything from one source (a vehicle, a charge session) in the same split. *In obd:* split by vehicle, then session.
-- **Leakage.** Test information sneaking into training or tuning. Classic causes: windows from one session in two splits, tuning on the test set.
-- **Leave-one-group-out.** Train on all vehicles but one, test on that one, repeat. Honest when you have few vehicles.
-- **LLM-as-judge.** Using a model to grade output. Biased; check it against your own labels and report agreement with n.
-- **Regression suite.** Saved inputs and outputs replayed in CI so a change that breaks behaviour fails the build. *In obd:* saved model responses replayed through the checkers (BM5).
+- How a command travels through an MCP tool, the relay, the phone, BLE, and the ELM session, then returns as a result and recording.
+- Framing, one command in flight, timeouts, disconnects, cancellation, and incomplete responses. Use [ELM327.md](ELM327.md) for command and protocol facts; do not invent constants from memory.
+- Authentication, input validation, allowlists, and explicit confirmation at the actual execution boundary. A prompt cannot authorize a forbidden operation.
+- Android foreground logging and screen-off behavior, durable capture, polling gaps, and keeping measurements aligned within a cycle.
+- What an agent may propose versus what needs the owner's signal-verification verdict. Track proposal precision, session cost, and time.
 
-### Training and serving LLMs (for BM7 only)
+**Practice artifact:** trace one allowed command through a replay or fake-phone scenario. Produce a transcript showing the result, a rejected operation, and a disconnect outcome. Define expected failures before implementing isolated tests. Fake-device success does not establish phone/car acceptance.
 
-- **Fine-tuning / SFT.** Continuing training on input → ideal-output pairs. Changes behaviour and format well, adds facts poorly.
-- **LoRA.** Training small adapter matrices while the base model stays frozen. Cheap; the adapter file is small.
-- **Distillation.** Training a small model to imitate a larger one's outputs. *In obd:* BM7 on reviewed hosted summaries.
-- **Loss / overfitting.** Loss measures how wrong predictions are; overfitting is training loss falling while validation stalls.
-- **Quantization.** Storing weights at lower precision to save memory. Doesn't always make things faster; measure.
+**Enough when:** you can identify where each permission is enforced, explain what happens to an interrupted command, and trace a displayed result back to a recording.
 
-## 4. Prerequisites you may be missing
+## 5. Block B: battery measurement and dataset construction
 
-Just enough of each. Don't go deeper until a later week needs it.
+**Tasks:** T2.4, BM1, and the measurement part of BM2. Data export and intake requirements come from T2.9.
 
-**Python and notebooks (2–4 hours if new).** Functions, lists and dicts, comprehensions, virtual environments (`uv` is already used here), Jupyter notebooks. Google Colab is the easiest start.
+**Learn:**
 
-**pandas and numpy (4–6 hours).** DataFrames, indexing by time, `resample`, `groupby`, merging. Battery logs are time series, so this is the workhorse.
+- Inspect timestamps, sign conventions, units, missing samples, and polling alignment before computing features. Resampling must not silently hide a gap.
+- Integrate current over time for charge and voltage × current for energy. Keep Ah and kWh distinct and state how each estimate was obtained.
+- Understand the progression in [PLAN.md](PLAN.md): T2.4 initially uses BMS-SOC-referenced estimates; BM1 builds this car's OCV–SOC curve from rested windows; BM2 uses OCV-anchored endpoints for its independent estimator.
+- Understand why a BMS energy/SOC calculation is a comparison, and why the independent estimator also has uncertainty rather than becoming ground truth.
+- Build an error budget covering current offset/quantisation, sampling gaps, SOC endpoint uncertainty, relaxation, and temperature. Learn session-selection rules from the approved experiment spec.
+- Preserve raw recordings, produce derived artifacts with source hashes and versions, and track consent and real/synthetic provenance. Apply the appropriate export/redaction policy: ADR-017 describes committed recording copies; other export paths have their own requirements.
+- Split data before windowing or augmentation. Keep an entire session together. Separate own-car time-series analysis from claims about generalisation to other vehicles.
 
-**scikit-learn (3–4 hours).** The `fit` / `predict` API, pipelines, `GroupKFold` for grouped splits, metrics. The "Getting Started" and user-guide pages for ensembles and model selection are enough.
+**Practice artifact:** a reproducible charge-session summary with plots, gap counts, integrated quantities, the SOC reference method, and an error-budget table. For OCV practice, show rested-point count and SOC coverage. Use labeled synthetic data for learning a missing branch; required project evidence still needs the specified recordings.
 
-**Basic statistics (3–4 hours).**
-- Mean vs. median vs. percentile (p50/p95).
-- Small samples: 7/9 is not "78%" in any trustworthy sense. Report it as 7/9, with a bootstrap interval where it helps.
-- Precision and recall when classes are imbalanced (most battery sessions are healthy).
-- What a prediction interval is and what coverage means.
+**Enough when:** you can explain what changed an estimate, which error dominates, when a session should be rejected, and what additional measurement would reduce uncertainty.
 
-**Battery basics (3 hours).** SOC vs. state of health, capacity (kWh, Ah), cell voltage and why spread matters, how a lithium-ion charge curve looks, what a BMS does. The [Battery University](https://batteryuniversity.com) articles on capacity and cell balancing are a readable start; check anything you plan to rely on against a second source.
+## 6. Block C: own-car modeling and honest validation
 
-## 5. Courses and what to take from them
+### C1. Capacity trends and uncertainty — BM2
 
-**Hugging Face LLM Course** (<https://huggingface.co/learn/llm-course>): chapters 0, 1, 2 in week 1 (setup, transformers, the tokenizer → model pipeline). Chapters 3, 5, 10, 11 only when you start BM7. Skip the rest for now.
+Start with per-session estimates and their error budgets. Learn how a Kalman filter or Gaussian process can represent a trend with different noise levels for different sessions. Compare with a simple baseline before adding complexity.
 
-**scikit-learn user guide** (<https://scikit-learn.org/stable/user_guide.html>): ensembles (gradient boosting), Gaussian processes, cross-validation with groups, outlier detection (isolation forest).
+Practice **rolling-origin evaluation**: use earlier sessions to estimate or predict later ones without using future observations in fitting or preprocessing. Report interval coverage and width with the number of evaluated sessions. Distinguish repeatability from accuracy against an independent reference; one consistent estimator can still be biased.
 
-**Conformal prediction:** Angelopoulos and Bates, "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification" (<https://arxiv.org/abs/2107.07511>). Read sections 1–2 and run the split-conformal example yourself.
+Conformal prediction remains useful to understand and check. Its exchangeability assumption is a central lesson: one car observed across seasons does not automatically satisfy it. ADR-016 makes Bayesian trends the primary own-car method and defers leading with vehicle-level conformal calibration until fleet data exists.
 
-**Time series:** Hyndman and Athanasopoulos, *Forecasting: Principles and Practice* (free online, <https://otexts.com/fpp3/>). Chapters on time-series graphics, decomposition, and evaluating accuracy.
+The BM2 comparison rows still require learning enough gradient boosting or ridge, lab-data priors, and a selected small time-series foundation model to run a fair comparison at the specified data budget. Learn the selected model's inputs, fitting, validation, and limitations. Training a foundation model from scratch is outside this scope. Public lab datasets are method practice or approved priors, not vehicle ground truth; check licensing before use.
 
-**MCP:** the Model Context Protocol docs and quickstart (<https://modelcontextprotocol.io>). Build the quickstart server before designing the car server.
+**Practice artifact:** a time-ordered results table showing baseline and chosen-method estimates, intervals, coverage with n, and failure cases. Project comparisons include losing models and reproducible negative results.
 
-## 6. Six-week plan
+### C2. Resistance and circuit models — BM8
 
-Each week has a goal, reading, one hands-on exercise with a definition of done, common pitfalls, and a self-check. Hours are rough estimates for full-time study. Keep all practice notebooks and notes **outside** `fixtures/` and out of any task evidence. A personal scratch folder or separate repo is fine.
+Learn effective resistance from current steps, matched temperature/SOC comparisons, and the limits imposed by sampling rate and timing. Then learn the simple equivalent-circuit model selected in the spec and how a small learned residual corrects its voltage prediction.
 
-### Week 1: model fundamentals
+The target is explaining and evaluating that model, including residual training and overfitting. Detailed electrochemical modeling, impedance spectroscopy, and elaborate circuit identification are outside the current OBD-rate scope. Use [ML.md](ML.md) and its cited research for feasibility and parameter sources.
 
-**Goal.** Explain what happens between sending a prompt and getting a response.
+**Practice artifact:** an event table and voltage plot with conditions, effective-resistance estimates, repeatability across matched sessions, and held-out-session voltage errors for the circuit model and learned residual.
 
-**Read / watch (about 12–15 h):**
-- 3Blue1Brown's neural network series, including the transformer and attention videos (<https://www.3blue1brown.com/topics/neural-networks>).
-- Karpathy's "Neural Networks: Zero to Hero" (<https://karpathy.ai/zero-to-hero.html>). Minimum: "Let's build GPT" and "Let's build the GPT Tokenizer".
-- HF course chapters 0, 1, 2.
-- Python prerequisites from section 4, as needed.
+### C3. Group analytics and fault detection — BM3
 
-**Build (about 20 h):**
-1. Write a synthetic battery report by hand as JSON: SOC, pack voltage, cell min/max, a capacity estimate with an interval, a couple of codes. Don't copy anything from `fixtures/recordings/`.
-2. Tokenize it with a small open model's tokenizer. Print the token count and look at how numbers split.
-3. Ask a hosted model to summarize it in plain language, at low and higher temperature, several times each. Compare.
-4. Ask it something the report can't answer ("how many km until 70%?") and watch what it invents.
+Start with each group relative to the pack: median/MAD baselines, persistence, and dependence on current, SOC, and temperature. Learn to distinguish sensor offset/drift, connection resistance, and plausible cell faults before choosing a more complex detector.
 
-**Done when.** A notebook plus a half-page note: token count, how output varied, and one hallucination with your explanation of why it happened.
+Study physics-based fault injection from the approved spec. Split sessions before injection. Evaluate detection against severity, lead time, and false alarms per vehicle-day on untouched healthy recordings. Synthetic detection results and real-data false alarms belong in separate tables. Healthy own-car data does not establish real-fault diagnostic accuracy.
 
-**Self-check. Can you explain:**
-- [ ] why cost and limits are counted in tokens?
-- [ ] what attention does, in one paragraph with no math?
-- [ ] why prompting doesn't change the model, and what does?
-- [ ] why a model hallucinates numbers, and two ways an application contains the damage?
+**Practice artifact:** a scored fault experiment with source-session provenance, injection parameters, detection curves, and a separate healthy-data false-alarm result.
 
-### Week 2: application engineering, guardrails, and evals
+**Enough for Block C when:** you can explain the baseline, what the model adds, how leakage was prevented, what the intervals mean, and which claims the available data cannot support.
 
-**Goal.** Build a small but honest LLM feature, guard it in code, and measure it. The most interview-relevant week.
+## 7. Block D: checked LLM summaries, tools, and evaluation
 
-**Read (about 12 h):**
-- Anthropic, "Building effective agents" and "Effective context engineering for AI agents" (Anthropic engineering blog).
-- Claude API docs on tool use, structured outputs, and prompt caching. When implementing in this repo, use the `claude-api` skill rather than memory for model IDs and parameters.
-- Hamel Husain on evals and error analysis (<https://hamel.dev>).
-- Eugene Yan, "Patterns for Building LLM-based Systems & Products" (<https://eugeneyan.com/writing/llm-patterns/>).
-- Chip Huyen, *AI Engineering* (O'Reilly, 2025): the evaluation and guardrail chapters.
+**Tasks:** T2.10, T2.11, BM5. This block can use synthetic reports for practice while real report builders are pending.
 
-**Build (about 25 h):**
-1. Write 20–30 synthetic battery reports: healthy, high cell spread, missing data, a capacity with a wide interval. For each, write what a good summary must mention.
-2. **Before writing any prompt**, split them into development and test sets. Don't open the test set again until step 6.
-3. Structured output: summary text plus a list of the numbers it cites, each with the report field it came from.
-4. A **number checker** in code: extract every number from the text and match it against the report. A mismatch fails, and the fallback is a template.
-5. A tool-calling version: the model can call `get_report_field` instead of seeing the whole report. Add one prompt-injection case (instructions hidden in a "notes" field).
-6. Run once on the test set: checker failures, missed flags, injection result, tokens, latency, cost.
-7. Grade 20 outputs yourself, then have a judge model grade the same 20. Report agreement.
+**Keep the practical focus:**
 
-**Done when.** A results table (dev and test separate, with denominators), judge-vs-you agreement with n, three failure examples with your diagnosis, and a note on what the checker caught that the judge missed or vice versa.
+- Typed reports, hosted API calls through the project's client boundary, structured output and schema validation.
+- Context selection, tool calling over stored sessions, citations to returned values, and correct behavior when data is missing.
+- A deterministic number-and-unit check, unsupported-claim and omission evaluation, and the template fallback. Matching numbers alone does not prove the explanation is correct.
+- Untrusted imported notes, prompt injection, tool permissions, BYOK handling, and excluding identifying data from model requests.
+- Prompt versions, development/test separation, owner labels, judge agreement with n, and measured tokens, caching, latency, and cost.
+- Saved-response regression checks in CI, with live model evaluation separate. Replaying saved responses tests checkers; evaluating a changed prompt's generated behavior requires new model outputs.
 
-**Pitfalls.** Tuning on the test set. Scoring only whether the answer "looks good". Trusting an unchecked judge. Putting guardrails in the prompt instead of in code.
+**Practice artifact:** a small set of synthetic reports and questions, including missing data and malicious notes. Define expected outcomes and freeze the test set before prompt tuning. Build the checker and tool path, then report checker failures, missed flags, citation failures, refusal behavior, judge-versus-owner agreement, and cost/latency. Save representative failures and reproduction instructions.
 
-**Self-check. Can you explain:**
-- [ ] why you validate output in code, and what happens when validation fails?
-- [ ] how tool calling works, and why the model never executes the tool?
-- [ ] what prompt injection is and how your design limits it?
-- [ ] why a test set must be frozen before prompt iteration?
-- [ ] how LLM-as-judge can mislead, and how you checked yours?
-- [ ] what prompt caching saves and when it helps?
+Use current official documentation for the selected provider when implementing; verify API methods, model IDs, and prices in the task spec. No broad provider survey is required. Retrieval over a vector database is not a prerequisite for the currently specified tools over stored sessions.
 
-### Week 3: time-series ML and uncertainty
+**Enough when:** you can trace an answer to its data, demonstrate a rejected output and fallback, explain what the checker misses, and measure whether a change improved the feature.
 
-**Goal.** Train a model on battery data, put intervals on its predictions, and measure whether the intervals hold.
+## 8. Block E: deployment, evidence, and communication
 
-**Read (about 12 h):**
-- scikit-learn guide: gradient boosting, Gaussian processes, `GroupKFold`.
-- Angelopoulos and Bates on conformal prediction, sections 1–2.
-- *Forecasting: Principles and Practice*: time-series graphics and evaluating accuracy.
-- Severson et al., "Data-driven prediction of battery cycle life before capacity degradation" (Nature Energy, 2019): abstract, figures, and the features they used.
+**Tasks:** BM4, BM6, plus verification throughout the project.
 
-**Build (about 25 h):**
-1. Pick a public battery dataset from [ML.md](ML.md) and read its license first. Load it with pandas.
-2. Build features per cell and cycle: capacity, voltage-curve shape, and so on. Resample onto a regular grid.
-3. Split **by cell**, not by row, into train, calibration, and test.
-4. Train a gradient-boosted model and a Gaussian process to predict capacity. Compare with a simple baseline (last value, or linear trend).
-5. Apply split conformal prediction using the calibration set. Report the interval width and the coverage on the test set.
-6. Break it on purpose: split by row instead of by cell and watch the scores look better than they should. Write down why.
+**Deployment:** learn the export format and runtime selected for the actual model. Pure TypeScript evaluation may be sufficient. ONNX/TFLite and native Expo integration are only study requirements if the BM4 spec chooses them. Compare offline and phone outputs on identical inputs, measure phone latency and battery cost, and demonstrate a drift/stale-model check. A TypeScript script on a laptop is useful preparation but does not verify phone behavior.
 
-**Done when.** A table of error and coverage per model, with n, the leakage demonstration from step 6, and a paragraph on what would change with real vehicle data instead of lab cells.
+**Verification:** follow [AGENTS.md](../AGENTS.md) and [WORKFLOW.md](WORKFLOW.md). Prefer recordings through public entry points that produce a checkable artifact: replay summary, report, recording path, or eval output. The reviewer regenerates it. For necessary isolated tests, list failure modes in the spec first, write a test for each, and demonstrate failure before changing implementation. Do not add unit tests after the code to restate its behavior.
 
-**Pitfalls.** Row-level splits. Calibrating on the test set. Reporting average interval width without coverage. Treating lab cells as if they were Ultium packs.
+**Communication:** keep a short evidence note with each artifact: question, source data and consent, method, versions, reproduction command, results with denominators, representative failures, limitations, and PASS/FAIL/NOT RUN. Derive the BM6 write-ups from completed experiments and task records as they become available. You do not need a separate week of portfolio exercises before returning to project work.
 
-**Self-check. Can you explain:**
-- [ ] why gradient boosting is the default for tabular data?
-- [ ] what a Gaussian process gives you that boosting doesn't?
-- [ ] how split conformal prediction works, and what it assumes? (Exchangeability: why one car's sessions over seasons break it, and why ADR-016 leads with a Bayesian interval instead.)
-- [ ] what coverage is, and what an overconfident interval looks like?
-- [ ] why you split by cell or vehicle, and what leakage looked like in your run?
+**Enough when:** another person can reproduce the result, distinguish practice from vehicle evidence, and understand the limits without asking you to fill in missing steps.
 
-### Week 4: anomalies, edge deployment, drift, and agents with MCP
+## 9. Working glossary
 
-**Goal.** Detect a problem without real labels, run a model on the device, notice drift, and let an agent use a tool you built, safely.
+Return here when a task uses a term; memorising the whole list is not a prerequisite.
 
-**Read (about 10 h):**
-- scikit-learn guide: novelty and outlier detection.
-- *AI Engineering*: the chapters on deployment and monitoring.
-- MCP docs: concepts (servers, tools) and the quickstart.
-- Anthropic, "Building effective agents" (again, the agent sections).
-
-**Build (about 25 h):**
-1. **Anomalies.** From the week-3 data, take healthy series and inject a synthetic fault (for example, one cell drifting low). Train a residual model or isolation forest on healthy data only. Measure detection rate, time to detection, and false positives on healthy data. Label everything synthetic.
-2. **Edge.** Export the week-3 tree model to JSON (or ONNX) and evaluate it in a small TypeScript script. Confirm it gives the same predictions as Python on the same inputs. Time it.
-3. **Drift.** Shift one input's distribution (simulate an over-the-air update changing a signal's scale) and build a check that flags it.
-4. **MCP.** Build a small MCP server with two tools over a fake device: `send_command` with an allowlist, and `read_log`. Connect an agent (Claude Code works). Ask it to do a task that needs several calls. Then ask it to send a forbidden command and confirm the server, not the prompt, blocks it.
-
-**Done when.** Detection and false-positive numbers, a Python-vs-TypeScript agreement check with latency, a drift check that fires, and an agent transcript showing a blocked command.
-
-**Pitfalls.** Evaluating anomaly detection only on injected faults and forgetting false positives on healthy data. Trusting an exported model without comparing outputs. Enforcing tool permissions in the prompt.
-
-**Self-check. Can you explain:**
-- [ ] how to evaluate anomaly detection when real faults are rare?
-- [ ] why synthetic results are reported separately?
-- [ ] what changes when a model runs on a phone instead of a server?
-- [ ] what drift is and how you'd notice it?
-- [ ] what MCP is and why it's useful beyond one agent?
-- [ ] where agent permissions must be enforced, and why?
-
-### Week 5: write-ups
-
-**Goal.** Turn weeks 1–4 into evidence you can talk through.
-
-**Do (about 30 h):**
-- For each exercise, one page: the question, the setup (data, models, versions), the results table, three failures, limitations, what you'd do next.
-- Put the notebooks and write-ups in a public personal repo with instructions to reproduce them.
-- A one-paragraph summary of each for your resume or LinkedIn. Only numbers you actually measured.
-- Re-read the glossary. Anything you can't explain without notes goes back on the list.
-
-**Done when.** Someone else could rerun each exercise from your write-up, and every number has a source.
-
-### Week 6: interview prep, and back to the real project
-
-**Goal.** Practise explaining, and keep the real work moving so BM1–BM5 start with real evidence.
-
-**Do:**
-- Work through section 9. Answer each question out loud or in writing, under 2 minutes each.
-- Mock interviews: have Claude play interviewer and push back on vague answers.
-- Keep Phase 0 and Phase 2 moving in this repo. Real charge logs and the relay are what turn practice into portfolio evidence.
-
-**Optional (BM7 prep).** HF course chapters 3, 5, 10, 11; the LoRA paper (<https://arxiv.org/abs/2106.09685>); a small LoRA run on a public dataset in Colab. Only after the rest is solid.
-
-## 7. How this maps onto the project
-
-| Project task | Skills needed | Guide week | What still has to happen before it's real |
-|---|---|---|---|
-| T0.6 car MCP server | MCP, tool design, allowlists | 4 | T0.8 app with BLE on the phone |
-| T2.3 agent-driven discovery | Agent loops, human in the loop, measuring agent precision | 2, 4 | Gate A passed; relay running |
-| T2.10 LLM summary | Structured output, faithfulness check, prompt caching | 1, 2 | Battery report (T2.6) exists |
-| T2.11 assistant | Tool calling, prompt injection, refusing when data is missing | 2 | Stored charge sessions |
-| BM1 dataset pipeline | pandas, resampling, grouped splits, provenance | 3 | Charge logs (T2.4) and beta data (T2.9) |
-| BM2 independent capacity + Bayesian trend | Coulomb counting, OCV curves, error budgets, Kalman filters/GPs, rolling-origin coverage (conformal as a check; exchangeability) | 3 | Several real charges; a reference method per charge |
-| BM3 imbalance anomalies | Fault injection, detection metrics, false positives | 4 | Healthy real sessions to inject into |
-| BM8 resistance + circuit model | Equivalent-circuit models, ΔV/ΔI at current steps, small residual networks trained on voltage (self-labelling) | 3, 4 | Current and group voltages polled every cycle (T2.4); driving and charging sessions |
-| BM4 on-device and drift | Model export, parity checks, drift detection | 4 | A BM2 or BM3 model worth shipping; runtime chosen in the spec |
-| BM5 LLM eval infrastructure | Evals, judge calibration, CI regression suites | 2 | T2.10 and T2.11 built |
-| BM6 write-ups | Writing with numbers and failures | 5 | BM2–BM5 evidence exists |
-| BM7 distillation (stretch) | Fine-tuning, LoRA, comparing against the hosted model | optional | Enough reviewed BM5 summaries; compute and cap in the spec |
-
-## 8. Resources
-
-Grouped by topic. Links and course contents change, so check them.
-
-**Fundamentals**
-- 3Blue1Brown, neural networks series: <https://www.3blue1brown.com/topics/neural-networks>.
-- Andrej Karpathy, "Neural Networks: Zero to Hero": <https://karpathy.ai/zero-to-hero.html>.
-- Hugging Face LLM Course: <https://huggingface.co/learn/llm-course>.
-
-**Application engineering and agents**
-- Anthropic, "Building effective agents" and "Effective context engineering for AI agents" (Anthropic engineering blog).
-- Claude API documentation: tool use, structured outputs, prompt caching.
-- Model Context Protocol: <https://modelcontextprotocol.io>.
-- Eugene Yan, "Patterns for Building LLM-based Systems & Products": <https://eugeneyan.com/writing/llm-patterns/>.
-- Chip Huyen, *AI Engineering* (O'Reilly, 2025). **The best single book for this whole track.**
-
-**Evals**
-- Hamel Husain's blog: <https://hamel.dev>.
-- [EVAL.md](EVAL.md) in this repo: a real example of eval design.
-
-**Classical ML, time series, and uncertainty**
-- scikit-learn user guide: <https://scikit-learn.org/stable/user_guide.html>.
-- Angelopoulos and Bates, conformal prediction introduction: <https://arxiv.org/abs/2107.07511>.
-- Hyndman and Athanasopoulos, *Forecasting: Principles and Practice*: <https://otexts.com/fpp3/>.
-
-**Batteries**
-- Severson et al., Nature Energy 2019, and its dataset (linked in [ML.md](ML.md)).
-- CALCE battery data: <https://calce.umd.edu/battery-data>.
-- PyBaMM (battery simulation; the stretch in ML.md): <https://github.com/pybamm-team/PyBaMM>.
-
-**Fine-tuning (BM7 only)**
-- LoRA: <https://arxiv.org/abs/2106.09685>. QLoRA: <https://arxiv.org/abs/2305.14314>.
-- TRL SFT trainer docs; HF smol-course: <https://github.com/huggingface/smol-course>.
-
-## 9. Interview readiness
-
-### Turning an exercise into a story
-
-For each exercise, have a 2-minute version and a 10-minute version covering:
-1. **Question.** What were you trying to find out?
-2. **Setup.** Data, models, versions, and how you kept the test set clean.
-3. **Numbers.** The results, with denominators.
-4. **Failure.** Something that went wrong, how you found it, and what it taught you.
-5. **Decision.** What you'd do next, or recommend, and why.
-
-Interviewers usually remember the failure more than the result. "The intervals looked fine until I split by vehicle instead of by session" is a strong answer.
-
-### Questions to practise, by layer
-
-**Fundamentals**
-- What is a token, and why does it matter for cost and limits?
-- Why do LLMs hallucinate, and how do you contain it in a product?
-
-**Application engineering**
-- How would you design an LLM feature whose numbers users will act on? (Structured output, a code-level check, a deterministic fallback.)
-- RAG vs. fine-tuning vs. prompting: when do you use which?
-- How do you defend against prompt injection from user-supplied files?
-- What does prompt caching save, and how would you verify it's working?
-
-**Agents and tooling**
-- When would you build an agent instead of a workflow?
-- What is MCP, and how would you design a server that exposes real hardware?
-- Where do you enforce what an agent is allowed to do? (Server-side allowlists, not prompts.)
-- How would you measure whether an agent's work is any good? (Precision against human verdicts, cost, time.)
-
-**Evals**
-- How do you know a prompt change made things better?
-- What are the risks of LLM-as-judge, and how did you check yours?
-- How do you run LLM regression tests in CI without paying for API calls?
-- What's wrong with "92% accuracy on 12 examples"?
-
-**Classical ML and uncertainty**
-- Why gradient boosting for tabular data? When would you use a Gaussian process instead?
-- Explain conformal prediction to a backend engineer. What does it assume?
-- Your 90% intervals cover 70% of the time. What's going on?
-- How do you evaluate anomaly detection when real faults are rare?
-- How would you split data from 8 vehicles with 5 charges each?
-
-**Deployment and monitoring**
-- What changes when a model runs on a phone?
-- How would you detect that a model has gone stale after an over-the-air update?
-
-**Fine-tuning (if BM7 happened)**
-- Explain LoRA and distillation. When is a small tuned model worth it versus a hosted one?
-
-### What not to claim
-
-- Don't claim results you didn't run. Say "NOT RUN" or "planned".
-- Don't present practice-run numbers as obd's results.
-- Don't claim certified battery health. The reports are observed data and estimates with intervals.
-- Don't say "expert". Say what you built and measured.
-
-### Web skills that transfer
-
-| You already know | AI-work equivalent |
+| Term | Meaning in this project |
 |---|---|
-| Validating input at API boundaries (zod) | Structured output validation and faithfulness checks |
-| Unit and integration tests | Evals and CI regression suites over saved model responses |
-| API design and auth | MCP server design and server-side permissions |
-| API latency monitoring, p95s | Model latency on the phone and per LLM call |
-| Caching (CDN, Redis) | Prompt caching |
-| Feature flags and fallbacks | Opt-in LLM features with deterministic fallbacks |
-| Monitoring and alerting | Drift detection and stale-model flags |
-| Secure handling of API keys | BYOK, never committing secrets |
+| Model | A mathematical mapping from inputs to outputs; may be a simple regression, a circuit model, or an LLM. |
+| SOC / capacity / SOH | SOC describes charge state; capacity describes how much charge or energy is usable under stated conditions; a health claim needs its definition and reference stated. |
+| OCV | Open-circuit voltage; rested measurements support the planned SOC mapping, with relaxation and temperature limitations. |
+| Coulomb counting | Integrating current over elapsed time to estimate transferred charge. |
+| Error budget | Explicit contributions to an estimate's uncertainty, including measurement and processing errors. |
+| Learned residual | A trained correction to a baseline model's prediction, evaluated on held-out data. |
+| Kalman filter / Gaussian process | Candidate methods for the capacity trend; learn the chosen method's noise assumptions and interval interpretation. |
+| Coverage | How often the evaluated target lies inside the reported interval, with the target and sample count stated. |
+| Exchangeability | The data assumption behind standard conformal guarantees; temporal or seasonal structure can undermine it. |
+| Rolling-origin evaluation | Repeatedly fit using the past and evaluate on later observations. |
+| Grouped split / leakage | Keep related observations together; leakage occurs when evaluation information influences training, preprocessing, or selection. |
+| MAD | Median absolute deviation, used with the median for robust group-versus-pack comparisons. |
+| Fault injection / drift | Injection introduces a labeled synthetic fault for evaluation; drift is a change in inputs or relationships that may invalidate a deployed model. |
+| Token / context | Units of model input/output and the information available to a model call; relevant to limits, cost, and grounding. |
+| Training / inference | Training adjusts model parameters; inference uses them. Supplying a prompt does not update weights. |
+| Structured output / faithfulness | Schema-conforming output versus claims supported by supplied data; both need checks. |
+| Tool calling / MCP | The model requests an operation; application code validates and executes it. MCP exposes tools through a shared protocol. |
+| Prompt injection | Instructions in untrusted content that attempt to redirect model behavior. |
+| LLM-as-judge | Model-assisted grading, measured against owner labels and supplemented by deterministic checks. |
+| Distillation / LoRA | Optional BM7 methods for training a smaller summary model; outside the main learning path. |
 
-## 10. Progress checklist
+## 10. Sources and study discipline
 
-**Prerequisites**
-- [ ] Python basics and a working Colab notebook
-- [ ] pandas time-series basics (`resample`, `groupby`)
-- [ ] scikit-learn `fit` / `predict`, pipelines, `GroupKFold`
-- [ ] Understand p50/p95, bootstrap intervals, precision/recall, coverage
-- [ ] Battery basics: SOC, SOH, capacity, cell spread, BMS
+Start with the project's requirements, then read only the external material needed to understand or implement the selected method.
 
-**Week 1: fundamentals**
-- [ ] 3Blue1Brown neural network and transformer videos
-- [ ] Karpathy: Let's build GPT, and the GPT Tokenizer
-- [ ] HF chapters 0, 1, 2
-- [ ] Exercise: tokenization and sampling notebook on a synthetic battery report, with a hallucination example
-- [ ] Self-check answered
+| Question | Start here |
+|---|---|
+| What is actually planned, and what depends on data? | [PLAN.md](PLAN.md), [DECISIONS.md](DECISIONS.md) |
+| Where does the code run, and what are its boundaries? | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Where do protocol facts and signal constants come from? | [ELM327.md](ELM327.md) and the cited signal sources |
+| What battery method and evidence are required? | [ML.md](ML.md), its cited research, then the approved experiment spec |
+| How are outputs scored and datasets labeled? | [EVAL.md](EVAL.md) |
+| How do implementation and review work? | [AGENTS.md](../AGENTS.md), [WORKFLOW.md](WORKFLOW.md), the task's spec and record |
 
-**Week 2: application engineering and evals**
-- [ ] Anthropic: Building effective agents; Effective context engineering
-- [ ] Claude docs: tool use, structured outputs, prompt caching
-- [ ] Hamel Husain: evals and error analysis posts
-- [ ] Eugene Yan: LLM patterns
-- [ ] *AI Engineering*: evaluation and guardrail chapters
-- [ ] Exercise: synthetic reports, frozen split, number checker, tool calling, injection case, judge agreement
-- [ ] Self-check answered
+Use official documentation for pandas/NumPy and the selected statistical library as specific questions arise. For LLM/MCP APIs, consult current official documentation at implementation time. A course is optional support for a concrete gap, not a completion gate. Check dataset licenses and model terms before importing data or running experiments.
 
-**Week 3: time-series ML and uncertainty**
-- [ ] scikit-learn: boosting, Gaussian processes, grouped cross-validation
-- [ ] Conformal prediction introduction, sections 1–2
-- [ ] *Forecasting: Principles and Practice*: graphics and accuracy chapters
-- [ ] Severson et al. paper: abstract, figures, features
-- [ ] Exercise: capacity models with conformal intervals, coverage table, leakage demonstration
-- [ ] Self-check answered
+**Park until needed:** implementing transformers/tokenizers; broad deep-learning courses; LoRA/QLoRA and LLM serving; PyBaMM/PyBOP simulation; vector databases; native inference runtimes that have not been selected; cross-vehicle SOH regressors and supervised deep fault detection before fleet evidence. BM7 and simulation remain stretch work, BM9 publication remains optional, and none of them should delay the core study blocks.
 
-**Week 4: anomalies, edge, drift, and MCP**
-- [ ] scikit-learn: outlier and novelty detection
-- [ ] MCP docs and quickstart server
-- [ ] Exercise: injected-fault detection, Python/TypeScript parity, drift check, MCP server with a blocked command
-- [ ] Self-check answered
+## 11. Week-by-week study guide
 
-**Week 5: write-ups**
-- [ ] One-page write-up per exercise
-- [ ] Public practice repo with reproduction instructions
-- [ ] Resume and LinkedIn summaries using only measured numbers
+Use this as an **eight-week first pass**, alongside project work: roughly 12–18 focused hours per week, about one-third reading and two-thirds practice. These are study budgets, not task estimates. Extend a week when its exercise exposes a gap; completing the schedule does not complete the associated milestones. If studying full time, use additional time for the current project task and deeper practice rather than adding unrelated courses.
 
-**Week 6: interview prep**
-- [ ] Every question in section 9 answered in under 2 minutes
-- [ ] Three stories with numbers and a failure each
-- [ ] At least two mock interviews
-- [ ] Phase 0 / Phase 2 work continuing in this repo
+The topic blocks above explain the scope; this schedule tells you where to learn it. Resource pages were checked on 2026-09-24. Follow the named topics if headings move, and use documentation matching the project's installed versions. Course access may require an account or payment; no certificate is required. The linked UCCS circuit-model notes were found in the search index but their server returned an error during this check.
+
+### Week 1: understand the data path and MCP
+
+**Goal:** explain how an agent reaches the car and where software enforces the boundaries. **Tasks:** T0.6, T2.3; Block A.
+
+**Read in this order (4–6 hours):**
+
+1. [ARCHITECTURE.md](ARCHITECTURE.md) — core transport/session, mobile, relay, and data-flow sections. Draw the path from tool request to recorded response. Read the framing and command rules in [ELM327.md](ELM327.md).
+2. [MCP: Build an MCP server](https://modelcontextprotocol.io/docs/develop/build-server) — core concepts, logging, and the TypeScript example. Learn tool schemas, handlers, results, and connecting a client. Skip the other language implementations.
+3. [Anthropic: Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) — workflows versus agents and the appendix on tool design. Learn when a fixed workflow suffices and what makes a tool clear. Skip implementing every orchestration pattern.
+4. [Android foreground services overview](https://developer.android.com/develop/background-work/services/fgs) — purpose, user visibility, and lifecycle restrictions. Relate these to a multi-hour screen-off charge log; native service implementation comes with T2.4.
+
+**Build (8–12 hours):** in a scratch project, expose one fake-device tool with a schema and allowlist. Define rejection and disconnect outcomes before coding. Save a transcript showing an allowed request, a rejected request, and an interrupted request. If the relay already provides this evidence, trace and explain that implementation instead of recreating it.
+
+**Done/self-check:** show the transcript and answer: who executes the tool, where is permission checked, and what happens when the phone disappears? No car access is required.
+
+### Week 2: Python, recordings, and battery vocabulary
+
+**Goal:** turn a recording into an understandable dataset without hiding data-quality problems. **Tasks:** T2.4, BM1; Block B.
+
+**Read in this order (4–6 hours):**
+
+1. [Python tutorial](https://docs.python.org/3/tutorial/) — skim chapters 3–5 for syntax, then modules, file/JSON I/O, and exceptions in chapters 6–8. Skip material you already know; use the repo's `uv` environment conventions.
+2. [pandas time-series guide](https://pandas.pydata.org/docs/user_guide/timeseries.html) — datetime conversion, time indexing, time differences, and resampling. Learn what aggregation or filling does to missing observations. Skip calendar/business-day machinery.
+3. [Gregory Plett: Introduction to battery-management systems](https://www.coursera.org/learn/battery-management-systems/) — “Introducing Important Battery Terminology” and “How Does an Electrochemical Cell Store and Release Energy?” in Battery Boot Camp; then the voltage, temperature, and current-sensing lessons in module 3. Focus on quantities and measurement limitations. Skip manufacturing, contactor design, and the full certificate sequence.
+
+**Build (8–12 hours):** read an available recording without modifying it; produce a derived table, timeline plot, gap counts, units dictionary, and source manifest. If it lacks decoded charge signals, use a separately labeled synthetic charge series for the plots. Keep absent signals explicit rather than filling them with invented vehicle values.
+
+**Done/self-check:** regenerate the outputs with one command and explain SOC versus capacity, Ah versus kWh, which fields are observed, and which are derived.
+
+### Week 3: capacity measurement, OCV, and error budgets
+
+**Goal:** explain how a capacity estimate is constructed and why it can be wrong. **Tasks:** T2.4, BM1, BM2; Block B.
+
+**Read in this order (4–6 hours):**
+
+1. [ML.md: methods](ML.md#methods-candidates-chosen-in-specs) and [ADR-016](DECISIONS.md#adr-016-measurement-first-battery-ml-the-llm-only-explains-2026-09-23) — the BMS-referenced starting point, OCV endpoints, session selection, and error terms. Follow the cited battery research when you need the justification for a project-specific assumption.
+2. [Plett: Equivalent-Circuit Cell Models, lecture notes](https://mocha-java.uccs.edu/ECE5710/ECE5710-Notes02.pdf) — focus on open-circuit voltage and SOC dependence first. Learn why loaded voltage and rested voltage need different treatment. Save resistance and dynamics for Week 5; skip detailed electrochemical models.
+3. [NumPy trapezoidal integration](https://numpy.org/doc/stable/reference/generated/numpy.trapezoid.html) — the explicit `x` sample coordinates and examples. Practice with actual elapsed times and check units rather than assuming uniform sampling.
+4. [NIST Technical Note 1297](https://www.nist.gov/pml/nist-technical-note-1297) — sections on Type A/Type B uncertainty and combined uncertainty; consult [Appendix A](https://www.nist.gov/pml/nist-technical-note-1297/nist-tn-1297-appendix-law-propagation-uncertainty) for propagation. Learn to enumerate sources and account for dependencies. Do not treat this as a certification exercise.
+
+**Build (8–12 hours):** integrate a labeled synthetic charge with known inputs, then perturb timing, current offset, gaps, and SOC endpoints one at a time. Produce an estimate/sensitivity table and plot. Explain how an OCV curve would supply endpoints and what real rested measurements are still needed. Apply the analysis to a real charge only when a suitable recording exists.
+
+**Done/self-check:** identify the dominant error, show why a smaller SOC span can amplify endpoint error, and explain why agreement with the BMS is insufficient validation. Recordings needed for real OCV evidence remain a project dependency.
+
+### Week 4: uncertainty and trends with one car
+
+**Goal:** evaluate a simple capacity trend without learning from the future. **Tasks:** BM2; Block C1.
+
+**Read in this order (4–6 hours):**
+
+1. [Roger Labbe: Kalman and Bayesian Filters in Python](https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python) — the Gaussian and one-dimensional Kalman-filter chapters. Learn prediction, update, measurement noise, and process noise. Stop before extended/unscented/particle filters.
+2. [Forecasting: Principles and Practice, time-series cross-validation](https://otexts.com/fpp3/tscv.html) — study the rolling-origin diagram and evaluation procedure. Implement the idea in Python; learning the book's R stack is unnecessary.
+3. [scikit-learn Gaussian processes](https://scikit-learn.org/stable/modules/gaussian_process.html) — regression, noise handling, and predictive uncertainty. Read enough to compare the approach with Kalman filtering; deeply practice one first.
+4. [A Gentle Introduction to Conformal Prediction](https://arxiv.org/abs/2107.07511) — the introductory split-conformal construction and assumptions only. Connect the exchangeability limitation to ADR-016. Fleet calibration is later work.
+
+**Build (8–12 hours):** create a labeled synthetic sequence of session estimates with known trend and differing measurement noise. Compare a last-value baseline with a simple filter, evaluating later sessions using only the past. Plot intervals, report coverage with n, and deliberately introduce a shift to expose a limitation. Use real sessions later without pretending their true capacity is known.
+
+**Done/self-check:** explain what the interval targets, why a noisy session gets different weight, and the difference between measured coverage on synthetic truth and evidence available on the Equinox.
+
+### Week 5: resistance, cell groups, and fault detection
+
+**Goal:** connect battery behavior to a simple detector and its failure modes. **Tasks:** BM8, BM3; Blocks C2/C3.
+
+**Read in this order (4–6 hours):**
+
+1. Revisit [Plett's circuit-model notes](https://mocha-java.uccs.edu/ECE5710/ECE5710-Notes02.pdf) — equivalent series resistance, voltage dynamics, and the basic circuit representation. Focus on explaining a current step; do not implement the entire model toolbox.
+2. [ML.md](ML.md) — resistance windows, temperature/SOC normalization, learned residuals, and the named fault families. Learn which effects the available polling can resolve.
+3. [scikit-learn novelty and outlier detection](https://scikit-learn.org/stable/modules/outlier_detection.html) — the distinction between novelty and outlier detection, then Isolation Forest only. Compare its purpose with a median/MAD group baseline before adding it.
+4. [scikit-learn cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html) — grouped-data and time-series sections. Understand why windows from one session stay together; group splitting alone does not enforce time order.
+
+**Build (8–12 hours):** use a documented synthetic current-step example to compute effective resistance and plot a simple circuit response. In a separate labeled group-voltage exercise, compare a constant sensor offset with a current-dependent deviation. Start with a robust group baseline; report detection by severity and false alarms on an untouched healthy split. These toy faults teach mechanics; BM3's physics-based injections require their approved spec.
+
+**Done/self-check:** explain which fault distinctions the signals support and show the baseline's failure cases. Fitting BM8's learned residual on real held-out sessions is a follow-on project experiment, not an assumed one-week result.
+
+### Week 6: hosted LLM summaries and tool calling
+
+**Goal:** build the app's kind of LLM feature and contain failures in code. **Tasks:** T2.10, T2.11; Block D.
+
+**Read in this order (4–6 hours):**
+
+1. Review the LLM entries in section 9 and the `obd-assist` boundary in [ARCHITECTURE.md](ARCHITECTURE.md). Be able to explain tokens, context, and inference; no transformer implementation is required.
+2. [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) — JSON schemas, parsing, and limitations. Learn the distinction between valid shape and true content.
+3. [Claude tool-use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) — tool definitions, requests/results, and the client execution loop. Implement one tool over a stored report before adding more.
+4. [Claude prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) — stable prefixes, cache behavior, and usage reporting. Learn how to verify a cache hit; do not assume ordinary application caching is the same mechanism.
+
+**Build (8–12 hours):** create a small synthetic report set including missing data and uncertainty. Define expected behavior and reserve a test set before prompt iteration. Build structured summaries, a number/unit checker with a template fallback, and one report-reading tool. Include a wrong-number output and an instruction hidden in a note. Log model/prompt versions and usage without secrets or identifying data.
+
+**Done/self-check:** show a supported answer, a rejected answer, and a missing-data response. Explain what schema validation and number checking each fail to detect. Live API practice uses a stated personal spending cap; without access, saved synthetic responses can exercise the checker, with live generation marked NOT RUN.
+
+### Week 7: LLM evals and fair model comparisons
+
+**Goal:** measure whether a change helps and preserve honest evidence. **Tasks:** BM5 and preparation for BM2 comparison rows; Blocks C1/D.
+
+**Read in this order (4–6 hours):**
+
+1. [Claude: Define success criteria and build evaluations](https://platform.claude.com/docs/en/test-and-evaluate/develop-tests) — criteria, test cases, and grading choices. Translate them into the specific failures in [EVAL.md](EVAL.md) and BM5.
+2. [Anthropic: Writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) — tool evaluations and interpreting agent behavior. Focus on reproducible cases and tool descriptions; skip adopting extra agent infrastructure.
+3. [scikit-learn ensemble guide](https://scikit-learn.org/stable/modules/ensemble.html) — gradient-boosting regression and its main controls only. Learn fit/predict, overfitting, and a baseline comparison. This is preparation for BM2's comparison row, not a survey of every ensemble.
+
+**Build (8–12 hours):** score the Week 6 held-out outputs for numbers, citations, omissions, unsupported claims, and refusals. Grade a small sample yourself and compare a judge's grades with yours. Produce a results table with n, failures, cost, and latency; save responses for checker regression. Separately, sketch BM2's comparison protocol: shared data budget, splits, baseline, target, and metrics.
+
+**Done/self-check:** explain whether the prompt improved, how the judge disagreed with you, and which changes require fresh model calls. Full lab-prior and time-series foundation-model runs remain required BM2 work once the spec selects models/data/compute; no need to study those architectures broadly this week.
+
+### Week 8: phone deployment and reproducible explanations
+
+**Goal:** carry a small result across runtimes and explain its evidence. **Tasks:** BM4, BM6; Block E.
+
+**Read in this order (3–5 hours):**
+
+1. [React Native performance overview](https://reactnative.dev/docs/performance) — JS/UI thread work, development versus release performance, and profiling considerations. Connect this to inference and logging without blocking the app.
+2. Revisit [Android foreground services](https://developer.android.com/develop/background-work/services/fgs) for the capture lifecycle and [ML.md](ML.md) for offline/phone parity and drift requirements. Study ONNX/TFLite documentation only if the approved runtime choice requires it.
+3. [AGENTS.md testing rules](../AGENTS.md#testing-rules), [WORKFLOW.md](WORKFLOW.md), and [EVAL.md](EVAL.md) — learn what an independent reviewer must regenerate and which claims require real recordings or hardware.
+
+**Build (8–12 hours):** export a small practice estimator or model into a simple TypeScript representation, compare outputs on identical inputs, and save a parity report. Introduce a documented synthetic input shift and demonstrate a stale-data/model signal. Measure on a phone when the app and device are available; otherwise explicitly leave phone latency and battery cost NOT RUN.
+
+Write a one-page report for one completed exercise: question, source, method, result, failure, limitations, and reproduction command. Practice explaining it in two minutes, then answering a deeper technical question using the artifact.
+
+**Done/self-check:** someone else can regenerate the result and tell which parts used synthetic data, real recordings, a live model, or a phone. You can explain one meaningful failure without overstating what the project has verified.
+
+### After the eight-week pass
+
+Return to the next approved project task and deepen only the required method. Keep the main progress checklist below as the long-term record; the weekly exercises do not automatically check off project evidence. When beta vehicles arrive, add fleet validation. When BM2 selects a foundation-model comparison, learn that model's official inference/fine-tuning example and run the specified comparison. Only start LoRA, simulation, or dataset-publication study when the corresponding stretch/optional work is selected.
+
+## 12. Progress checklist
+
+Check a box when you can explain the result and point to an artifact. Label that artifact practice or project evidence.
+
+### Capture and measurement
+
+- [ ] Trace a relay command, its permissions, and its failure handling.
+- [ ] Regenerate a replay artifact and explain what it proves.
+- [ ] Inspect a charge log's timestamps, units, polling alignment, and gaps.
+- [ ] Produce a charge/energy calculation with its reference method stated.
+- [ ] Explain rested windows and show an OCV exercise with coverage and limitations.
+- [ ] Build an error budget and explain when to reject a session.
+- [ ] Produce a dataset manifest with provenance, appropriate redaction, and valid splits.
+
+### Battery modeling
+
+- [ ] Compare a baseline with a chosen capacity trend using time-ordered evaluation.
+- [ ] Report interval coverage and width with n; explain measurement uncertainty and the reference target.
+- [ ] Explain why fleet calibration differs from own-car validation.
+- [ ] Complete BM2's specified comparison experiments when their data and specs are ready.
+- [ ] Evaluate resistance events and a simple circuit model with a learned residual.
+- [ ] Evaluate group faults by severity and lead time, with separate real healthy-data false alarms.
+
+### LLM application and evaluation
+
+- [ ] Explain tokens, context, inference, tool calling, and output validation at the application boundary.
+- [ ] Demonstrate a checked summary and deterministic fallback.
+- [ ] Demonstrate cited answers, missing-data behavior, and an injection test.
+- [ ] Produce an eval table with held-out outcomes, judge agreement, and measured cost/latency.
+- [ ] Replay saved responses through CI checkers and explain what still requires a live eval.
+
+### Deployment and explanation
+
+- [ ] Compare offline and phone outputs on identical inputs and measure phone cost.
+- [ ] Demonstrate drift detection and explain the stale-result behavior.
+- [ ] Produce an artifact another person can regenerate under the current testing rules.
+- [ ] Explain one completed experiment's question, method, result, failure, and limitation.
+
+For an interview or a project review, use the same explanation: what you built, why you chose it, what the evidence says, and what remains unknown. No claim of fleet generalisation, certified battery health, hardware verification, or model improvement without the corresponding evidence.

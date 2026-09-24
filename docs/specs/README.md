@@ -34,6 +34,9 @@ One paragraph. What outcome is visible to a user or to a test when this is done.
 | "SEARCHING..." handling | fixtures/recordings/chrysler-200/2026-09-17-spike.jsonl line 12 |
 
 ## Verification
+- [ ] E2E: `<recording>` replayed through `<public entry point>` asserts <user-visible output>; artifact `<path or command output>` regenerates identically
+- [ ] Isolated tests (only if needed; AGENTS.md Testing rules). Failure modes, listed before any code:
+  1. <how it could fail> → test `<name>`
 - [ ] `pnpm -F obd-core test` includes `<test file>` covering <behaviors>
 - [ ] `pnpm replay fixtures/recordings/<file>` prints <expected>
 - [ ] `pnpm check` green

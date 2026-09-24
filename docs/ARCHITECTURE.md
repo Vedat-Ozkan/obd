@@ -16,6 +16,7 @@ src/
   elm/
     reader.ts       ElmLineReader: byte chunks → complete responses (until '>')
     session.ts      Elm327Session: init, protocol select, single-flight queue, timeouts, retries
+    guard.ts        read-only allowlist and header/protocol sequence rule (docs/ELM327.md §Write safety)
     isotp.ts        multi-frame reassembly with headers on
     errors.ts       classification of NO DATA / UNABLE TO CONNECT / CAN ERROR / BUFFER FULL / STOPPED / ?
   obd/
@@ -105,7 +106,7 @@ export class ElmSessionError extends Error {
 export class Elm327Session {
   constructor(transport: Transport);
   init(profile: VehicleProfile): Promise<InitResult>;                // ATZ ATI ATE0 ATL0 ATS0 ATH1 ATSPn ATDPN ATRV 0100; fixed protocol falls back to ATSP0
-  send(cmd: string, opts?: SendOptions): Promise<ElmResponse>;       // one command, one response; rejects 04/2E/2F/31 ("blocked")
+  send(cmd: string, opts?: SendOptions): Promise<ElmResponse>;       // one command, one response; rejects anything off the read-only allowlist ("blocked"); docs/ELM327.md §Write safety
   close(): Promise<void>;
 }
 ```

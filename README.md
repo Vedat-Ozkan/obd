@@ -97,7 +97,7 @@ Full setup and the known WSL2 pitfalls: [docs/FEASIBILITY.md](docs/FEASIBILITY.m
 The build process is part of the portfolio. Every non-trivial task goes through three agents defined in `.claude/agents/`:
 
 - **architect** writes a spec (interfaces, files, sources for every OBD constant, verification plan) and never writes code.
-- **implementer** builds to the spec with tests against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per item.
+- **implementer** builds to the spec with E2E tests written first against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per item.
 - **reviewer** is read-only, reruns the checks itself, rejects any unsourced PID or AT command, and returns APPROVE or REQUEST_CHANGES.
 
 `/feature T0.4` runs the loop for a task. The rules the agents work under are in [AGENTS.md](AGENTS.md); the reasoning is in [docs/WORKFLOW.md](docs/WORKFLOW.md). The one-line version: agents are cheap, wrong PID tables are expensive, and the phone relay exists so agents test against the real dongle, through an allowlist, instead of guessing.

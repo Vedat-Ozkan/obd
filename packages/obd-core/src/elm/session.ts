@@ -2,6 +2,7 @@ import { latin1Encode } from "../recording/format.js";
 import type { Transport } from "../transport/types.js";
 import type { VehicleProfile } from "../vehicles/profile.js";
 import type { ElmError } from "./errors.js";
+import { afterReply, allowedCommand, beforeWrite, NON_PRINTABLE, normalize, UNKNOWN_STATE, type HeaderState } from "./guard.js";
 import { reassemble, type DroppedFrame, type Frame } from "./isotp.js";
 import { ElmLineReader, parseElmResponse } from "./reader.js";
 
@@ -70,14 +71,7 @@ export const CAN_ERROR_RETRY_DELAY_MS = 500;
 /** Policy value, not an ELM constant (spec Risks): how long to wait for a late '>' after a timeout. */
 export const RESYNC_MS = 1000;
 
-// AGENTS.md hard rule 5: Mode 04 and UDS writes never go out through send().
-const BLOCKED_SERVICES = new Set(["04", "2E", "2F", "31"]);
-// docs/ELM327.md §Framing: a command ends at '\r', so an embedded CR (or any control byte) could smuggle a
-// second command past the service check (spec amendment 2026-09-23). Only printable ASCII goes on the wire.
-const NON_PRINTABLE = /[^\x20-\x7E]/;
 const PROTOCOLS: readonly string[] = ["0", "6", "7"];
-
-const normalize = (cmd: string) => cmd.replace(/ /g, "").toUpperCase();
 
 /** The one thing the current queue slot waits for: a '>' (reply or resync) or a timer (timeout, delay). */
 interface Wait {
@@ -94,6 +88,7 @@ export class Elm327Session {
   private wait: Wait | undefined;
   private stale = false;
   private closed = false;
+  private headerState: HeaderState = UNKNOWN_STATE;
 
   constructor(private readonly transport: Transport) {
     this.unsubscribe = transport.onData((chunk) => {
@@ -112,11 +107,8 @@ export class Elm327Session {
   }
 
   send(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
-    if (NON_PRINTABLE.test(cmd)) return Promise.reject(new ElmSessionError("blocked", cmd));
-    const norm = normalize(cmd);
-    if (!norm.startsWith("AT") && BLOCKED_SERVICES.has(norm.slice(0, 2))) {
-      return Promise.reject(new ElmSessionError("blocked", cmd));
-    }
+    // AGENTS.md hard rule 5; docs/ELM327.md §Write safety.
+    if (allowedCommand(cmd) === undefined) return Promise.reject(new ElmSessionError("blocked", cmd));
     return this.enqueue(cmd, () => this.run(cmd, opts));
   }
 
@@ -174,18 +166,21 @@ export class Elm327Session {
     });
   }
 
-  private resync(cmd: string): Promise<void> {
+  /** Resolves true on a '>', false when RESYNC_MS passes without one. */
+  private resync(cmd: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      this.arm(cmd, RESYNC_MS, resolve, () => {
-        resolve();
+      this.arm(cmd, RESYNC_MS, () => {
+        resolve(false);
+      }, () => {
+        resolve(true);
       }, reject);
     });
   }
 
   private exchange(cmd: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Defense in depth: the only transport.write; no path may put a CR or control byte inside a command.
-      if (NON_PRINTABLE.test(cmd)) {
+      // Defense in depth: the only transport.write; nothing off the allowlist (control bytes, empty) goes out.
+      if (allowedCommand(cmd) === undefined) {
         reject(new ElmSessionError("blocked", cmd));
         return;
       }
@@ -215,7 +210,9 @@ export class Elm327Session {
 
   private async attempt(cmd: string, timeoutMs: number): Promise<ElmResponse> {
     if (this.stale) {
-      await this.resync(cmd);
+      // docs/ELM327.md §Write safety: a busy ELM discards the first character it receives, so nothing is
+      // written until a '>' shows it is idle; without one the session stays stale.
+      if (!(await this.resync(cmd))) throw new ElmSessionError("timeout", cmd);
       this.stale = false;
     }
     this.reader.reset();
@@ -223,12 +220,20 @@ export class Elm327Session {
   }
 
   private async run(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
+    // docs/ELM327.md §Write safety: checked in queue order; if an attempt throws, the in-flight state stays.
+    const norm = normalize(cmd);
+    const inFlight = beforeWrite(this.headerState, norm);
+    if (inFlight === undefined) throw new ElmSessionError("blocked", cmd);
+    this.headerState = inFlight;
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const first = await this.attempt(cmd, timeoutMs);
-    const retry = opts.retry === false ? undefined : retryAfter(first);
-    if (retry === undefined) return first;
-    if (retry > 0) await this.delay(cmd, retry);
-    return { ...(await this.attempt(cmd, timeoutMs)), attempts: 2 };
+    let r = await this.attempt(cmd, timeoutMs);
+    const retry = opts.retry === false ? undefined : retryAfter(r);
+    if (retry !== undefined) {
+      if (retry > 0) await this.delay(cmd, retry);
+      r = { ...(await this.attempt(cmd, timeoutMs)), attempts: 2 };
+    }
+    this.headerState = afterReply(this.headerState, norm, r.kind);
+    return r;
   }
 
   private async required(cmd: string): Promise<void> {
@@ -237,7 +242,6 @@ export class Elm327Session {
   }
 
   private async runInit(requested: VehicleProfile["protocol"]): Promise<InitResult> {
-    this.stale = false;
     this.reader.reset();
     await this.run("ATZ");
     await this.run("ATI");

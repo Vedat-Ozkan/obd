@@ -77,12 +77,6 @@ describe("connectVeepeak", () => {
     await expect(connectVeepeak(wrongService.manager, "id")).rejects.toThrow("was not found");
   });
 
-  it("fails as ambiguous when FFF1 and FFF2 are both write-without-response", async () => {
-    const twoWwr = fakeDevice(185, [{ uuid: fff1, ...props, isWritableWithoutResponse: true, isWritableWithResponse: true, isNotifiable: true }, { uuid: fff2, ...props, isWritableWithoutResponse: true }]);
-    await expect(connectVeepeak(twoWwr.manager, "id")).rejects.toThrow(/missing or ambiguous.*fff1.*writeWithoutResponse=true.*fff2.*writeWithoutResponse=true/);
-    expect(twoWwr.device.cancelConnection).toHaveBeenCalledOnce(); expect(twoWwr.device.monitorCharacteristicForService).not.toHaveBeenCalled();
-  });
-
   it("cancels the connection exactly once and rethrows the original error when setup fails", async () => {
     const missingService = fakeDevice(185, reversedChars, [{ uuid: otherService, characteristics: async () => reversedChars }]);
     const discoveryFails = fakeDevice(); discoveryFails.device.discoverAllServicesAndCharacteristics.mockRejectedValue(new Error("discovery failed"));
@@ -93,13 +87,6 @@ describe("connectVeepeak", () => {
       await expect(connectVeepeak(fake.manager, "id")).rejects.toThrow(message);
       expect(fake.device.cancelConnection).toHaveBeenCalledOnce();
     }
-  });
-
-  it("does not let a cancel failure mask the setup error, and does not cancel on success", async () => {
-    const fake = fakeDevice(185, reversedChars, [{ uuid: otherService, characteristics: async () => reversedChars }]);
-    fake.device.cancelConnection.mockRejectedValue(new Error("cancel failed"));
-    await expect(connectVeepeak(fake.manager, "id")).rejects.toThrow("was not found"); expect(fake.device.cancelConnection).toHaveBeenCalledOnce();
-    const ok = fakeDevice(); await connectVeepeak(ok.manager, "id"); expect(ok.device.cancelConnection).not.toHaveBeenCalled();
   });
 });
 

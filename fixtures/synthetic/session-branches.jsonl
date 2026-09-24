@@ -1,4 +1,4 @@
-{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.4: fixed-protocol fallback, 11-bit headers, retry after a dropped last line, timeout, CAN ERROR and DATA ERROR retries; sources in docs/specs/T0.4-elm327-session.md; timestamps invented; ATDPN reply is opaque"}
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.4: fixed-protocol fallback, 11-bit headers, retry after a dropped last line, timeout followed by a late '>' (added 2026-09-23 for X-2026-09-23-write-safety; ReplayTransport delivers it right after the 0100 write), CAN ERROR and DATA ERROR retries; sources in docs/specs/T0.4-elm327-session.md; timestamps invented; ATDPN reply is opaque"}
 {"t": 0.010, "dir": "tx", "data": "ATZ\r"}
 {"t": 0.030, "dir": "rx", "data": "ATZ\r"}
 {"t": 0.031, "dir": "rx", "data": "ü"}
@@ -34,6 +34,7 @@
 {"t": 3.480, "dir": "rx", "data": "7E81014490201314334\r7E82153594E54484554\r7E822494356494E3030\r\r>"}
 {"t": 3.490, "dir": "tx", "data": "0100\r"}
 {"t": 3.540, "dir": "meta", "note": "timeout waiting for '>' after 0100"}
+{"t": 4.100, "dir": "rx", "data": "7E806410080000001\r\r>"}
 {"t": 4.600, "dir": "tx", "data": "0101\r"}
 {"t": 4.620, "dir": "rx", "data": "CAN ERROR\r\r>"}
 {"t": 5.130, "dir": "tx", "data": "0101\r"}

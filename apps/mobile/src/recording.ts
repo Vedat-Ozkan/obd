@@ -41,8 +41,9 @@ export class RecordingBuffer {
     return [...this.recordingLines];
   }
 
+  // Python json.dumps form (", " and ": ", \u escapes outside printable ASCII): tools/spike/redact_vin.py refuses any other form (ADR-017).
   toJsonl(): string {
-    return this.recordingLines.map((line) => JSON.stringify(line)).join("\n") + (this.recordingLines.length > 0 ? "\n" : "");
+    return this.recordingLines.map(pythonJsonLine).join("\n") + (this.recordingLines.length > 0 ? "\n" : "");
   }
 
   private requireStarted(): void {
@@ -52,4 +53,10 @@ export class RecordingBuffer {
   private timestamp(): number {
     return Math.max(0, Math.round((this.nowSeconds() - this.origin) * 1000) / 1000);
   }
+}
+
+function pythonJsonLine(line: RecordingLine): string {
+  const body = Object.entries(line).map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`).join(", ");
+  // JSON.stringify already escapes the other control characters exactly as Python does.
+  return `{${body}}`.replace(/[\u007f-\uffff]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
