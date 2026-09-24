@@ -77,9 +77,9 @@
 {"t": 6.283, "dir": "rx", "data": "4E52503952\r18DAF"}
 {"t": 6.284, "dir": "rx", "data": "1282137444E52503"}
 {"t": 6.285, "dir": "rx", "data": "952\r18DAF1172253"}
-{"t": 6.298, "dir": "rx", "data": "323031343038\r18D"}
-{"t": 6.299, "dir": "rx", "data": "AF12822533230313"}
-{"t": 6.299, "dir": "rx", "data": "43038\r"}
+{"t": 6.298, "dir": "rx", "data": "303030303030\r18D"}
+{"t": 6.299, "dir": "rx", "data": "AF12822533030303"}
+{"t": 6.299, "dir": "rx", "data": "03030\r"}
 {"t": 6.312, "dir": "rx", "data": "\r>"}
 {"t": 6.318, "dir": "tx", "data": "090A\r"}
 {"t": 6.342, "dir": "rx", "data": "18DAF1451017490A"}
@@ -171,3 +171,4 @@
 {"t": 7.437, "dir": "rx", "data": "1CB2400000000000"}
 {"t": 7.438, "dir": "rx", "data": "000\r"}
 {"t": 7.452, "dir": "rx", "data": "\r>"}
+{"t": 7.452, "dir": "meta", "redacted": "vin-serial", "source": "2026-09-22-spike-2.jsonl", "source_sha256": "910f0d7551e8984b585211f5fed028a2e6f770ac35853581e31469aeadbc9b7f", "script": "tools/spike/redact_vin.py", "script_version": 1, "masked_messages": 2}

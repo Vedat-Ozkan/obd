@@ -9,7 +9,7 @@ import go
 import pytest
 from spike import Recorder
 
-# Reply texts from fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.jsonl (S1), joined rx
+# Reply texts from fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl (S1), joined rx
 # chunks after the tx on the cited line.
 S1_0100 = ("SEARCHING...\r18DAF14506410080000001\r18DAF1CB06410080000001\r18DAF14006410080000001\r"
            "18DAF128064100BFFFF997\r18DAF11706410080080013\r\r>")  # S1 line 24
@@ -145,7 +145,7 @@ def test_check_allowed_accepts() -> None:
 
 
 @pytest.mark.parametrize("cmd", [
-    "04", "0902", "22 F190", "22F190", "2227C6", "22 27C6 2AF5", "10 03", "1003", "11 01", "14FF00",
+    "04", "0902", "22 F190", "22F190", "22 4193", "224193", "2227C6", "22 27C6 2AF5", "10 03", "1003", "11 01", "14FF00",
     "27 01", "28 00", "2E 1234 00", "2F 1234 03", "31 01 1234", "3E 00", "3E80", "19 02 FF", "0100 ",
     "01 00", "010C0D", "atz", "ATMA", "ATSP6", "ATST 19", "ATAR", "ATSH DA1DF1", "ATSH DB33F1", "",
 ])

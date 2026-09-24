@@ -18,7 +18,7 @@ class FakeTransport implements Transport {
   async close(): Promise<void> { /* nothing to release */ }
   data(text: string): void { this.callbacks.forEach((callback) => { callback(latin1Encode(text)); }); }
 }
-// Verbatim rx chunks after tx "0100\r": fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.jsonl lines 25-41.
+// Verbatim rx chunks after tx "0100\r": fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl lines 25-41.
 const EQUINOX_0100_RX = ["SEAR", "CH", "I", "NG", ".", "..", "\r", "18DAF14506410080", "000001\r18DAF1CB0", "6410080000001\r18", "DAF1400641008000", "0001\r18DAF128064", "100BFFFF997\r18DA", "F117064100800800", "13\r", "\r", ">"];
 const EQUINOX_0100_RESPONSE = EQUINOX_0100_RX.join("").slice(0, -1);
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };

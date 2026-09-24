@@ -37,7 +37,7 @@ ALLOWED_AT = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATSP7", "ATDPN", 
               "ATCP 18", "ATFCSD 300000", "ATFCSM 1",
               *(f"ATSH DA{m}F1" for m in MODULES), *(f"ATCRA 18DAF1{m}" for m in MODULES),
               *(f"ATFCSH 18DA{m}F1" for m in MODULES)}
-_VIN = ("0902", "22 F190")  # user decision: no VIN reads (spec Non-goals)
+_VIN = ("0902", "22 F190", "22 4193")  # user decision: no VIN reads (spec Non-goals; 4193: X-2026-09-23-vin-redaction)
 _INSTRUCTIONS = (
     "HVAC off, car in Ready, Park. After about 60 s set the heater to max (hot, fan high) and press Enter once hot air flows.",
     "After about 60 s turn the heater off and press Enter.",

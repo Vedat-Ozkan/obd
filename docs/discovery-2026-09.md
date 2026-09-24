@@ -2,7 +2,7 @@
 
 Run card for `tools/spike/discover.py`. Spec: `docs/specs/T2.3a-equinox-discovery.md`. The tool records one file, `fixtures/recordings/chevrolet-equinox-ev-2024/<date>-discovery.jsonl`. Claude fills the result sections from that file. Every result cell starts as `NOT RUN`.
 
-The recording stays **local only**. `.gitignore` excludes `fixtures/recordings/**/*-discovery*.jsonl` until the redaction ADR exists (spec Decision 3). It holds ECU names, calibration IDs, and `F18x` part and serial numbers, but no VIN: `0902` and `22 F190` are refused by the tool's allowlist.
+The recording stays **local only**. `.gitignore` excludes `fixtures/recordings/**/*-discovery*.jsonl` (spec Decision 3; ADR-017). It holds ECU names, calibration IDs, and `F18x` part and serial numbers. `0902` and `22 F190` are refused by the tool's allowlist, but the 2026-09 discovery recordings still hold the VIN: Mode 22 DID `4193` on module `17` returned it (found 2026-09-23). The tools now block DID `4193` (ADR-017 work), and the local discovery recordings stay gitignored.
 
 ## Desk prep (once, with internet)
 

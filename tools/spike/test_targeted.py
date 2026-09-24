@@ -23,10 +23,14 @@ def is_f1xx(did: str) -> bool:
     return "F180" <= did <= "F1FF"
 
 
+def is_vin(did: str) -> bool:
+    return f"22 {did}" in discover._VIN
+
+
 def test_watch_list_shape(tmp_path) -> None:
     core, rotate = targeted.load_watch_list()
     assert core == [("CB", d) for d in CORE]
-    assert len(rotate) == 839
+    assert len(rotate) == 838
     cb = [d for m, d in rotate if m == "CB"]
     assert [m for m, _ in rotate] == ["CB"] * len(cb) + ["17"] * (len(rotate) - len(cb))
     assert cb == sorted(cb) and [d for m, d in rotate if m == "17"] == sorted(d for m, d in rotate if m == "17")
@@ -70,9 +74,10 @@ def test_watch_list_cites_recording() -> None:
     with open(targeted.WATCH_LIST, encoding="utf-8") as f:
         data = json.load(f)
     # Selection rule (spec Selection rule + Decisions 1 and 2), applied to line 49772 positives.
-    keep = [d for d in positives["CB"] if d not in CORE and d != "2E8E" and not is_f1xx(d)]
+    # VIN-bearing DIDs are excluded by the allowlist (X-2026-09-23-vin-redaction Decision 3).
+    keep = [d for d in positives["CB"] if d not in CORE and d != "2E8E" and not is_f1xx(d) and not is_vin(d)]
     rotate = [("CB", d) for d in sorted(d for d in keep if not found[("CB", d)][1] or d not in watched)]
-    rotate += [("17", d) for d in positives["17"] if not is_f1xx(d)]
+    rotate += [("17", d) for d in positives["17"] if not is_f1xx(d) and not is_vin(d)]
     assert data["core"] == [["CB", d, found[("CB", d)][0]] for d in CORE]
     assert data["rotate"] == [[m, d, found[(m, d)][0]] for m, d in rotate]
 

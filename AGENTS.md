@@ -55,7 +55,7 @@ cd tools/hil-bridge && uv run hil-bridge   # laptop fallback bridge; URL in docs
 ## Hard rules
 
 1. **Source every constant.** Every PID, AT command, CAN header, scaling formula, and DTC decode must trace to `docs/ELM327.md`, a J1979 table checked into the repo, an OBDb signalset under `packages/obd-core/vehicles/`, or a file under `fixtures/recordings/`. If you cannot cite it, do not write it; capture it on hardware first. Values from memory are the main way wrong PID tables spread.
-2. **Recordings are immutable.** Never hand-edit `fixtures/recordings/`. Add new ones with the recording tool. Hand-written data goes in `fixtures/synthetic/` and is labeled synthetic in the eval.
+2. **Recordings are immutable.** Never hand-edit `fixtures/recordings/`. Add new ones with the recording tool. Only `*.redacted.jsonl` copies made by `tools/spike/redact_vin.py` are committed (ADR-017); the original stays local and untouched. Hand-written data goes in `fixtures/synthetic/` and is labeled synthetic in the eval.
 3. **Never claim hardware verification you did not do.** Reports say PASS, FAIL, or NOT RUN with a reason. Hardware claims cite a recording path.
 4. **`obd-core` is pure.** No React Native, BLE, `fetch`, or Node-only imports. Transports are injected. The same code runs in the app, the eval harness, and replay tests.
 5. **Read-only toward the vehicle.** The only write is Mode 04 (clear DTCs), behind an explicit user confirmation. No UDS writes (2E, 31, 2F), no session changes beyond what reads require, no coding or adaptation. Reading is safe; writing to a car you do not fully understand is not.

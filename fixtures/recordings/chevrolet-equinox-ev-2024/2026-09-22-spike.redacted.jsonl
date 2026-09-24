@@ -77,9 +77,9 @@
 {"t": 8.052, "dir": "rx", "data": "4E52503952\r18DAF"}
 {"t": 8.052, "dir": "rx", "data": "1282137444E52503"}
 {"t": 8.065, "dir": "rx", "data": "952\r18DAF1172253"}
-{"t": 8.066, "dir": "rx", "data": "323031343038\r18D"}
-{"t": 8.067, "dir": "rx", "data": "AF12822533230313"}
-{"t": 8.067, "dir": "rx", "data": "43038\r"}
+{"t": 8.066, "dir": "rx", "data": "303030303030\r18D"}
+{"t": 8.067, "dir": "rx", "data": "AF12822533030303"}
+{"t": 8.067, "dir": "rx", "data": "03030\r"}
 {"t": 8.096, "dir": "rx", "data": "\r>"}
 {"t": 8.103, "dir": "tx", "data": "090A\r"}
 {"t": 8.126, "dir": "rx", "data": "18DAF1451017490A"}
@@ -169,3 +169,4 @@
 {"t": 9.237, "dir": "rx", "data": "000\r18DAF1CB2400"}
 {"t": 9.25, "dir": "rx", "data": "000000000000\r"}
 {"t": 9.265, "dir": "rx", "data": "\r>"}
+{"t": 9.265, "dir": "meta", "redacted": "vin-serial", "source": "2026-09-22-spike.jsonl", "source_sha256": "6c29956dfc2ade5a2f2071f6042120b18747bfc6d0a4b821bf431fb58ba387d5", "script": "tools/spike/redact_vin.py", "script_version": 1, "masked_messages": 2}

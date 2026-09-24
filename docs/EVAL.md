@@ -7,6 +7,7 @@ The claim this project wants to make is not "it knows your battery's health" but
 ```
 fixtures/
   recordings/<car>/<date>-<slug>.jsonl          immutable transcript (see ARCHITECTURE.md format)
+  recordings/<car>/<date>-<slug>.redacted.jsonl  committed form: VIN serial masked by tools/spike/redact_vin.py (ADR-017); the original stays local
   recordings/<car>/<date>-<slug>.label.json     label, when the recording is a labeled session
   recordings/<car>/<date>-<slug>.log.jsonl      charge-session log (Phase 2), same naming
   synthetic/<slug>.jsonl + .label.json          hand-written or injected; always labeled synthetic: true

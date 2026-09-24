@@ -148,3 +148,19 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 **Why.** The deep-research review of 2026-09-23 (`reports/Battery ML depth beyond LLM wrappers.md`) found that with one car there is no ground-truth capacity label, so the hard and valuable work is constructing one, and that hiring signals for battery ML reward field-data measurement with rigorous evaluation over model novelty.
 
 **Amends ADR-012** (ML track contents) and the BM table in `docs/ML.md`. **Unchanged:** provenance, grouped splits, real/synthetic separation, NOT RUN semantics.
+
+## ADR-017: Committed recordings mask the VIN serial; originals stay local (2026-09-23)
+
+**Decision.** Every recording committed under `fixtures/recordings/` is a `<date>-<slug>.redacted.jsonl` copy written by `tools/spike/redact_vin.py`. In it, VIN characters 12–17 (the serial) are masked in place with ASCII `0`, and characters 1–11 are kept. Characters 1–11 identify make, model, model year, and plant, which ADR-014's "verified by model and year" needs; many vehicles share them, unlike the serial. The unredacted original stays on the owner's disk, gitignored and never edited.
+
+**Hard rule 2.** The copy is derived by a tested script, never by hand, and the original is not modified. The copy's final meta line records the source file's SHA-256 and the script version, so provenance is checkable. Every original line keeps its number, so line citations carry over.
+
+**VIN locations covered.** `0902` replies (`49 02 01` + 17 bytes). Mode 22 DID `4193` replies (`62 41 93`, then the VIN four times back to back at payload indices 3, 20, 37 and 54; all four serial windows masked), found on module `17` in the discovery recordings. A safety net refuses output if a learned serial survives anywhere.
+
+**Citations.** A citation of `<date>-<slug>.jsonl` line N in a closed spec or task record refers equally to `<date>-<slug>.redacted.jsonl` line N. SHA-256 values cited there are of the originals.
+
+**Git history.** Commits up to `c88dffa` still contain the unredacted spike files. The owner accepted this instead of a history rewrite, which stays possible before any public push.
+
+**Follow-ups (not implemented).** Redact at source in the phone console export, the relay, and `hil:smoke`.
+
+**Refines ADR-014** ("the VIN stays on the device"): committed fixtures carry at most the first 11 VIN characters. **Amends AGENTS.md hard rule 2.**
