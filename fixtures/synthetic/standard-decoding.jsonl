@@ -1,0 +1,25 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.5: decode branches absent from the Equinox recordings; sources in docs/specs/T0.5-standard-decoding.md; timestamps invented"}
+{"t": 0.010, "dir": "tx", "data": "0101\r"}
+{"t": 0.030, "dir": "rx", "data": "7E806410183276504\r7E906410100088A80\r\r>"}
+{"t": 0.040, "dir": "tx", "data": "0141\r"}
+{"t": 0.060, "dir": "rx", "data": "7E806414100276504\r\r>"}
+{"t": 0.070, "dir": "tx", "data": "011C\r"}
+{"t": 0.090, "dir": "rx", "data": "7E803411C01\r\r>"}
+{"t": 0.100, "dir": "tx", "data": "0131\r"}
+{"t": 0.120, "dir": "rx", "data": "7E804413103E8\r\r>"}
+{"t": 0.130, "dir": "tx", "data": "015B\r"}
+{"t": 0.150, "dir": "rx", "data": "7E803415BB2\r\r>"}
+{"t": 0.160, "dir": "tx", "data": "01A6\r"}
+{"t": 0.180, "dir": "rx", "data": "7E80641A6000186A0\r\r>"}
+{"t": 0.190, "dir": "tx", "data": "0131\r"}
+{"t": 0.210, "dir": "rx", "data": "7E80341300A\r\r>"}
+{"t": 0.220, "dir": "tx", "data": "03\r"}
+{"t": 0.240, "dir": "rx", "data": "7E8100843030133C158\r7E82192340000000000\r\r>"}
+{"t": 0.250, "dir": "tx", "data": "07\r"}
+{"t": 0.270, "dir": "rx", "data": "7E80447014240\r\r>"}
+{"t": 0.280, "dir": "tx", "data": "0A\r"}
+{"t": 0.300, "dir": "rx", "data": "7E8024A00\r7E9037F0A11\r\r>"}
+{"t": 0.310, "dir": "tx", "data": "0902\r"}
+{"t": 0.330, "dir": "rx", "data": "7E81014490201314734\r7E82141483539483435\r7E82247313138333431\r\r>"}
+{"t": 0.340, "dir": "tx", "data": "0904\r"}
+{"t": 0.360, "dir": "rx", "data": "7E8102349040253594E\r7E821544843414C3030\r7E82230310000000053\r7E823594E544843414C\r7E82430303032000000\r7E82500000000000000\r\r>"}

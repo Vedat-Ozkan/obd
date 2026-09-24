@@ -1,9 +1,17 @@
 // `pnpm replay <recording.jsonl>`: Node-only CLI, kept outside src/ so obd-core/src stays pure.
-// Output format: docs/specs/T0.4-elm327-session.md "packages/obd-core/scripts/replay.ts".
+// Output format: docs/specs/T0.4-elm327-session.md "packages/obd-core/scripts/replay.ts"; `decoded` lines:
+// docs/specs/T0.5-standard-decoding.md "scripts/replay.ts".
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { Frame } from "../src/elm/isotp.js";
 import { ElmSessionError, Elm327Session, type ElmResponse } from "../src/elm/session.js";
+import { decodeDtcList, type DtcMode } from "../src/obd/dtc.js";
+import { decodePid, MODE01_PIDS } from "../src/obd/j1979.js";
+import { decodeReadiness } from "../src/obd/readiness.js";
+import type { DecodeFailure } from "../src/obd/response.js";
+import { BITMAP_PIDS, decodeSupported } from "../src/obd/supported.js";
+import { decodeCalIds, decodeEcuName, decodeVin } from "../src/obd/vin.js";
 import { parseRecording, type RecordingLine } from "../src/recording/format.js";
 import { ReplayTransport } from "../src/transport/replay.js";
 
@@ -40,7 +48,59 @@ function formatBlock(lineNo: number, cmd: string, r: ElmResponse, afterVin: bool
   }
   for (const d of r.dropped) out.push(`  dropped ${d.reason} ${vin || afterVin ? `${d.header} <redacted>` : d.line}`);
   for (const t of r.lines) out.push(`  text ${vin ? "<redacted>" : t}`);
+  for (const f of r.frames) {
+    const text = decodeText(cmd, f);
+    if (text !== undefined) out.push(`  decoded ${f.ecu} ${text}`);
+  }
   return out;
+}
+
+const hexList = (pids: readonly number[], none: string) => (pids.length > 0 ? hex(pids) : none);
+
+function failureText(f: DecodeFailure): string {
+  return f.reason === "negative" ? `negative code=${hex([f.code ?? 0])}` : `invalid ${f.reason}`;
+}
+
+/** The `decoded` text for one frame, or undefined when the command has no decoder (T0.5 spec, replay table).
+ *  VIN: status only, never a character (ADR-014, ADR-017). */
+function decodeText(cmd: string, frame: Frame): string | undefined {
+  const c = cmd.replace(/ /g, "").toUpperCase();
+  const m01 = /^01([0-9A-F]{2})$/.exec(c);
+  const pid = m01 ? parseInt(m01[1], 16) : undefined;
+  if (pid !== undefined && BITMAP_PIDS.includes(pid)) {
+    const r = decodeSupported(pid, frame);
+    return r.ok ? `supported ${hexList(r.pids, "none")}` : failureText(r);
+  }
+  if (pid === 0x01 || pid === 0x41) {
+    const r = decodeReadiness(pid, frame);
+    if (!r.ok) return failureText(r);
+    const head = r.mil === undefined ? "" : ` mil=${r.mil ? "on" : "off"} dtcs=${String(r.dtcCount)}`;
+    const monitors = r.monitors.map((m) => ` ${m.id}=${m.complete ? "complete" : "incomplete"}`).join("");
+    return `readiness pid=${hex([pid])}${head} ignition=${r.ignition}${monitors}`;
+  }
+  if (pid !== undefined && MODE01_PIDS.some((d) => d.pid === pid)) {
+    const r = decodePid(pid, frame);
+    if (!r.ok) return failureText(r);
+    if (r.unit === "enum") return `${r.id} ${String(r.value)}${r.label === undefined ? "" : ` (${r.label})`}`;
+    return `${r.id} ${String(Math.round(r.value * 1000) / 1000)} ${r.unit}`;
+  }
+  if (c === "03" || c === "07" || c === "0A") {
+    const r = decodeDtcList(parseInt(c, 16) as DtcMode, frame);
+    return r.ok ? `dtcs ${r.dtcs.length > 0 ? r.dtcs.join(" ") : "none"}` : failureText(r);
+  }
+  if (c === "0902") {
+    const r = decodeVin(frame);
+    return r.ok ? `vin status=${r.status}` : `vin ${failureText(r)}`;
+  }
+  if (c === "0904") {
+    const r = decodeCalIds(frame);
+    return r.ok ? `cal-ids ${r.calIds.length > 0 ? r.calIds.join(" ") : "none"}` : failureText(r);
+  }
+  if (c === "090A") {
+    const r = decodeEcuName(frame);
+    return r.ok ? `ecu-name ${r.name}` : failureText(r);
+  }
+  return undefined;
 }
 
 /** Runs every tx of a recording through Elm327Session.send (retry: false, timeoutMs: 500) and formats the result. */

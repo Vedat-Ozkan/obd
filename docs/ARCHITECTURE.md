@@ -19,12 +19,13 @@ src/
     isotp.ts        multi-frame reassembly with headers on
     errors.ts       classification of NO DATA / UNABLE TO CONNECT / CAN ERROR / BUFFER FULL / STOPPED / ?
   obd/
+    response.ts     DecodeFailure, echo check
     j1979.ts        table-driven Mode 01 PID definitions (bytes, formula, unit, source)
     dtc.ts          Mode 03/07/0A parsing and P/C/B/U decoding
     freeze.ts       Mode 02
     vin.ts          Mode 09
     readiness.ts    PID 01 / 41 bitfields
-    supported.ts    supported-PID bitmap walk
+    supported.ts    supported-PID bitmap decode (the walk is T0.9)
   vehicles/
     profile.ts      VehicleProfile: protocol, headers, extra commands, decoders
     generic.ts      the default 11-bit CAN profile
@@ -36,6 +37,7 @@ src/
     format.ts       recording line schema (zod) and writer/reader
 scripts/replay.ts   pnpm replay (Node CLI; outside src)
 vehicles/
+  saej1979/               vendored OBDb SAEJ1979 signalset (CC-BY-SA-4.0)
   <make>-<model>/         vendored OBDb signalsets + LICENSE (CC-BY-SA-4.0), Equinox EV first   (Phase 2)
 ```
 
