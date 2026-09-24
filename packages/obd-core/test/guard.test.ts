@@ -86,6 +86,8 @@ describe("allowedCommand", () => {
     }
     // T0.7 Decisions 4-5: Mode 06 is refused; Mode 02 only as 02 <pid> 00 (frame 0, the only frame recorded).
     for (const cmd of ["06", "0600", "06 00", "020201", "0202FF", "02 02 01"]) expect(allowedCommand(cmd), cmd).toBeUndefined();
+    // 00 outside the frame position (as the PID) is not frame 0.
+    for (const cmd of ["020001", "0200FF"]) expect(allowedCommand(cmd), cmd).toBeUndefined();
     expect(allowedCommand("020200")).toBe("020200");
     expect(allowedCommand("02 46 00")).toBe("024600");
   });
