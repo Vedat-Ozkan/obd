@@ -1,0 +1,5 @@
+{"t":0,"dir":"meta","synthetic":true,"purpose":"profile scan setup failure at ATCP 18"}
+{"t":1,"dir":"tx","data":"ATSP7\r"}
+{"t":2,"dir":"rx","data":"OK\r\r>"}
+{"t":3,"dir":"tx","data":"ATCP 18\r"}
+{"t":4,"dir":"rx","data":"?\r\r>"}
