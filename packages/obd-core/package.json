@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./transport": "./src/transport/types.ts",
+    "./transport/relay": "./src/transport/relay.ts",
     "./elm": "./src/elm/reader.ts",
     "./recording": "./src/recording/format.ts"
   },

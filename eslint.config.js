@@ -5,7 +5,7 @@ export default tseslint.config(
     ignores: ['**/coverage/**', '**/dist/**', '**/node_modules/**', '**/.pnpm/**'],
   },
   {
-    files: ['packages/**/*.ts', 'apps/**/*.{ts,tsx}'],
+    files: ['packages/**/*.ts', 'apps/**/*.{ts,tsx}', 'tools/relay/**/*.ts'],
     extends: [tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {
