@@ -3,30 +3,13 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ElmSessionError, Elm327Session } from "../src/elm/session.js";
-import { parseRecording, type RecordingLine } from "../src/recording/format.js";
-import { buildCodesReport, type CodesExchange, type CodesReport } from "../src/report/codes.js";
+import { parseRecording } from "../src/recording/format.js";
 import { renderCodesReport } from "../src/report/render.js";
-import { ReplayTransport } from "../src/transport/replay.js";
+import { codesReportFromRecording } from "../src/report/replay.js";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
-/** Replays every tx through Elm327Session.send (retry false, timeoutMs 500; a timeout adds no exchange) and builds the report. */
-export async function codesReportFromRecording(lines: readonly RecordingLine[]): Promise<CodesReport> {
-  const session = new Elm327Session(new ReplayTransport(lines));
-  const exchanges: CodesExchange[] = [];
-  for (const line of lines) {
-    if (line.dir !== "tx") continue;
-    const command = line.data.endsWith("\r") ? line.data.slice(0, -1) : line.data;
-    try {
-      exchanges.push({ command, response: await session.send(command, { retry: false, timeoutMs: 500 }) });
-    } catch (e) {
-      if (!(e instanceof ElmSessionError && e.kind === "timeout")) throw e;
-    }
-  }
-  await session.close();
-  return buildCodesReport(exchanges);
-}
+export { codesReportFromRecording };
 
 /** For each repo-relative path: "<!-- <path> -->\n" + renderCodesReport(report), blocks joined by "\n". Used by the CLI and the test. */
 export async function renderRecordings(paths: readonly string[]): Promise<string> {

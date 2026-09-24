@@ -26,7 +26,7 @@ src/
     freeze.ts       Mode 02
     vin.ts          Mode 09
     readiness.ts    PID 01 / 41 bitfields
-    supported.ts    supported-PID bitmap decode (the walk is T0.9)
+    supported.ts    supported-PID bitmap decode (no walk; T0.9 sends a fixed list)
   vehicles/
     profile.ts      VehicleProfile: protocol, headers, extra commands, decoders
     generic.ts      the default 11-bit CAN profile
@@ -34,6 +34,7 @@ src/
   report/
     codes.ts        CodesReport type, buildCodesReport(), recentlyCleared(), LOW_COUNTER; embedded in every battery report
     render.ts       template renderer
+    replay.ts       codesReportFromRecording(): recording → Elm327Session replay → CodesReport (obd-core/report; used by pnpm codes-report and the app)
   recording/
     format.ts       recording line schema (zod) and writer/reader
 scripts/replay.ts   pnpm replay (Node CLI; outside src)
@@ -189,7 +190,7 @@ A read-only allowlist is enforced in the relay, not in prompts: Mode 04 requires
 
 ## Data flow
 
-**Codes report (Phase 0):** connect → `session.init(profile)` → supported PIDs → Mode 09 VIN → Mode 03/07/0A → Mode 02 per stored DTC → PID 01/41 readiness → PIDs 30/31/4E → `buildCodesReport()` → render → share.
+**Codes report (Phase 0):** connect → the app's console capture runner records a fixed list (init, PID 00/20/40 bitmaps, PID 01 readiness, PIDs 21/30/31/4D/4E, Mode 03/07/0A, `020200`; no VIN request) → the frozen recording → `codesReportFromRecording()` (replay through `Elm327Session`) → `buildCodesReport()` → render markdown → share sheet (T0.9).
 
 **Charge session (Phase 2):** logger polls the profile's battery signals into a charge log during a charge → `capacity()` and `imbalance()` → `BatteryReport` → template text → optional `summarize()` → `check()` → display (template on failure).
 

@@ -5,15 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
+import { CODES_SCAN_COMMANDS, codesReportMarkdown, codesScanStop } from "./src/codesScan.js";
 import { ConsoleSession } from "./src/console.js";
 import { RecordingBuffer } from "./src/recording.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole, vehicleAvailability, vehicleEvidence, type CatalogVehicle } from "./src/garage/catalog.js";
 import { garageDocumentStore } from "./src/garage/documentStore.js";
 import { LOCAL_INTEREST_NOTICE, createGarageFlow, type GarageState, type Interest, type Ownership } from "./src/garage/flow.js";
 
-function localFilename(): string {
+function localDate(): string {
   const date = new Date();
-  return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}-phone-console.jsonl`;
+  return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localFilename(slug: string, extension: string): string {
+  return `${localDate()}-${slug}${extension}`;
 }
 
 async function requestBlePermission(): Promise<boolean> {
@@ -57,6 +62,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [capturing, setCapturing] = useState(false);
   const [captureStep, setCaptureStep] = useState("");
   const [captureLast, setCaptureLast] = useState("");
+  const [report, setReport] = useState<string>();
 
   // A session exists only while recording, so closing it freezes the buffer: no rx lands after Stop or disconnect.
   const endRecording = (): string | undefined => {
@@ -112,7 +118,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
     // A fresh session per recording: its reader starts empty and every notification lands in the started buffer.
     session.current = new ConsoleSession(connection.transport, recording);
-    setTranscript([]); setFrozenJsonl(undefined); frozenRef.current = undefined; setRecordingActive(true); setStatus("Recording started.");
+    setTranscript([]); setFrozenJsonl(undefined); frozenRef.current = undefined; setReport(undefined); setRecordingActive(true); setStatus("Recording started.");
     return session.current;
   };
   const send = async () => {
@@ -124,25 +130,32 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   };
   const stopRecording = () => { endRecording(); setStatus("Recording stopped and frozen."); };
   /** Writes a new file and opens the share sheet; returns the file name. */
-  const exportJsonl = async (jsonl: string): Promise<string> => {
-    const base = localFilename(); const extension = ".jsonl"; const stem = base.slice(0, -extension.length);
+  const exportFile = async (content: string, slug: string, extension: string, mimeType: string, dialogTitle: string): Promise<string> => {
+    const base = localFilename(slug, extension); const stem = base.slice(0, -extension.length);
     let suffix = 1; let file = new File(Paths.cache, base);
     while (file.exists) { suffix++; file = new File(Paths.cache, `${stem}-${String(suffix)}${extension}`); }
     file.create(); // throws if the file exists; never overwrite an export
-    file.write(jsonl);
-    await Sharing.shareAsync(file.uri, { mimeType: "application/x-ndjson", dialogTitle: "Export OBD recording" });
+    file.write(content);
+    await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
     return file.name;
   };
+  const exportJsonl = (jsonl: string) => exportFile(jsonl, "phone-console", ".jsonl", "application/x-ndjson", "Export OBD recording");
+  const shareReport = (markdown: string) => exportFile(markdown, "codes-report", ".md", "text/markdown", "Share codes report");
   const exportRecording = async () => {
     if (!frozenJsonl) return;
     try { setStatus(`Exported ${await exportJsonl(frozenJsonl)}.`); }
     catch (error) { setStatus(`Export error: ${error instanceof Error ? error.message : String(error)}`); }
   };
-  const capture = async () => {
+  const shareCurrentReport = async () => {
+    if (!report) return;
+    try { setStatus(`Share sheet opened for ${await shareReport(report)}.`); }
+    catch (error) { setStatus(`Share error: ${error instanceof Error ? error.message : String(error)}`); }
+  };
+  const capture = async (kind: "recording" | "codes") => {
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox capture unavailable for this model year."); return; }
     const active = startRecording();
     if (!active) return;
-    setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus("Capturing…");
+    setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus(kind === "codes" ? "Running codes scan…" : "Capturing…");
     let step = 0; let stepCommand = "";
     try {
       const result = await runCapture(active, recording, (progress) => {
@@ -152,7 +165,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
         setCaptureLast(`Last: ${progress.command} → ${outcome}`);
         const response = progress.response;
         setTranscript((current) => response === undefined ? [...current, `-- ${outcome}`] : [...current, `> ${progress.command}`, `${response}>`]);
-      });
+      }, kind === "codes" ? { commands: CODES_SCAN_COMMANDS, stopAfter: codesScanStop } : undefined);
       // If teardown already froze the recording, its JSONL is in the ref; an early stop still exports the partial file.
       const jsonl = endRecording() ?? frozenRef.current;
       const summary = result.stoppedEarly === undefined
@@ -160,6 +173,18 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
         : `Capture stopped at step ${String(step)} of ${String(result.total)} (${stepCommand}): ${result.stoppedEarly}.`;
       setStatus(summary);
       if (!jsonl) return;
+      if (kind === "codes") {
+        // The raw recording is not exported automatically (T0.9 Decision 5).
+        const keep = "Tap Export recording to save the raw recording.";
+        let markdown: string | undefined;
+        try { markdown = await codesReportMarkdown(jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }); }
+        catch (error) { setStatus(`Report error: ${error instanceof Error ? error.message : String(error)} ${keep}`); return; }
+        if (markdown === undefined) { setStatus(`No module answered; no report. ${summary} ${keep}`); return; }
+        setReport(markdown);
+        try { setStatus(`${summary} Share sheet opened for ${await shareReport(markdown)}. ${keep}`); }
+        catch (error) { setStatus(`${summary} Share error: ${error instanceof Error ? error.message : String(error)} ${keep}`); }
+        return;
+      }
       try { setStatus(`${summary} Share sheet opened for ${await exportJsonl(jsonl)}; choose where to save it.`); }
       catch (error) { setStatus(`${summary} Export error: ${error instanceof Error ? error.message : String(error)}`); }
     } finally { setCapturing(false); }
@@ -174,12 +199,15 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting} onPress={() => void connect(item)} />} />
     <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!recordingActive} />
     <Button title={recordingActive ? "Stop recording" : "Start recording"} color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || pending || capturing || (!recordingActive && !connection)} onPress={recordingActive ? stopRecording : startRecording} />
-    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || recordingActive || pending || capturing} onPress={() => void capture()} />
+    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || recordingActive || pending || capturing} onPress={() => void capture("recording")} />
+    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || recordingActive || pending || capturing} onPress={() => void capture("codes")} />
     {captureStep ? <Text style={{ color: colors.text }}>{captureStep}</Text> : null}
     {captureLast ? <Text style={{ color: colors.muted }}>{captureLast}</Text> : null}
     <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" />
     <Button title="Send" color={colors.buttonBackground} disabled={!connection || !recordingActive || pending || capturing} onPress={() => void send()} />
     <Button title="Export recording" color={colors.buttonBackground} disabled={!frozenJsonl || capturing} onPress={() => void exportRecording()} />
+    <Button title="Share report" color={colors.buttonBackground} disabled={!report || capturing} onPress={() => void shareCurrentReport()} />
+    {report ? <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{report}</Text></ScrollView> : null}
     <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
   </View>;
 }

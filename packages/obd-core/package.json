@@ -6,7 +6,8 @@
     "./transport": "./src/transport/types.ts",
     "./transport/relay": "./src/transport/relay.ts",
     "./elm": "./src/elm/reader.ts",
-    "./recording": "./src/recording/format.ts"
+    "./recording": "./src/recording/format.ts",
+    "./report": "./src/report/replay.ts"
   },
   "scripts": {
     "test": "vitest run"

@@ -25,15 +25,24 @@ export interface CaptureResult {
   stoppedEarly?: string;
 }
 
-export async function runCapture(session: ConsoleSession, recording: RecordingBuffer, onProgress: (progress: CaptureProgress) => void): Promise<CaptureResult> {
-  const total = CAPTURE_COMMANDS.length;
-  recording.meta(`capture start: ${CAPTURE_COMMANDS.join(" ")}`);
+export interface CaptureOptions {
+  /** Default CAPTURE_COMMANDS. */
+  commands?: readonly string[];
+  /** Called after each step that produced an outcome and left the ELM idle (a reply with '>', or a late '>' after a
+   *  timeout or failed write). A returned string stops the run with that reason. Default: never stops. */
+  stopAfter?: (command: string, outcome: string) => string | undefined;
+}
+
+export async function runCapture(session: ConsoleSession, recording: RecordingBuffer, onProgress: (progress: CaptureProgress) => void, options: CaptureOptions = {}): Promise<CaptureResult> {
+  const { commands = CAPTURE_COMMANDS, stopAfter = () => undefined } = options;
+  const total = commands.length;
+  recording.meta(`capture start: ${commands.join(" ")}`);
   let sent = 0;
   let stoppedEarly: string | undefined;
   let step = 0;
   // A function, not the getter inline: TypeScript would keep the narrowing from the loop-top check across awaits.
   const closed = (): boolean => session.closed;
-  for (const command of CAPTURE_COMMANDS) {
+  for (const command of commands) {
     if (closed()) { stoppedEarly = "disconnected"; break; }
     step++;
     onProgress({ step, total, command });
@@ -43,20 +52,27 @@ export async function runCapture(session: ConsoleSession, recording: RecordingBu
       sent++;
       const response = await reply;
       const status = parseElmResponse(response, command).status;
-      onProgress({ step, total, command, outcome: status.kind === "error" ? `error: ${status.error.kind}` : status.kind, response });
+      const outcome = status.kind === "error" ? `error: ${status.error.kind}` : status.kind;
+      onProgress({ step, total, command, outcome, response });
+      stoppedEarly = stopAfter(command, outcome);
+      if (stoppedEarly !== undefined) break;
     } catch (error) {
       // A closed session was frozen by teardown: record nothing more.
       if (closed()) { stoppedEarly = "disconnected"; break; }
       const message = error instanceof Error ? error.message : String(error);
       onProgress({ step, total, command, outcome: message });
       // Error replies came with '>' and are safe to follow; a timeout or failed write is not until the ELM prompts again.
-      if (await session.waitForPrompt(PROMPT_WAIT_MS)) continue;
+      if (await session.waitForPrompt(PROMPT_WAIT_MS)) {
+        stoppedEarly = stopAfter(command, message);
+        if (stoppedEarly !== undefined) break;
+        continue;
+      }
       stoppedEarly = closed() ? "disconnected" : `no '>' within ${String(PROMPT_WAIT_MS)} ms after: ${message}`;
       break;
     }
   }
   if (!closed()) {
-    recording.meta(stoppedEarly === undefined ? `capture complete: ${String(sent)} of ${String(total)} sent` : `capture stopped at step ${String(step)} (${CAPTURE_COMMANDS[step - 1]}): ${stoppedEarly}`);
+    recording.meta(stoppedEarly === undefined ? `capture complete: ${String(sent)} of ${String(total)} sent` : `capture stopped at step ${String(step)} (${commands[step - 1]}): ${stoppedEarly}`);
   }
   return stoppedEarly === undefined ? { sent, total } : { sent, total, stoppedEarly };
 }
