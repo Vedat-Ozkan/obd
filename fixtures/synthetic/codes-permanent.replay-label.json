@@ -1,0 +1,50 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/codes-permanent.jsonl",
+  "recording_sha256": "8866e8b620fae99b0ade21758a7400336feef34d9e23be10d0044722b804c383",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 4,
+      "command": "0120",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 supported 40"
+      ]
+    },
+    {
+      "tx_line": 6,
+      "command": "0140",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 supported 42"
+      ]
+    },
+    {
+      "tx_line": 8,
+      "command": "0101",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 readiness pid=01 mil=off dtcs=0 ignition=spark components=incomplete"
+      ]
+    },
+    {
+      "tx_line": 10,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 dtcs none"
+      ]
+    },
+    {
+      "tx_line": 14,
+      "command": "0A",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 dtcs P0133"
+      ]
+    }
+  ],
+  "summary": "summary: 7 commands; data 7, ok 0, nodata 0, error 0, timeout 0; frames 7; dropped none",
+  "notes": "Synthetic T0.7 'recently cleared' branch: indicated, strong (permanent code, no stored codes, a monitor incomplete; counters unsupported); no vehicle evidence."
+}

@@ -15,6 +15,10 @@ const pairs = [
   ["fixtures/synthetic/elm-framing.jsonl", "fixtures/synthetic/elm-framing.replay-label.json"],
   ["fixtures/synthetic/session-branches.jsonl", "fixtures/synthetic/session-branches.replay-label.json"],
   ["fixtures/synthetic/standard-decoding.jsonl", "fixtures/synthetic/standard-decoding.replay-label.json"],
+  ["fixtures/synthetic/codes-cleared.jsonl", "fixtures/synthetic/codes-cleared.replay-label.json"],
+  ["fixtures/synthetic/codes-permanent.jsonl", "fixtures/synthetic/codes-permanent.replay-label.json"],
+  ["fixtures/synthetic/codes-stored.jsonl", "fixtures/synthetic/codes-stored.replay-label.json"],
+  ["fixtures/synthetic/codes-conflict.jsonl", "fixtures/synthetic/codes-conflict.replay-label.json"],
 ] as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -22,7 +26,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 describe("protocol replay observation labels", () => {
-  it("has exactly the six companion labels", () => {
+  it("has exactly the ten companion labels", () => {
     const found = [real, "fixtures/synthetic/"].flatMap((dir) =>
       readdirSync(join(root, dir))
         .filter((name) => name.endsWith(".replay-label.json"))

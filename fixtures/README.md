@@ -29,13 +29,21 @@ The tracked synthetic recordings are:
 - `synthetic/elm-framing.jsonl`
 - `synthetic/session-branches.jsonl`
 - `synthetic/standard-decoding.jsonl`
+- `synthetic/codes-cleared.jsonl`
+- `synthetic/codes-permanent.jsonl`
+- `synthetic/codes-stored.jsonl`
+- `synthetic/codes-conflict.jsonl`
 
-Each of these six recordings has a companion `.replay-label.json` for observed
+The four `codes-*` fixtures each drive one T0.7 "recently cleared" branch
+(indicated, indicated strong, not indicated, unknown because the checks
+disagree; `docs/specs/T0.7-codes-report.md`).
+
+Each of these ten recordings has a companion `.replay-label.json` for observed
 protocol outcomes. None has a `.label.json` health-session companion.
 
 ## Protocol replay observation labels
 
-The six companion files are the three real recording stems above and the three
+The ten companion files are the three real recording stems above and the seven
 synthetic stems above, each ending in `.replay-label.json`. For a real input,
 the companion removes `.redacted.jsonl` before adding that suffix; for a
 synthetic input, it removes `.jsonl`.
@@ -53,7 +61,7 @@ These labels describe protocol responses only. A supported PID, readiness
 state, empty DTC list, or dash-displayed SOC does not establish battery
 condition or capacity. The future `*.label.json` files in [docs/EVAL.md](../docs/EVAL.md)
 are separate health-session labels with condition and, when justified, a
-reference measurement. None of the six protocol snapshots supplies one.
+reference measurement. None of the ten protocol snapshots supplies one.
 
 ## Implemented recording JSONL contract
 
@@ -97,7 +105,7 @@ meta line. Their trailing ADR-017 provenance marker currently has
 `redacted: "vin-serial"`, `source`, `source_sha256`, `script`,
 `script_version`, and `masked_messages`.
 
-The three synthetic fixtures currently begin with metadata containing
+The seven synthetic fixtures currently begin with metadata containing
 `synthetic: true`, `car: "none"`, `dongle: "none"`, and a `note` explaining
 why the data is hand-written and where its sources live. Future synthetic
 fixtures should provide equivalent provenance without copying those existing

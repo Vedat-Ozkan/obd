@@ -4,7 +4,8 @@ import type { Transport } from "obd-core/transport";
 import type { RecordingBuffer } from "./recording.js";
 
 // Sources: docs/ELM327.md §Standard modes used (04 is a write) and §Init sequence; AGENTS.md hard rule 5.
-export const READ_ONLY_SERVICES: readonly string[] = ["01", "02", "03", "06", "07", "09", "0A", "22"];
+// 06 is refused until a Mode 06 request is recorded (docs/specs/T0.7-codes-report.md, Decisions 4).
+export const READ_ONLY_SERVICES: readonly string[] = ["01", "02", "03", "07", "09", "0A", "22"];
 export const ALLOWED_AT_COMMANDS: readonly string[] = ["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV"];
 
 export function normalizeReadOnlyCommand(input: string): string {

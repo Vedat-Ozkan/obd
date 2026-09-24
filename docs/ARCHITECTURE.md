@@ -32,11 +32,12 @@ src/
     generic.ts      the default 11-bit CAN profile
     obdb/           importer for OBDb signalset JSON; every signal tagged community | verified (Phase 2)
   report/
-    codes.ts        CodesReport type, buildCodesReport(), recentlyCleared(); embedded in every battery report
+    codes.ts        CodesReport type, buildCodesReport(), recentlyCleared(), LOW_COUNTER; embedded in every battery report
     render.ts       template renderer
   recording/
     format.ts       recording line schema (zod) and writer/reader
 scripts/replay.ts   pnpm replay (Node CLI; outside src)
+scripts/codes-report.ts   pnpm codes-report (Node CLI; outside src)
 vehicles/
   saej1979/               vendored OBDb SAEJ1979 signalset (CC-BY-SA-4.0)
   <make>-<model>/         vendored OBDb signalsets + LICENSE (CC-BY-SA-4.0), Equinox EV first   (Phase 2)

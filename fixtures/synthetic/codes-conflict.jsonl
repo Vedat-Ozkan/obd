@@ -1,0 +1,21 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.7: unknown, checks disagree (Equinox-like 29-bit); layouts per docs/ELM327.md \u00a7J1979 conventions; 0100/0120/0140/0101 replies of modules 17 and CB as in fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl L24-70, CB 0A reply 7F 0A 11 as spike L122-128; timestamps invented"}
+{"t": 0.010, "dir": "tx", "data": "0100\r"}
+{"t": 0.030, "dir": "rx", "data": "18DAF1CB06410080000001\r18DAF11706410080080013\r\r>"}
+{"t": 0.040, "dir": "tx", "data": "0120\r"}
+{"t": 0.060, "dir": "rx", "data": "18DAF11706412080018001\r18DAF1CB06412000000001\r\r>"}
+{"t": 0.070, "dir": "tx", "data": "0140\r"}
+{"t": 0.090, "dir": "rx", "data": "18DAF1CB06414040000000\r18DAF11706414040000001\r\r>"}
+{"t": 0.100, "dir": "tx", "data": "0101\r"}
+{"t": 0.120, "dir": "rx", "data": "18DAF1CB06410100040000\r18DAF11706410100040000\r\r>"}
+{"t": 0.130, "dir": "tx", "data": "0130\r"}
+{"t": 0.150, "dir": "rx", "data": "18DAF11703413001\r\r>"}
+{"t": 0.160, "dir": "tx", "data": "0131\r"}
+{"t": 0.180, "dir": "rx", "data": "18DAF1170441310005\r\r>"}
+{"t": 0.190, "dir": "tx", "data": "03\r"}
+{"t": 0.210, "dir": "rx", "data": "18DAF117024300\r18DAF1CB024300\r\r>"}
+{"t": 0.220, "dir": "tx", "data": "07\r"}
+{"t": 0.240, "dir": "rx", "data": "18DAF117024700\r18DAF1CB024700\r\r>"}
+{"t": 0.250, "dir": "tx", "data": "0A\r"}
+{"t": 0.270, "dir": "rx", "data": "18DAF117024A00\r18DAF1CB037F0A11\r\r>"}
+{"t": 0.280, "dir": "tx", "data": "020200\r"}
+{"t": 0.300, "dir": "rx", "data": "18DAF117054202000000\r\r>"}

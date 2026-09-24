@@ -1,0 +1,23 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.7: not indicated (counters exactly at policy), stored and pending DTCs, MIL on, stored freeze frame; layouts per docs/ELM327.md \u00a7J1979 conventions; timestamps invented"}
+{"t": 0.010, "dir": "tx", "data": "0101\r"}
+{"t": 0.030, "dir": "rx", "data": "7E806410181440000\r\r>"}
+{"t": 0.040, "dir": "tx", "data": "0121\r"}
+{"t": 0.060, "dir": "rx", "data": "7E8044121000C\r\r>"}
+{"t": 0.070, "dir": "tx", "data": "014D\r"}
+{"t": 0.090, "dir": "rx", "data": "7E804414D001E\r\r>"}
+{"t": 0.100, "dir": "tx", "data": "0130\r"}
+{"t": 0.120, "dir": "rx", "data": "7E80341300A\r\r>"}
+{"t": 0.130, "dir": "tx", "data": "0131\r"}
+{"t": 0.150, "dir": "rx", "data": "7E80441310064\r\r>"}
+{"t": 0.160, "dir": "tx", "data": "014E\r"}
+{"t": 0.180, "dir": "rx", "data": "7E804414E0258\r\r>"}
+{"t": 0.190, "dir": "tx", "data": "03\r"}
+{"t": 0.210, "dir": "rx", "data": "7E80443010133\r7E9024300\r\r>"}
+{"t": 0.220, "dir": "tx", "data": "07\r"}
+{"t": 0.240, "dir": "rx", "data": "7E8044701C158\r7E9024700\r\r>"}
+{"t": 0.250, "dir": "tx", "data": "0A\r"}
+{"t": 0.270, "dir": "rx", "data": "7E8044A010133\r\r>"}
+{"t": 0.280, "dir": "tx", "data": "020200\r"}
+{"t": 0.300, "dir": "rx", "data": "7E8054202000133\r\r>"}
+{"t": 0.310, "dir": "tx", "data": "024600\r"}
+{"t": 0.330, "dir": "rx", "data": "7E8044246003C\r\r>"}

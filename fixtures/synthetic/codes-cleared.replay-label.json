@@ -1,0 +1,74 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/codes-cleared.jsonl",
+  "recording_sha256": "c11f8d6f5a5736c21b1dc3ce9acd3b110f60d35df9c6786b039dc46c0a1098f4",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 8,
+      "command": "0101",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 readiness pid=01 mil=off dtcs=0 ignition=spark components=incomplete"
+      ]
+    },
+    {
+      "tx_line": 12,
+      "command": "0130",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 WARM_UPS 2 count"
+      ]
+    },
+    {
+      "tx_line": 14,
+      "command": "0131",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 CLR_DIST 99 km"
+      ]
+    },
+    {
+      "tx_line": 18,
+      "command": "014E",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 CLR_TIME 45 min"
+      ]
+    },
+    {
+      "tx_line": 20,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 dtcs none"
+      ]
+    },
+    {
+      "tx_line": 24,
+      "command": "0A",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 dtcs none"
+      ]
+    },
+    {
+      "tx_line": 26,
+      "command": "020200",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 freeze 0 dtc none"
+      ]
+    },
+    {
+      "tx_line": 28,
+      "command": "024600",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 freeze 0 AAT 20 degC"
+      ]
+    }
+  ],
+  "summary": "summary: 14 commands; data 14, ok 0, nodata 0, error 0, timeout 0; frames 14; dropped none",
+  "notes": "Synthetic T0.7 'recently cleared' branch: indicated (standard path: no stored codes, a monitor incomplete, counters below policy); no vehicle evidence."
+}

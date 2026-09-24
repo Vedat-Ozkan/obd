@@ -14,7 +14,8 @@ describe("allowedCommand", () => {
   });
 
   it("G2. allows exactly the read services, in every spelling of a refused one", () => {
-    const allowed = new Set(["01", "02", "03", "06", "07", "09", "0A", "22"]);
+    // T0.7 Decisions 4: Mode 06 is refused (docs/specs/T0.7-codes-report.md).
+    const allowed = new Set(["01", "02", "03", "07", "09", "0A", "22"]);
     // Spec amendment 2026-09-23 (review round 2): each service has one request length, so try 1-3 bytes.
     for (let b = 0; b <= 0xff; b++) {
       const any = [2, 4, 6].some((n) => allowedCommand(hex(b).padEnd(n, "0")) !== undefined);
@@ -51,6 +52,7 @@ describe("allowedCommand", () => {
     const files = [
       "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl",
       "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike-2.redacted.jsonl",
+      "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl",
       "fixtures/synthetic/session-branches.jsonl",
       "fixtures/synthetic/standard-decoding.jsonl",
       "fixtures/synthetic/elm-framing.jsonl",
@@ -73,7 +75,7 @@ describe("allowedCommand", () => {
   // Spec amendment 2026-09-23 (review round 2): a busy ELM discards the first character it receives
   // (datasheet rev J p.9, p.48), so no request may have room to become a refused service when shifted by one.
   it("G8. allows each read service only at its exact request length", () => {
-    const lengths: Record<string, number> = { "01": 4, "02": 6, "03": 2, "06": 4, "07": 2, "09": 4, "0A": 2, "22": 6 };
+    const lengths: Record<string, number> = { "01": 4, "02": 6, "03": 2, "07": 2, "09": 4, "0A": 2, "22": 6 };
     const shifted = ["014FFFFFF1", "011011", "02EF190ABCD1", "0100FF", "2233E5FF", "00100", "0 0100", "01 00 00", "22 33"];
     for (const cmd of shifted) expect(allowedCommand(cmd), cmd).toBeUndefined();
     for (const [s, n] of Object.entries(lengths)) {
@@ -82,6 +84,10 @@ describe("allowedCommand", () => {
         expect(allowedCommand(cmd) !== undefined, cmd).toBe(len === n);
       }
     }
+    // T0.7 Decisions 4-5: Mode 06 is refused; Mode 02 only as 02 <pid> 00 (frame 0, the only frame recorded).
+    for (const cmd of ["06", "0600", "06 00", "020201", "0202FF", "02 02 01"]) expect(allowedCommand(cmd), cmd).toBeUndefined();
+    expect(allowedCommand("020200")).toBe("020200");
+    expect(allowedCommand("02 46 00")).toBe("024600");
   });
 });
 

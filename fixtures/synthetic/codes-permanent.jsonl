@@ -1,0 +1,15 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.7: indicated, strong (permanent DTC), counters unsupported; layouts per docs/ELM327.md \u00a7J1979 conventions; timestamps invented"}
+{"t": 0.010, "dir": "tx", "data": "0100\r"}
+{"t": 0.030, "dir": "rx", "data": "7E806410080000001\r\r>"}
+{"t": 0.040, "dir": "tx", "data": "0120\r"}
+{"t": 0.060, "dir": "rx", "data": "7E806412000000001\r\r>"}
+{"t": 0.070, "dir": "tx", "data": "0140\r"}
+{"t": 0.090, "dir": "rx", "data": "7E806414040000000\r\r>"}
+{"t": 0.100, "dir": "tx", "data": "0101\r"}
+{"t": 0.120, "dir": "rx", "data": "7E806410100440000\r\r>"}
+{"t": 0.130, "dir": "tx", "data": "03\r"}
+{"t": 0.150, "dir": "rx", "data": "7E8024300\r\r>"}
+{"t": 0.160, "dir": "tx", "data": "07\r"}
+{"t": 0.180, "dir": "rx", "data": "7E8024700\r\r>"}
+{"t": 0.190, "dir": "tx", "data": "0A\r"}
+{"t": 0.210, "dir": "rx", "data": "7E8044A010133\r\r>"}

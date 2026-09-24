@@ -10,12 +10,21 @@ export function normalize(cmd: string): string {
 }
 
 // §Write safety, Services: first byte of an OBD request with CAF1 in effect, and the one request length
-// (hex characters) allowed for it, so a dropped first character cannot leave a refused service. Hex pairs
-// only, so the response-count digit (odd length) and an empty command (a bare CR repeats) are refused.
+// (hex characters) allowed for it, which keeps what a dropped first character leaves to one or two bytes.
+// Hex pairs only, so the response-count digit (odd length) and an empty command (a bare CR repeats) are
+// refused. 06 is refused: no recorded request sources its length (docs/specs/T0.7-codes-report.md, Decisions 4).
 const READ_LENGTHS: Readonly<Record<string, number | undefined>> = {
-  "01": 4, "02": 6, "03": 2, "06": 4, "07": 2, "09": 4, "0A": 2, "22": 6,
+  "01": 4, "02": 6, "03": 2, "07": 2, "09": 4, "0A": 2, "22": 6,
 };
 const HEX_BYTES = /^(?:[0-9A-F]{2})+$/;
+// Mode 02 frame 0 only: the only frame recorded (§J1979 conventions "Mode 02 reply layout"; phone-console
+// L38, L42; docs/specs/T0.7-codes-report.md, Decisions 5).
+const MODE02_FRAME = "00";
+
+function allowedRequest(norm: string): boolean {
+  if (READ_LENGTHS[norm.slice(0, 2)] !== norm.length) return false;
+  return !norm.startsWith("02") || norm.endsWith(MODE02_FRAME);
+}
 
 // §Write safety, AT commands allowed: no CAF, PP, reset other than ATZ, or monitoring command is listed.
 const PLAIN_AT: readonly string[] = [
@@ -30,7 +39,7 @@ const HEADER_CLASS = /^(?:ATCP18|ATSHDA[0-9A-F]{2}F1|ATFCSH18DA[0-9A-F]{2}F1|ATF
 export function allowedCommand(cmd: string): string | undefined {
   if (NON_PRINTABLE.test(cmd)) return undefined;
   const norm = normalize(cmd);
-  if (HEX_BYTES.test(norm)) return READ_LENGTHS[norm.slice(0, 2)] === norm.length ? norm : undefined;
+  if (HEX_BYTES.test(norm)) return allowedRequest(norm) ? norm : undefined;
   if (PLAIN_AT.includes(norm) || PLAIN_PATTERN.test(norm) || HEADER_CLASS.test(norm)) return norm;
   return undefined;
 }

@@ -28,7 +28,7 @@ afterEach(() => { vi.useRealTimers(); });
 describe("normalizeReadOnlyCommand", () => {
   it("normalizes every allowed service and all eight AT commands", () => {
     expect(ALLOWED_AT_COMMANDS).toEqual(["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV"]);
-    expect(READ_ONLY_SERVICES).toEqual(["01", "02", "03", "06", "07", "09", "0A", "22"]);
+    expect(READ_ONLY_SERVICES).toEqual(["01", "02", "03", "07", "09", "0A", "22"]);
     for (const command of [...ALLOWED_AT_COMMANDS, ...READ_ONLY_SERVICES, ...READ_ONLY_SERVICES.map((service) => `${service}00`)]) {
       expect(normalizeReadOnlyCommand(`  ${command.toLowerCase()}  `)).toBe(command);
     }
@@ -36,7 +36,7 @@ describe("normalizeReadOnlyCommand", () => {
     expect(normalizeReadOnlyCommand("22 33e5")).toBe("2233E5");
   });
 
-  const rejected = ["", "   ", "ATI", "ATMA", "ATSP7", "ATST 32", "AT Z", "ATZ0", "ATSH DA1DF1", "04", "0400", "2E", "2E1234", "2F00", "31", "3101", "10 03", "08", "0800", "0", "010", "01\r00", "01\n00", "01\t00", "01é", "0100\u0000", "ZZ"];
+  const rejected = ["", "   ", "ATI", "ATMA", "ATSP7", "ATST 32", "AT Z", "ATZ0", "ATSH DA1DF1", "04", "0400", "2E", "2E1234", "2F00", "31", "3101", "10 03", "08", "0800", "0600", "0", "010", "01\r00", "01\n00", "01\t00", "01é", "0100\u0000", "ZZ"];
   it.each(rejected)("rejects %j", (command) => { expect(() => normalizeReadOnlyCommand(command)).toThrow(); });
 
   it("rejects before any transport write", async () => {

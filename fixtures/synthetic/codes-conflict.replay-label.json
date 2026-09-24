@@ -1,0 +1,79 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/codes-conflict.jsonl",
+  "recording_sha256": "69e203ef01a44a7d81ceaf1537836abfb78138178b1ca943954d0e8f7a32de24",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 4,
+      "command": "0120",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 supported 21 30 31 40",
+        "  decoded CB supported 40"
+      ]
+    },
+    {
+      "tx_line": 6,
+      "command": "0140",
+      "outcome": "data",
+      "decoded": [
+        "  decoded CB supported 42",
+        "  decoded 17 supported 42 60"
+      ]
+    },
+    {
+      "tx_line": 8,
+      "command": "0101",
+      "outcome": "data",
+      "decoded": [
+        "  decoded CB readiness pid=01 mil=off dtcs=0 ignition=spark components=complete",
+        "  decoded 17 readiness pid=01 mil=off dtcs=0 ignition=spark components=complete"
+      ]
+    },
+    {
+      "tx_line": 10,
+      "command": "0130",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 WARM_UPS 1 count"
+      ]
+    },
+    {
+      "tx_line": 12,
+      "command": "0131",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 CLR_DIST 5 km"
+      ]
+    },
+    {
+      "tx_line": 14,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 dtcs none",
+        "  decoded CB dtcs none"
+      ]
+    },
+    {
+      "tx_line": 18,
+      "command": "0A",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 dtcs none",
+        "  decoded CB negative code=11"
+      ]
+    },
+    {
+      "tx_line": 20,
+      "command": "020200",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 freeze 0 dtc none"
+      ]
+    }
+  ],
+  "summary": "summary: 10 commands; data 10, ok 0, nodata 0, error 0, timeout 0; frames 17; dropped none",
+  "notes": "Synthetic T0.7 'recently cleared' branch: unknown, checks disagree (counters low, components monitor complete; CB 0A negative); no vehicle evidence."
+}
