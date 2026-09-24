@@ -29,6 +29,8 @@ export class ReplayMismatchError extends Error {
  * are delivered asynchronously, one callback per rx line, so recorded chunk boundaries survive.
  */
 export class ReplayTransport implements Transport {
+  /** It only answers what is written, so it is never busy when a session starts. */
+  readonly startsIdle = true;
   private cursor = 0;
   private closed = false;
   private readonly subscribers = new Set<(bytes: Uint8Array) => void>();

@@ -44,6 +44,8 @@ export async function runCapture(session: ConsoleSession, recording: RecordingBu
   const closed = (): boolean => session.closed;
   for (const command of commands) {
     if (closed()) { stoppedEarly = "disconnected"; break; }
+    // A refused send() would still count as sent: the check must come before the call (docs/specs/X-2026-09-24-first-write.md D5).
+    if (session.stateUnknown && command !== "ATZ" && command !== "ATI") { stoppedEarly = "ELM state unknown; send ATZ or ATI first"; break; }
     step++;
     onProgress({ step, total, command });
     try {

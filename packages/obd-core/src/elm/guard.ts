@@ -13,8 +13,8 @@ export function normalize(cmd: string): string {
 // (hex characters) allowed for it. Hex pairs only, so the response-count digit (odd length) and an empty
 // command (a bare CR repeats) are refused. The length only keeps what dropped leading characters leave to at
 // most two bytes plus a count digit (DS p.32), and the first of them can still be a refused service (0111 -> 11;
-// two drops: 0131 -> 31; §Write safety, "What the length rule does not do"). 06 is refused: no recorded request sources its length
-// (docs/specs/T0.7-codes-report.md, Decisions 4).
+// two drops: 0131 -> 31; §Write safety, "What the length rule does not do"). 06 is refused: no recorded request
+// sources its length (docs/specs/T0.7-codes-report.md, Decisions 4).
 const READ_LENGTHS: Readonly<Record<string, number | undefined>> = {
   "01": 4, "02": 6, "03": 2, "07": 2, "09": 4, "0A": 2, "22": 6,
 };

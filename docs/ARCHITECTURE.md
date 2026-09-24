@@ -53,6 +53,9 @@ export interface Transport {
   /** Subscribe to incoming bytes. Chunk boundaries are meaningless. */
   onData(cb: (bytes: Uint8Array) => void): () => void;
   close(): Promise<void>;
+  /** true only when the far end cannot be mid-command when a session starts (a recording replay).
+   *  Unset: the session assumes the ELM may be busy (docs/ELM327.md §Write safety). */
+  readonly startsIdle?: boolean;
 }
 
 export interface VehicleProfile {
@@ -108,7 +111,7 @@ export class ElmSessionError extends Error {
 export class Elm327Session {
   constructor(transport: Transport);
   init(profile: VehicleProfile): Promise<InitResult>;                // ATZ ATI ATE0 ATL0 ATS0 ATH1 ATSPn ATDPN ATRV 0100; fixed protocol falls back to ATSP0
-  send(cmd: string, opts?: SendOptions): Promise<ElmResponse>;       // one command, one response; rejects anything off the read-only allowlist ("blocked"); docs/ELM327.md §Write safety
+  send(cmd: string, opts?: SendOptions): Promise<ElmResponse>;       // one command, one response; rejects anything off the read-only allowlist ("blocked"); a fresh session sends only ATZ/ATI until a clean reply; docs/ELM327.md §Write safety
   close(): Promise<void>;
 }
 ```

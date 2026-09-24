@@ -13,6 +13,7 @@ class FakeTransport implements Transport {
   private callbacks = new Set<(bytes: Uint8Array) => void>();
   fail?: Error;
   onWrite?: () => void;
+  startsIdle = true;
   async write(bytes: Uint8Array): Promise<void> { this.onWrite?.(); this.writes.push(latin1Decode(bytes)); if (this.fail) throw this.fail; }
   onData(callback: (bytes: Uint8Array) => void): () => void { this.callbacks.add(callback); return () => { this.callbacks.delete(callback); }; }
   async close(): Promise<void> { /* nothing to release */ }
@@ -26,8 +27,8 @@ const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdch
 afterEach(() => { vi.useRealTimers(); });
 
 describe("normalizeReadOnlyCommand", () => {
-  it("normalizes every allowed service and all eight AT commands", () => {
-    expect(ALLOWED_AT_COMMANDS).toEqual(["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV"]);
+  it("normalizes every allowed service and all nine AT commands", () => {
+    expect(ALLOWED_AT_COMMANDS).toEqual(["ATZ", "ATI", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV"]);
     expect(READ_ONLY_SERVICES).toEqual(["01", "02", "03", "07", "09", "0A", "22"]);
     for (const command of [...ALLOWED_AT_COMMANDS, ...READ_ONLY_SERVICES, ...READ_ONLY_SERVICES.map((service) => `${service}00`)]) {
       expect(normalizeReadOnlyCommand(`  ${command.toLowerCase()}  `)).toBe(command);
@@ -36,7 +37,7 @@ describe("normalizeReadOnlyCommand", () => {
     expect(normalizeReadOnlyCommand("22 33e5")).toBe("2233E5");
   });
 
-  const rejected = ["", "   ", "ATI", "ATMA", "ATSP7", "ATST 32", "AT Z", "ATZ0", "ATSH DA1DF1", "04", "0400", "2E", "2E1234", "2F00", "31", "3101", "10 03", "08", "0800", "0600", "0", "010", "01\r00", "01\n00", "01\t00", "01é", "0100\u0000", "ZZ"];
+  const rejected = ["", "   ", "ATMA", "ATSP7", "ATST 32", "AT Z", "ATZ0", "ATSH DA1DF1", "04", "0400", "2E", "2E1234", "2F00", "31", "3101", "10 03", "08", "0800", "0600", "0", "010", "01\r00", "01\n00", "01\t00", "01é", "0100\u0000", "ZZ"];
   it.each(rejected)("rejects %j", (command) => { expect(() => normalizeReadOnlyCommand(command)).toThrow(); });
 
   it("rejects before any transport write", async () => {
@@ -115,6 +116,44 @@ describe("ConsoleSession", () => {
     const recording = new RecordingBuffer(() => 1); recording.start(meta); const transport = new FakeTransport(); const session = new ConsoleSession(transport, recording);
     const pending = session.send("0100"); session.close(); await expect(pending).rejects.toThrow("closed");
     transport.data("4100>"); expect(recording.lines().filter((line) => line.dir === "rx")).toHaveLength(0);
+  });
+
+  // docs/specs/X-2026-09-24-first-write.md Verification, isolated tests 8-11.
+  const UNKNOWN = "ELM state unknown; send ATZ or ATI first";
+  const fresh = (timeoutMs?: number) => {
+    const recording = new RecordingBuffer(() => 1); recording.start(meta); const transport = new FakeTransport(); transport.startsIdle = false;
+    return { recording, transport, session: new ConsoleSession(transport, recording, timeoutMs) };
+  };
+
+  it("first-write C1: a fresh console refuses anything but ATZ/ATI before recording or writing; ATI is sent", async () => {
+    const { recording, transport, session } = fresh();
+    await expect(session.send("0100")).rejects.toThrow(UNKNOWN);
+    expect(transport.writes).toEqual([]); expect(recording.lines()).toHaveLength(1); expect(session.stateUnknown).toBe(true);
+    const sent = session.send("ATI"); expect(transport.writes).toEqual(["ATI\r"]);
+    transport.data("ELM327 v1.5\r\r>"); await expect(sent).resolves.toBe("ELM327 v1.5\r\r"); expect(session.stateUnknown).toBe(false);
+  });
+
+  it("first-write C2: an ATZ answered '?' leaves the console unknown", async () => {
+    const { transport, session } = fresh();
+    const sent = session.send("ATZ"); transport.data("?\r\r>"); await sent;
+    await expect(session.send("0100")).rejects.toThrow(UNKNOWN); expect(transport.writes).toEqual(["ATZ\r"]);
+  });
+
+  it("first-write C3: a late '>' after a timed-out ATZ does not end the unknown state", async () => {
+    vi.useFakeTimers();
+    const { transport, session } = fresh(10);
+    const timed = session.send("ATZ"); const timedExpectation = expect(timed).rejects.toThrow("Timed out"); await vi.advanceTimersByTimeAsync(10); await timedExpectation;
+    transport.data("\r\rELM327 v1.5\r\r>");
+    expect(session.stateUnknown).toBe(true);
+    await expect(session.send("ATE0")).rejects.toThrow(UNKNOWN); expect(transport.writes).toEqual(["ATZ\r"]);
+  });
+
+  it("first-write C4: STOPPED in a known console starts the unknown state again", async () => {
+    const { transport, session } = fresh();
+    const reset = session.send("ATZ"); transport.data("\r\rELM327 v1.5\r\r>"); await reset; expect(session.stateUnknown).toBe(false);
+    const stopped = session.send("0100"); transport.data("STOPPED\r\r>"); await stopped;
+    expect(session.stateUnknown).toBe(true);
+    await expect(session.send("0101")).rejects.toThrow(UNKNOWN); expect(transport.writes).toEqual(["ATZ\r", "0100\r"]);
   });
 });
 

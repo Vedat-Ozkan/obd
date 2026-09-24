@@ -136,4 +136,13 @@ describe("runCapture", () => {
     expect(transport.writes.at(-1)).toBe("0100\r"); expect(transport.writes).toHaveLength(7);
     expect(recording.lines()).toHaveLength(linesAtClose);
   });
+
+  // docs/specs/X-2026-09-24-first-write.md Verification, isolated test 12 (spec name C5).
+  it("first-write C5: a plain capture whose ATZ is answered '?' stops before writing ATE0", async () => {
+    const { recording, transport, run } = setup({ ATZ: ["?\r\r>"] });
+    const result = await run();
+    expect(result).toEqual({ sent: 1, total: 10, stoppedEarly: "ELM state unknown; send ATZ or ATI first" });
+    expect(transport.writes).toEqual(["ATZ\r"]);
+    expect(recording.lines().at(-1)).toEqual({ t: 0, dir: "meta", note: "capture stopped at step 1 (ATZ): ELM state unknown; send ATZ or ATI first" });
+  });
 });

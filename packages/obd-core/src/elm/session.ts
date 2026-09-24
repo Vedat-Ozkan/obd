@@ -87,10 +87,16 @@ export class Elm327Session {
   private tail: Promise<unknown> = Promise.resolve();
   private wait: Wait | undefined;
   private stale = false;
+  // docs/ELM327.md §Write safety: a new session cannot tell whether the ELM is idle, so until an ATZ or ATI is
+  // answered cleanly only those two are written. STOPPED starts the state again.
+  private unknown: boolean;
+  /** After STOPPED: wait for the second '>' before the next write. */
+  private drain = false;
   private closed = false;
   private headerState: HeaderState = UNKNOWN_STATE;
 
   constructor(private readonly transport: Transport) {
+    this.unknown = transport.startsIdle !== true;
     this.unsubscribe = transport.onData((chunk) => {
       this.onData(chunk);
     });
@@ -214,6 +220,11 @@ export class Elm327Session {
       // written until a '>' shows it is idle; without one the session stays stale.
       if (!(await this.resync(cmd))) throw new ElmSessionError("timeout", cmd);
       this.stale = false;
+    } else if (this.drain) {
+      // docs/ELM327.md §Write safety (DS p.9, p.48): only the interrupting character is discarded, so the rest
+      // of the stopped command may still be answered. Written either way; the unknown state limits it to ATZ/ATI.
+      await this.resync(cmd);
+      this.drain = false;
     }
     this.reader.reset();
     return toResponse(cmd, await this.exchange(cmd, timeoutMs));
@@ -222,6 +233,8 @@ export class Elm327Session {
   private async run(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
     // docs/ELM327.md §Write safety: checked in queue order; if an attempt throws, the in-flight state stays.
     const norm = normalize(cmd);
+    const probe = norm === "ATZ" || norm === "ATI";
+    if (this.unknown && !probe) throw new ElmSessionError("blocked", cmd);
     const inFlight = beforeWrite(this.headerState, norm);
     if (inFlight === undefined) throw new ElmSessionError("blocked", cmd);
     this.headerState = inFlight;
@@ -233,6 +246,12 @@ export class Elm327Session {
       r = { ...(await this.attempt(cmd, timeoutMs)), attempts: 2 };
     }
     this.headerState = afterReply(this.headerState, norm, r.kind);
+    if (r.kind === "error" && r.error.kind === "stopped") {
+      this.unknown = true;
+      this.drain = true;
+    } else if (probe && r.kind !== "error") {
+      this.unknown = false;
+    }
     return r;
   }
 
@@ -243,7 +262,9 @@ export class Elm327Session {
 
   private async runInit(requested: VehicleProfile["protocol"]): Promise<InitResult> {
     this.reader.reset();
-    await this.run("ATZ");
+    // An ATZ answered with an error reset nothing; ATE0 must not follow it (docs/ELM327.md §Write safety).
+    const reset = await this.run("ATZ");
+    if (reset.kind === "error") throw new ElmSessionError("init", "ATZ", reset);
     await this.run("ATI");
     for (const cmd of ["ATE0", "ATL0", "ATS0", "ATH1", `ATSP${requested}`]) await this.required(cmd);
     await this.run("ATDPN");

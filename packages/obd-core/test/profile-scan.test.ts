@@ -56,6 +56,7 @@ describe("Equinox profile scan", () => {
       write: (bytes) => { writes.push(latin1Decode(bytes)); return replay.write(bytes); },
       onData: (cb) => replay.onData(cb),
       close: () => replay.close(),
+      startsIdle: true,
     };
     const session = new Elm327Session(transport);
     try {
@@ -83,6 +84,7 @@ describe("Equinox profile scan", () => {
       write: (bytes) => { writes.push(latin1Decode(bytes)); return Promise.resolve(); },
       onData: () => () => undefined,
       close: () => Promise.resolve(),
+      startsIdle: true,
     };
     const session = new Elm327Session(transport);
     try {

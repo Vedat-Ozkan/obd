@@ -36,7 +36,14 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
 
 /** init() then send every tx after the first 0100, in file order; responses keyed by command. */
 async function runEquinox(rec: RecordingLine[]) {
-  const session = new Elm327Session(new ReplayTransport(rec));
+  // No startsIdle: the session starts in the unknown state, as on a live transport (X-2026-09-24-first-write A2).
+  const inner = new ReplayTransport(rec);
+  const transport: Transport = {
+    write: (bytes) => inner.write(bytes),
+    onData: (cb) => inner.onData(cb),
+    close: () => inner.close(),
+  };
+  const session = new Elm327Session(transport);
   const init = await session.init(genericProfile);
   const first0100 = rec.findIndex((l) => l.dir === "tx" && l.data === "0100\r");
   const responses = new Map<string, ElmResponse>();
@@ -201,7 +208,10 @@ class ScriptedTransport implements Transport {
   readonly close = vi.fn(() => Promise.resolve());
   private readonly subscribers = new Set<(bytes: Uint8Array) => void>();
 
-  constructor(private readonly replies: Record<string, string | undefined>) {}
+  constructor(
+    private readonly replies: Record<string, string | undefined>,
+    readonly startsIdle: boolean = true,
+  ) {}
 
   write(bytes: Uint8Array): Promise<void> {
     const cmd = latin1Decode(bytes).slice(0, -1);
@@ -498,6 +508,129 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     transport.emit("7E806410100040000\r\r>");
     expect(await session.init(genericProfile)).toMatchObject({ protocol: "0" });
     expect(transport.writes.slice(0, 2)).toEqual(["0101", "ATZ"]);
+  });
+});
+
+// X-2026-09-24-first-write F1-F7: a fresh session (no startsIdle) writes only ATZ or ATI until one is answered
+// cleanly; STOPPED starts that state again (docs/ELM327.md §Write safety, DS p.9, p.48). Synthetic scripted replies.
+describe("Elm327Session unknown state (synthetic)", () => {
+  const stopped = "STOPPED\r\r>";
+  const reply0101 = "7E806410100040000\r\r>"; // fixtures/synthetic/session-branches.jsonl (0101)
+
+  it("F1. a fresh session refuses everything but ATZ and ATI before any byte is written", async () => {
+    const transport = new ScriptedTransport({ ...initReplies, "0131": "NO DATA\r\r>" }, false);
+    const session = new Elm327Session(transport);
+    for (const cmd of ["0131", "22 33E5", "ATE0", "ATSP7"]) {
+      expect(await rejection(session.send(cmd))).toMatchObject({ kind: "blocked", command: cmd });
+    }
+    expect(transport.writes).toEqual([]);
+    await session.send("ATZ");
+    await session.send("0131");
+    expect(transport.writes).toEqual(["ATZ", "0131"]);
+  });
+
+  it("F1. a transport with no startsIdle member (BLE, relay) starts in the unknown state", async () => {
+    const inner = new ScriptedTransport({ ...initReplies, "0131": "NO DATA\r\r>" });
+    const transport: Transport = {
+      write: (bytes) => inner.write(bytes),
+      onData: (cb) => inner.onData(cb),
+      close: () => inner.close(),
+    };
+    const session = new Elm327Session(transport);
+    expect(await rejection(session.send("0131"))).toMatchObject({ kind: "blocked", command: "0131" });
+    expect(inner.writes).toEqual([]);
+  });
+
+  it("F2. the rule is checked in queue order, not when send() is called", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const transport = new ScriptedTransport({ ...initReplies, "0100": stopped, "0101": reply0101 }, false);
+    const session = new Elm327Session(transport);
+    await session.send("ATZ");
+    const first = session.send("0100");
+    const next = rejection(session.send("0101"));
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await first).toMatchObject({ kind: "error", error: { kind: "stopped" } });
+    expect(await next).toMatchObject({ kind: "blocked", command: "0101" });
+    expect(transport.writes).toEqual(["ATZ", "0100"]);
+  });
+
+  it.each(["ATZ", "ATI"])("F3. %s answered ? does not end the unknown state", async (cmd) => {
+    const transport = new ScriptedTransport({ [cmd]: "?\r\r>", "0100": initReplies["0100"] }, false);
+    const session = new Elm327Session(transport);
+    expect(await session.send(cmd)).toMatchObject({ kind: "error", error: { kind: "unknown-command" } });
+    expect(await rejection(session.send("0100"))).toMatchObject({ kind: "blocked", command: "0100" });
+    expect(transport.writes).toEqual([cmd]);
+  });
+
+  it("F4. a late '>' after a timed-out ATZ does not end the unknown state", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const transport = new ScriptedTransport({ ...initReplies, ATZ: undefined }, false);
+    const session = new Elm327Session(transport);
+    const timedOut = rejection(session.send("ATZ", { timeoutMs: 50 }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(await timedOut).toMatchObject({ kind: "timeout", command: "ATZ" });
+    transport.emit(initReplies.ATZ);
+    expect(await rejection(session.send("ATE0"))).toMatchObject({ kind: "blocked", command: "ATE0" });
+    expect(transport.writes).toEqual(["ATZ"]);
+    await session.send("ATI");
+    expect(await session.send("ATE0")).toMatchObject({ kind: "ok" });
+    expect(transport.writes).toEqual(["ATZ", "ATI", "ATE0"]);
+  });
+
+  it("F5. STOPPED in a known session starts the unknown state again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const transport = new ScriptedTransport({ ...initReplies, "0100": stopped, "0101": reply0101 }, false);
+    const session = new Elm327Session(transport);
+    await session.send("ATZ");
+    expect(await session.send("0100")).toMatchObject({ kind: "error", error: { kind: "stopped" } });
+    expect(await rejection(session.send("0101"))).toMatchObject({ kind: "blocked", command: "0101" });
+    const ati = session.send("ATI");
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await ati).toMatchObject({ lines: ["ELM327 v1.5"] });
+    expect(transport.writes).toEqual(["ATZ", "0100", "ATI"]);
+  });
+
+  it("F6. after STOPPED the next write waits up to RESYNC_MS for the second '>' and discards it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const transport = new ScriptedTransport({ ...initReplies, "0100": stopped }, false);
+    const session = new Elm327Session(transport);
+    await session.send("ATZ");
+    await session.send("0100");
+    const ati = session.send("ATI");
+    await vi.advanceTimersByTimeAsync(RESYNC_MS - 1);
+    expect(transport.writes).toEqual(["ATZ", "0100"]);
+    transport.emit("?\r\r>");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transport.writes).toEqual(["ATZ", "0100", "ATI"]);
+    expect(await ati).toMatchObject({ lines: ["ELM327 v1.5"] });
+
+    await session.send("0100");
+    const noStray = session.send("ATI");
+    await vi.advanceTimersByTimeAsync(RESYNC_MS - 1);
+    expect(transport.writes).toHaveLength(4);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(transport.writes).toEqual(["ATZ", "0100", "ATI", "0100", "ATI"]);
+    expect(await noStray).toMatchObject({ lines: ["ELM327 v1.5"] });
+  });
+
+  it("F7. init() stops on an ATZ answered STOPPED; a second init() drains the late reply first", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const replies: Record<string, string> = { ...initReplies, ATZ: stopped };
+    const transport = new ScriptedTransport(replies, false);
+    const session = new Elm327Session(transport);
+    const first = rejection(session.init(genericProfile));
+    await vi.advanceTimersByTimeAsync(RESYNC_MS);
+    expect(await first).toMatchObject({ kind: "init", command: "ATZ", response: { kind: "error" } });
+    expect(transport.writes).toEqual(["ATZ"]);
+
+    replies.ATZ = initReplies.ATZ;
+    const second = session.init(genericProfile);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transport.writes).toEqual(["ATZ"]);
+    transport.emit("?\r\r>");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await second).toMatchObject({ protocol: "0" });
+    expect(transport.writes.slice(0, 4)).toEqual(["ATZ", "ATZ", "ATI", "ATE0"]);
   });
 });
 

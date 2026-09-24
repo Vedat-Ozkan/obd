@@ -36,6 +36,7 @@ async function main(): Promise<void> {
     write(bytes) { writes.push(latin1Decode(bytes).slice(0, -1)); return replay.write(bytes); },
     onData: (cb) => replay.onData(cb),
     close: () => replay.close(),
+    startsIdle: true, // forwards a ReplayTransport; the tail starts at ATSP7
   };
   const session = new Elm327Session(transport);
   try {
