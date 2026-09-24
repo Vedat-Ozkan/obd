@@ -1,0 +1,286 @@
+import { latin1Encode } from "../recording/format.js";
+import type { Transport } from "../transport/types.js";
+import type { VehicleProfile } from "../vehicles/profile.js";
+import type { ElmError } from "./errors.js";
+import { reassemble, type DroppedFrame, type Frame } from "./isotp.js";
+import { ElmLineReader, parseElmResponse } from "./reader.js";
+
+// Behavior: docs/specs/T0.4-elm327-session.md "src/elm/session.ts"; ELM rules: docs/ELM327.md §Framing,
+// §Init sequence, §Responses, §Clone quirks.
+
+export interface SendOptions {
+  /** Default DEFAULT_TIMEOUT_MS; measured from just before transport.write(). */
+  timeoutMs?: number;
+  /** Default true; `pnpm replay` passes false (recordings from the Python tools contain no retries). */
+  retry?: boolean;
+}
+
+interface ResponseBody {
+  /** [] for AT commands. */
+  frames: Frame[];
+  /** [] for AT commands. */
+  dropped: DroppedFrame[];
+  /** AT commands: all content lines; others: Reassembly.text. Non-printable lines removed. */
+  lines: string[];
+  searching: boolean;
+  /** Verbatim text of the final attempt, '>' excluded. */
+  raw: string;
+  attempts: 1 | 2;
+}
+
+export type ElmResponse =
+  | ({ kind: "data" } & ResponseBody)
+  | ({ kind: "ok" } & ResponseBody)
+  | ({ kind: "nodata" } & ResponseBody)
+  | ({ kind: "error"; error: ElmError } & ResponseBody); // frames kept: BUFFER FULL still returns complete messages
+
+export interface InitResult {
+  /** The ATSP value in effect after init ("0" after a fallback). */
+  protocol: VehicleProfile["protocol"];
+  fellBack: boolean;
+  /** From response0100.frames[0].header length (3 -> 11, 8 -> 29). */
+  idBits: 11 | 29;
+  /** ATRV content line as printed ("12.7V"); undefined if ATRV was not data. */
+  voltage: string | undefined;
+  /** kind "data", frames.length >= 1; T0.5 reuses it instead of re-sending 0100. */
+  response0100: ElmResponse;
+}
+
+export type SessionErrorKind = "timeout" | "closed" | "blocked" | "init";
+
+export class ElmSessionError extends Error {
+  readonly kind: SessionErrorKind;
+  readonly command: string;
+  /** "init": the response that failed the step. */
+  readonly response?: ElmResponse;
+
+  constructor(kind: SessionErrorKind, command: string, response?: ElmResponse) {
+    super(`elm session: ${kind} on ${JSON.stringify(command)}`);
+    this.name = "ElmSessionError";
+    this.kind = kind;
+    this.command = command;
+    if (response !== undefined) this.response = response;
+  }
+}
+
+/** tools/spike/discover.py CMD_TIMEOUT_S = 5 (longest seen: 2.3 s, 0100 with SEARCHING...). */
+export const DEFAULT_TIMEOUT_MS = 5000;
+/** docs/ELM327.md §Responses: CAN ERROR -> retry once after 500 ms. */
+export const CAN_ERROR_RETRY_DELAY_MS = 500;
+/** Policy value, not an ELM constant (spec Risks): how long to wait for a late '>' after a timeout. */
+export const RESYNC_MS = 1000;
+
+// AGENTS.md hard rule 5: Mode 04 and UDS writes never go out through send().
+const BLOCKED_SERVICES = new Set(["04", "2E", "2F", "31"]);
+// docs/ELM327.md §Framing: a command ends at '\r', so an embedded CR (or any control byte) could smuggle a
+// second command past the service check (spec amendment 2026-09-23). Only printable ASCII goes on the wire.
+const NON_PRINTABLE = /[^\x20-\x7E]/;
+const PROTOCOLS: readonly string[] = ["0", "6", "7"];
+
+const normalize = (cmd: string) => cmd.replace(/ /g, "").toUpperCase();
+
+/** The one thing the current queue slot waits for: a '>' (reply or resync) or a timer (timeout, delay). */
+interface Wait {
+  cmd: string;
+  timer: ReturnType<typeof setTimeout>;
+  onPrompt: ((raw: string) => void) | undefined;
+  reject: (e: unknown) => void;
+}
+
+export class Elm327Session {
+  private readonly reader = new ElmLineReader();
+  private readonly unsubscribe: () => void;
+  private tail: Promise<unknown> = Promise.resolve();
+  private wait: Wait | undefined;
+  private stale = false;
+  private closed = false;
+
+  constructor(private readonly transport: Transport) {
+    this.unsubscribe = transport.onData((chunk) => {
+      this.onData(chunk);
+    });
+  }
+
+  init(profile: VehicleProfile): Promise<InitResult> {
+    // Runtime check: the profile may come from outside TypeScript, and ATSP<protocol> is written verbatim.
+    // Read once: the queued init must use the validated value, not a later (mutated or getter) read.
+    const { protocol } = profile;
+    if (!PROTOCOLS.includes(protocol)) {
+      return Promise.reject(new ElmSessionError("blocked", `ATSP${protocol}`));
+    }
+    return this.enqueue("ATZ", () => this.runInit(protocol));
+  }
+
+  send(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
+    if (NON_PRINTABLE.test(cmd)) return Promise.reject(new ElmSessionError("blocked", cmd));
+    const norm = normalize(cmd);
+    if (!norm.startsWith("AT") && BLOCKED_SERVICES.has(norm.slice(0, 2))) {
+      return Promise.reject(new ElmSessionError("blocked", cmd));
+    }
+    return this.enqueue(cmd, () => this.run(cmd, opts));
+  }
+
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    const w = this.wait;
+    if (w !== undefined) {
+      clearTimeout(w.timer);
+      this.wait = undefined;
+      w.reject(new ElmSessionError("closed", w.cmd));
+    }
+    this.unsubscribe();
+    await this.transport.close();
+  }
+
+  private enqueue<T>(cmd: string, job: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(() => {
+      if (this.closed) throw new ElmSessionError("closed", cmd);
+      return job();
+    });
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
+  private onData(chunk: Uint8Array): void {
+    for (const raw of this.reader.push(chunk)) {
+      const w = this.wait;
+      if (w?.onPrompt !== undefined) {
+        clearTimeout(w.timer);
+        this.wait = undefined;
+        w.onPrompt(raw);
+      } else {
+        // A '>' with nothing in flight (late prompt after a timeout, or a second segment): discard.
+        this.stale = false;
+      }
+    }
+  }
+
+  private arm(cmd: string, ms: number, onTimer: () => void, onPrompt: Wait["onPrompt"], reject: Wait["reject"]): void {
+    if (this.closed) {
+      reject(new ElmSessionError("closed", cmd));
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.wait = undefined;
+      onTimer();
+    }, ms);
+    this.wait = { cmd, timer, onPrompt, reject };
+  }
+
+  private delay(cmd: string, ms: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.arm(cmd, ms, resolve, undefined, reject);
+    });
+  }
+
+  private resync(cmd: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.arm(cmd, RESYNC_MS, resolve, () => {
+        resolve();
+      }, reject);
+    });
+  }
+
+  private exchange(cmd: string, timeoutMs: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      // Defense in depth: the only transport.write; no path may put a CR or control byte inside a command.
+      if (NON_PRINTABLE.test(cmd)) {
+        reject(new ElmSessionError("blocked", cmd));
+        return;
+      }
+      this.arm(
+        cmd,
+        timeoutMs,
+        () => {
+          this.stale = true;
+          reject(new ElmSessionError("timeout", cmd));
+        },
+        resolve,
+        reject,
+      );
+      const w = this.wait;
+      if (w === undefined) return;
+      this.transport.write(latin1Encode(cmd + "\r")).catch((e: unknown) => {
+        if (this.wait !== w) return;
+        clearTimeout(w.timer);
+        this.wait = undefined;
+        this.stale = true;
+        // A transport.write rejection propagates as-is (spec "Resolve vs reject").
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        reject(e);
+      });
+    });
+  }
+
+  private async attempt(cmd: string, timeoutMs: number): Promise<ElmResponse> {
+    if (this.stale) {
+      await this.resync(cmd);
+      this.stale = false;
+    }
+    this.reader.reset();
+    return toResponse(cmd, await this.exchange(cmd, timeoutMs));
+  }
+
+  private async run(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const first = await this.attempt(cmd, timeoutMs);
+    const retry = opts.retry === false ? undefined : retryAfter(first);
+    if (retry === undefined) return first;
+    if (retry > 0) await this.delay(cmd, retry);
+    return { ...(await this.attempt(cmd, timeoutMs)), attempts: 2 };
+  }
+
+  private async required(cmd: string): Promise<void> {
+    const r = await this.run(cmd);
+    if (r.kind !== "ok") throw new ElmSessionError("init", cmd, r);
+  }
+
+  private async runInit(requested: VehicleProfile["protocol"]): Promise<InitResult> {
+    this.stale = false;
+    this.reader.reset();
+    await this.run("ATZ");
+    await this.run("ATI");
+    for (const cmd of ["ATE0", "ATL0", "ATS0", "ATH1", `ATSP${requested}`]) await this.required(cmd);
+    await this.run("ATDPN");
+    const rv = await this.run("ATRV");
+    let protocol = requested;
+    let response0100 = await this.run("0100");
+    if (!answered(response0100) && protocol !== "0") {
+      await this.required("ATSP0");
+      protocol = "0";
+      response0100 = await this.run("0100");
+    }
+    if (!answered(response0100)) throw new ElmSessionError("init", "0100", response0100);
+    return {
+      protocol,
+      fellBack: protocol !== requested,
+      idBits: response0100.frames[0].header.length === 3 ? 11 : 29,
+      voltage: rv.kind === "data" ? rv.lines.at(0) : undefined,
+      response0100,
+    };
+  }
+}
+
+function answered(r: ElmResponse): boolean {
+  return r.kind === "data" && r.frames.length >= 1;
+}
+
+/** Milliseconds to wait before the one retry, or undefined for no retry (docs/ELM327.md §Responses, §Clone quirks). */
+function retryAfter(r: ElmResponse): number | undefined {
+  if (r.kind === "error" && r.error.kind === "can-error") return CAN_ERROR_RETRY_DELAY_MS;
+  if (r.kind === "error" && r.error.kind === "data-error") return 0;
+  if (r.kind === "data" && r.dropped.some((d) => d.reason === "incomplete" || d.reason === "sequence")) return 0;
+  return undefined;
+}
+
+function toResponse(cmd: string, raw: string): ElmResponse {
+  const parsed = parseElmResponse(raw, cmd);
+  // The clone's reset garbage (docs/ELM327.md §Clone quirks) survives as a content line; it stays in raw.
+  const printable = parsed.lines.filter((l) => !NON_PRINTABLE.test(l));
+  const isAt = normalize(cmd).startsWith("AT");
+  const r = isAt ? { frames: [], dropped: [], text: printable } : reassemble(printable);
+  const body: ResponseBody = { frames: r.frames, dropped: r.dropped, lines: r.text, searching: parsed.searching, raw, attempts: 1 };
+  const status = parsed.status;
+  return status.kind === "error" ? { kind: "error", error: status.error, ...body } : { kind: status.kind, ...body };
+}

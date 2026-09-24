@@ -12,11 +12,13 @@
     "check:bridge": "cd tools/hil-bridge && uv run ruff check . && uv run pytest",
     "typecheck": "tsc --noEmit && pnpm --filter './apps/*' -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test"
+    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test",
+    "replay": "tsx packages/obd-core/scripts/replay.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
     "eslint": "^10.10.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^5.0.1"

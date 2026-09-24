@@ -34,6 +34,7 @@ src/
     render.ts       template renderer
   recording/
     format.ts       recording line schema (zod) and writer/reader
+scripts/replay.ts   pnpm replay (Node CLI; outside src)
 vehicles/
   <make>-<model>/         vendored OBDb signalsets + LICENSE (CC-BY-SA-4.0), Equinox EV first   (Phase 2)
 ```
@@ -49,18 +50,62 @@ export interface Transport {
   close(): Promise<void>;
 }
 
-export interface Elm327Session {
-  init(profile: VehicleProfile): Promise<InitResult>;   // runs ATZ/ATE0/..., selects protocol
-  send(cmd: string, opts?: { timeoutMs?: number }): Promise<ElmResponse>;  // one command, one response
-  close(): Promise<void>;
+export interface VehicleProfile {
+  protocol: "0" | "6" | "7";   // ATSP argument; T2.1 adds headers, setup commands, decoders
+}
+
+/** One reassembled ISO-TP message from one ECU (it is a message, not a CAN frame). */
+export interface Frame {
+  header: string;     // CAN ID as printed, spaces removed: "7E8" or "18DAF117"
+  ecu: string;        // "17" when header is 18DAF1xx, otherwise the header itself ("7E8")
+  data: Uint8Array;   // payload with PCI bytes removed, trimmed to the ISO-TP length (padding dropped)
+  negative?: { service: number; code: number };  // present iff data[0] === 0x7F and data.length >= 3
+}
+
+export type DropReason = "no-first-frame" | "sequence" | "incomplete" | "flow-control" | "malformed";
+export interface DroppedFrame { header: string; reason: DropReason; line: string; }
+
+export interface SendOptions {
+  timeoutMs?: number;   // default DEFAULT_TIMEOUT_MS; measured from just before transport.write()
+  retry?: boolean;      // default true; `pnpm replay` passes false
+}
+
+interface ResponseBody {
+  frames: Frame[];          // [] for AT commands
+  dropped: DroppedFrame[];  // [] for AT commands
+  lines: string[];          // AT commands: all content lines; others: non-frame text lines. Non-printable lines removed
+  searching: boolean;
+  raw: string;              // verbatim text of the final attempt, '>' excluded
+  attempts: 1 | 2;
 }
 
 export type ElmResponse =
-  | { kind: "data"; frames: Frame[]; raw: string[] }
-  | { kind: "nodata"; raw: string[] }
-  | { kind: "error"; error: ElmError; raw: string[] };
+  | ({ kind: "data" } & ResponseBody)
+  | ({ kind: "ok" } & ResponseBody)
+  | ({ kind: "nodata" } & ResponseBody)
+  | ({ kind: "error"; error: ElmError } & ResponseBody); // frames kept: BUFFER FULL still returns complete messages
 
-export interface Frame { header?: string; ecu?: string; data: Uint8Array; }
+export interface InitResult {
+  protocol: VehicleProfile["protocol"];  // the ATSP value in effect after init ("0" after a fallback)
+  fellBack: boolean;
+  idBits: 11 | 29;
+  voltage: string | undefined;           // ATRV content line as printed ("12.7V")
+  response0100: ElmResponse;             // kind "data", frames.length >= 1
+}
+
+export type SessionErrorKind = "timeout" | "closed" | "blocked" | "init";
+export class ElmSessionError extends Error {
+  readonly kind: SessionErrorKind;
+  readonly command: string;
+  readonly response?: ElmResponse;
+}
+
+export class Elm327Session {
+  constructor(transport: Transport);
+  init(profile: VehicleProfile): Promise<InitResult>;                // ATZ ATI ATE0 ATL0 ATS0 ATH1 ATSPn ATDPN ATRV 0100; fixed protocol falls back to ATSP0
+  send(cmd: string, opts?: SendOptions): Promise<ElmResponse>;       // one command, one response; rejects 04/2E/2F/31 ("blocked")
+  close(): Promise<void>;
+}
 ```
 
 Recording format (`fixtures/recordings/<car>/<date>-<slug>.jsonl`), one JSON object per line:

@@ -1,0 +1,48 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T0.4: fixed-protocol fallback, 11-bit headers, retry after a dropped last line, timeout, CAN ERROR and DATA ERROR retries; sources in docs/specs/T0.4-elm327-session.md; timestamps invented; ATDPN reply is opaque"}
+{"t": 0.010, "dir": "tx", "data": "ATZ\r"}
+{"t": 0.030, "dir": "rx", "data": "ATZ\r"}
+{"t": 0.031, "dir": "rx", "data": "ü"}
+{"t": 0.800, "dir": "rx", "data": "\r\rELM327 v1.5\r\r>"}
+{"t": 0.810, "dir": "tx", "data": "ATI\r"}
+{"t": 0.830, "dir": "rx", "data": "ATI\r"}
+{"t": 0.831, "dir": "rx", "data": "ELM327 v1.5\r\r>"}
+{"t": 0.840, "dir": "tx", "data": "ATE0\r"}
+{"t": 0.860, "dir": "rx", "data": "ATE0\r"}
+{"t": 0.861, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.870, "dir": "tx", "data": "ATL0\r"}
+{"t": 0.890, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.900, "dir": "tx", "data": "ATS0\r"}
+{"t": 0.920, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.930, "dir": "tx", "data": "ATH1\r"}
+{"t": 0.950, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.960, "dir": "tx", "data": "ATSP6\r"}
+{"t": 0.980, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.990, "dir": "tx", "data": "ATDPN\r"}
+{"t": 1.010, "dir": "rx", "data": "A6\r\r>"}
+{"t": 1.020, "dir": "tx", "data": "ATRV\r"}
+{"t": 1.050, "dir": "rx", "data": "12.6V\r\r>"}
+{"t": 1.060, "dir": "tx", "data": "0100\r"}
+{"t": 1.300, "dir": "rx", "data": "UNABLE TO CONNECT\r\r>"}
+{"t": 1.310, "dir": "tx", "data": "ATSP0\r"}
+{"t": 1.330, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.340, "dir": "tx", "data": "0100\r"}
+{"t": 1.360, "dir": "rx", "data": "SEARCHING...\r"}
+{"t": 3.400, "dir": "rx", "data": "7E806410080000001\r7E906410080080013\r\r>"}
+{"t": 3.410, "dir": "tx", "data": "0902\r"}
+{"t": 3.440, "dir": "rx", "data": "7E81014490201314334\r7E82153594E54484554\r\r>"}
+{"t": 3.450, "dir": "tx", "data": "0902\r"}
+{"t": 3.480, "dir": "rx", "data": "7E81014490201314334\r7E82153594E54484554\r7E822494356494E3030\r\r>"}
+{"t": 3.490, "dir": "tx", "data": "0100\r"}
+{"t": 3.540, "dir": "meta", "note": "timeout waiting for '>' after 0100"}
+{"t": 4.600, "dir": "tx", "data": "0101\r"}
+{"t": 4.620, "dir": "rx", "data": "CAN ERROR\r\r>"}
+{"t": 5.130, "dir": "tx", "data": "0101\r"}
+{"t": 5.150, "dir": "rx", "data": "7E806410100040000\r\r>"}
+{"t": 5.160, "dir": "tx", "data": "0120\r"}
+{"t": 5.180, "dir": "rx", "data": "DATA ERROR\r\r>"}
+{"t": 5.190, "dir": "tx", "data": "0120\r"}
+{"t": 5.210, "dir": "rx", "data": "<DATA ERROR\r\r>"}
+{"t": 5.220, "dir": "tx", "data": "0140\r"}
+{"t": 5.240, "dir": "rx", "data": "CAN ERROR\r\r>"}
+{"t": 5.750, "dir": "tx", "data": "0140\r"}
+{"t": 5.770, "dir": "rx", "data": "CAN ERROR\r\r>"}
