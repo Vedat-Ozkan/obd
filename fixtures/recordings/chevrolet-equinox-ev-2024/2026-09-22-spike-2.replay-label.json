@@ -1,0 +1,60 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike-2.redacted.jsonl",
+  "recording_sha256": "bd71be55dc8a197fed298c88663b0ae17dabb3b2c23a8767c6cdd17534562106",
+  "synthetic": false,
+  "observations": [
+    {
+      "tx_line": 23,
+      "command": "0100",
+      "outcome": "data searching",
+      "decoded": [
+        "  decoded 45 supported 01 20",
+        "  decoded 40 supported 01 20",
+        "  decoded 17 supported 01 0D 1C 1F 20",
+        "  decoded 28 supported 01 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 18 19 1C 1E 1F 20",
+        "  decoded CB supported 01 20"
+      ]
+    },
+    {
+      "tx_line": 62,
+      "command": "0101",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 45 readiness pid=01 mil=off dtcs=0 ignition=spark components=complete",
+        "  decoded 28 readiness pid=01 mil=off dtcs=0 ignition=spark components=complete",
+        "  decoded 17 readiness pid=01 mil=off dtcs=0 ignition=spark components=complete",
+        "  decoded 40 readiness pid=01 mil=off dtcs=0 ignition=spark components=complete",
+        "  decoded CB readiness pid=01 mil=off dtcs=0 ignition=spark components=complete"
+      ]
+    },
+    {
+      "tx_line": 84,
+      "command": "090A",
+      "outcome": "error buffer-full",
+      "decoded": [
+        "  decoded 45 ecu-name GWM-Gateway"
+      ]
+    },
+    {
+      "tx_line": 106,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 45 dtcs none",
+        "  decoded 40 dtcs none",
+        "  decoded 17 dtcs none",
+        "  decoded 28 dtcs none",
+        "  decoded CB dtcs none"
+      ]
+    },
+    {
+      "tx_line": 144,
+      "command": "22 33E5",
+      "outcome": "nodata",
+      "decoded": []
+    }
+  ],
+  "summary": "summary: 32 commands; data 15, ok 15, nodata 1, error 1 (buffer-full=1), timeout 0; frames 41; dropped malformed=1, incomplete=4, no-first-frame=1",
+  "notes": "Protocol snapshot only; capture metadata says Ready/Park. No battery-health adjudication."
+}

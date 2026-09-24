@@ -20,6 +20,7 @@ At this baseline, the tracked real recordings are:
 
 - `recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl`
 - `recordings/chevrolet-equinox-ev-2024/2026-09-22-spike-2.redacted.jsonl`
+- `recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl`
 
 They are protocol captures, not labeled healthy baseline fixtures.
 
@@ -29,7 +30,30 @@ The tracked synthetic recordings are:
 - `synthetic/session-branches.jsonl`
 - `synthetic/standard-decoding.jsonl`
 
-None of these five files has a companion `.label.json` at this baseline.
+Each of these six recordings has a companion `.replay-label.json` for observed
+protocol outcomes. None has a `.label.json` health-session companion.
+
+## Protocol replay observation labels
+
+The six companion files are the three real recording stems above and the three
+synthetic stems above, each ending in `.replay-label.json`. For a real input,
+the companion removes `.redacted.jsonl` before adding that suffix; for a
+synthetic input, it removes `.jsonl`.
+
+Each test-only label has `kind: "protocol-replay"`, the repository-relative
+`recording` path, its `recording_sha256`, a `synthetic` flag, a nonempty
+`observations` array, the exact replay `summary`, and a short `notes` evidence
+limit. An observation identifies a one-based `tx_line`, its `command` without
+the final carriage return, the replay heading's `outcome` after `->`, and
+selected exact `decoded` lines (or an empty array). The E2E test checks these
+against the immutable input and public replay output. Replay summaries can be
+regenerated with `pnpm replay <recording.jsonl>`.
+
+These labels describe protocol responses only. A supported PID, readiness
+state, empty DTC list, or dash-displayed SOC does not establish battery
+condition or capacity. The future `*.label.json` files in [docs/EVAL.md](../docs/EVAL.md)
+are separate health-session labels with condition and, when justified, a
+reference measurement. None of the six protocol snapshots supplies one.
 
 ## Implemented recording JSONL contract
 
@@ -99,7 +123,7 @@ and [`tools/spike/redact_vin.py`](../tools/spike/redact_vin.py) define the
 redaction workflow. The script refuses unsafe input or output. Resolve a
 failure without hand-editing either the original or the generated copy.
 
-## Future session label schema — planned and not implemented at this baseline
+## Future session label schema — planned and not implemented
 
 The following companion-label shape comes from [docs/EVAL.md](../docs/EVAL.md).
 It is planned for zod ownership in `obd-eval`; it is not implemented or

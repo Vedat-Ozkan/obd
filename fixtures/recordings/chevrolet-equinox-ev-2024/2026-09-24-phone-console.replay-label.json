@@ -1,0 +1,50 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl",
+  "recording_sha256": "e87dab6c101d35cc89a00b1594ff121b626eaeee6826ddbd33db5e7ab8acbe3d",
+  "synthetic": false,
+  "observations": [
+    {
+      "tx_line": 18,
+      "command": "0100",
+      "outcome": "data searching",
+      "decoded": [
+        "  decoded 45 supported 01 20",
+        "  decoded 40 supported 01 20",
+        "  decoded 17 supported 01 0D 1C 1F 20",
+        "  decoded CB supported 01 20",
+        "  decoded 28 supported 01 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 18 19 1C 1E 1F 20"
+      ]
+    },
+    {
+      "tx_line": 38,
+      "command": "020000",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 freeze 0 supported 02 0D 1F 20"
+      ]
+    },
+    {
+      "tx_line": 42,
+      "command": "020200",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 17 freeze 0 dtc none"
+      ]
+    },
+    {
+      "tx_line": 46,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 45 dtcs none",
+        "  decoded 40 dtcs none",
+        "  decoded 17 dtcs none",
+        "  decoded CB dtcs none",
+        "  decoded 28 dtcs none"
+      ]
+    }
+  ],
+  "summary": "summary: 10 commands; data 5, ok 5, nodata 0, error 0, timeout 0; frames 12; dropped none",
+  "notes": "Phone console protocol snapshot only; no battery-health adjudication."
+}

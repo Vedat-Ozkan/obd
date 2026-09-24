@@ -1,0 +1,37 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/session-branches.jsonl",
+  "recording_sha256": "d30e7f77ee0f9e1ec1f4c35e4811750fbbbf33cdc68a32a0ef9a57e5b0e7cdcd",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 24,
+      "command": "0100",
+      "outcome": "error unable-to-connect",
+      "decoded": []
+    },
+    {
+      "tx_line": 26,
+      "command": "ATSP0",
+      "outcome": "ok",
+      "decoded": []
+    },
+    {
+      "tx_line": 28,
+      "command": "0100",
+      "outcome": "data searching",
+      "decoded": [
+        "  decoded 7E8 supported 01 20",
+        "  decoded 7E9 supported 01 0D 1C 1F 20"
+      ]
+    },
+    {
+      "tx_line": 38,
+      "command": "0101",
+      "outcome": "error can-error",
+      "decoded": []
+    }
+  ],
+  "summary": "summary: 21 commands; data 9, ok 6, nodata 0, error 6 (unable-to-connect=1, can-error=3, data-error=2), timeout 0; frames 5; dropped incomplete=1",
+  "notes": "Synthetic fallback and error examples from docs/specs/T0.4-elm327-session.md; no vehicle evidence."
+}

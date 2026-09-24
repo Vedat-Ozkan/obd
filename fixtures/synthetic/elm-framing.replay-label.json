@@ -1,0 +1,22 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/elm-framing.jsonl",
+  "recording_sha256": "64509f75964d58bb33efc31a34dd0d0a2fb6da2283dee0667fd28ae3e5d4ab56",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 14,
+      "command": "0100",
+      "outcome": "error unable-to-connect searching",
+      "decoded": []
+    },
+    {
+      "tx_line": 21,
+      "command": "0120",
+      "outcome": "nodata",
+      "decoded": []
+    }
+  ],
+  "summary": "summary: 10 commands; data 3, ok 3, nodata 2, error 2 (unable-to-connect=1, unknown-command=1), timeout 0; frames 0; dropped incomplete=1",
+  "notes": "Synthetic protocol examples from docs/specs/T0.3-transport-replay-linereader.md; no vehicle evidence."
+}

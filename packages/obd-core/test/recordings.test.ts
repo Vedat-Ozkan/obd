@@ -10,11 +10,11 @@ import { ReplayTransport } from "../src/transport/replay.js";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
-function listJsonl(dir: string): string[] {
+function listJsonl(dir: string, suffix = ".jsonl"): string[] {
   const abs = join(repoRoot, dir);
   if (!existsSync(abs)) return [];
   return readdirSync(abs, { recursive: true, encoding: "utf8" })
-    .filter((p) => p.endsWith(".jsonl"))
+    .filter((p) => p.endsWith(suffix))
     .map((p) => join(abs, p))
     .sort();
 }
@@ -78,10 +78,10 @@ describe("fixtures/synthetic", () => {
 });
 
 describe("fixtures/recordings", () => {
-  const files = listJsonl("fixtures/recordings");
-  if (files.length === 0) {
-    it.skip("NOT RUN: fixtures/recordings/ has no .jsonl files (T0.2 hardware half pending)", () => {});
-  }
+  const files = listJsonl("fixtures/recordings", ".redacted.jsonl");
+  it("has committed redacted recordings", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
   for (const file of files) replayTest(file);
 });
 

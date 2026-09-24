@@ -1,0 +1,27 @@
+{
+  "kind": "protocol-replay",
+  "recording": "fixtures/synthetic/standard-decoding.jsonl",
+  "recording_sha256": "74ce479921e0dc3a7d241ff4cb1b98b7ba4075a66d3d6a94855493ed07a6371b",
+  "synthetic": true,
+  "observations": [
+    {
+      "tx_line": 2,
+      "command": "0101",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 readiness pid=01 mil=on dtcs=3 ignition=spark misfire=complete fuel=incomplete components=complete catalyst=complete evap=incomplete o2Sensor=complete o2Heater=complete",
+        "  decoded 7E9 readiness pid=01 mil=off dtcs=0 ignition=compression noxScr=complete boostPressure=complete egrVvt=incomplete"
+      ]
+    },
+    {
+      "tx_line": 16,
+      "command": "03",
+      "outcome": "data",
+      "decoded": [
+        "  decoded 7E8 dtcs P0133 U0158 B1234"
+      ]
+    }
+  ],
+  "summary": "summary: 12 commands; data 12, ok 0, nodata 0, error 0, timeout 0; frames 14; dropped none",
+  "notes": "Synthetic decoder examples from docs/specs/T0.5-standard-decoding.md; no vehicle evidence."
+}

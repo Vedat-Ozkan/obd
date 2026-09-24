@@ -7,7 +7,8 @@ import { pathToFileURL } from "node:url";
 import type { Frame } from "../src/elm/isotp.js";
 import { ElmSessionError, Elm327Session, type ElmResponse } from "../src/elm/session.js";
 import { decodeDtcList, type DtcMode } from "../src/obd/dtc.js";
-import { decodePid, MODE01_PIDS } from "../src/obd/j1979.js";
+import { decodeFreezeDtc, decodeFreezePid, decodeFreezeSupported } from "../src/obd/freeze.js";
+import { decodePid, MODE01_PIDS, type PidReading } from "../src/obd/j1979.js";
 import { decodeReadiness } from "../src/obd/readiness.js";
 import type { DecodeFailure } from "../src/obd/response.js";
 import { BITMAP_PIDS, decodeSupported } from "../src/obd/supported.js";
@@ -61,6 +62,29 @@ function failureText(f: DecodeFailure): string {
   return f.reason === "negative" ? `negative code=${hex([f.code ?? 0])}` : `invalid ${f.reason}`;
 }
 
+function readingText(r: PidReading): string {
+  if (r.unit === "enum") return `${r.id} ${String(r.value)}${r.label === undefined ? "" : ` (${r.label})`}`;
+  return `${r.id} ${String(Math.round(r.value * 1000) / 1000)} ${r.unit}`;
+}
+
+/** Mode 02 `02 <pid> <frame#>`: bitmap, PID 02 DTC, or a MODE01_PIDS value, each prefixed `freeze <frame#>`. */
+function freezeText(pid: number, frameNo: number, frame: Frame): string | undefined {
+  const head = `freeze ${String(frameNo)}`;
+  if (BITMAP_PIDS.includes(pid)) {
+    const r = decodeFreezeSupported(pid, frameNo, frame);
+    return r.ok ? `${head} supported ${hexList(r.pids, "none")}` : failureText(r);
+  }
+  if (pid === 0x02) {
+    const r = decodeFreezeDtc(frameNo, frame);
+    return r.ok ? `${head} dtc ${r.dtc ?? "none"}` : failureText(r);
+  }
+  if (MODE01_PIDS.some((d) => d.pid === pid)) {
+    const r = decodeFreezePid(pid, frameNo, frame);
+    return r.ok ? `${head} ${readingText(r)}` : failureText(r);
+  }
+  return undefined;
+}
+
 /** The `decoded` text for one frame, or undefined when the command has no decoder (T0.5 spec, replay table).
  *  VIN: status only, never a character (ADR-014, ADR-017). */
 function decodeText(cmd: string, frame: Frame): string | undefined {
@@ -80,10 +104,10 @@ function decodeText(cmd: string, frame: Frame): string | undefined {
   }
   if (pid !== undefined && MODE01_PIDS.some((d) => d.pid === pid)) {
     const r = decodePid(pid, frame);
-    if (!r.ok) return failureText(r);
-    if (r.unit === "enum") return `${r.id} ${String(r.value)}${r.label === undefined ? "" : ` (${r.label})`}`;
-    return `${r.id} ${String(Math.round(r.value * 1000) / 1000)} ${r.unit}`;
+    return r.ok ? readingText(r) : failureText(r);
   }
+  const m02 = /^02([0-9A-F]{2})([0-9A-F]{2})$/.exec(c);
+  if (m02) return freezeText(parseInt(m02[1], 16), parseInt(m02[2], 16), frame);
   if (c === "03" || c === "07" || c === "0A") {
     const r = decodeDtcList(parseInt(c, 16) as DtcMode, frame);
     return r.ok ? `dtcs ${r.dtcs.length > 0 ? r.dtcs.join(" ") : "none"}` : failureText(r);
