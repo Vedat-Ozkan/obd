@@ -172,3 +172,31 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 **Evidence and limits.** A report shows only values the scan or a completed charge log supports, with source and signal tier. A snapshot can show SOC, cell observations, 12 V adapter supply and codes where they answer; it does not certify battery health. Capacity says NOT MEASURED until a completed charge log and reviewed estimator exist. Missing or partial replies remain visible as missing evidence. A report never borrows measurements from another garage entry or scan.
 
 **Amends ADR-014 and the Phase 2 plan.** The used-EV positioning and `mine`/`checked` garage distinction remain, while the former “pre-purchase report” label, separate report/share flow, and alpha PDF expectation are superseded. T2.6 builds the in-app report and per-car history; T2.7 covers the `checked` entry flow and remaining diagnosis coverage. Historical specs and verification evidence stay unchanged.
+
+## ADR-019: Beta data uploads automatically after one consent, through a Cloudflare R2 bucket and a small Worker (2026-09-25, Accepted)
+
+**Status.** Accepted by the owner on 2026-09-25, with the amendments in `docs/specs/T2.9-beta-data-upload.md` §Decisions: `checked` garage entries upload too, disclosed in the consent text (the tester consents for their scan), and uploads use any network, disclosed, with no `expo-network`.
+
+**Decision.** The owner changed T2.9 on 2026-09-25 from files coming back by a user-initiated share to automatic upload. This ADR replaces the PLAN T2.9 line "No backend: files come back by user-initiated share."
+
+- **Consent.** A beta tester sees one plain-language consent screen with one "Share my data to improve the app" switch, default off. The app records a consent version, and changing the consent text requires a new version, which asks again. After consent, every run's recording uploads, or queues offline and retries, with no extra taps (the owner's one-and-done rule). This covers capture, codes scan, battery scan and charge log. A Garage switch stops sharing and discards anything still queued. "Delete my data" deletes every uploaded object and leaves a tombstone.
+- **Scrub on the phone.** Before a file is queued, the phone masks:
+  - the VIN serial (the `redact_vin.py` rules, ported to TypeScript and tested against the script, plus any check-digit-valid VIN);
+  - Mode 22 identification DIDs `F180`–`F1FF` (part and serial numbers);
+  - Mode 09 infotypes without a reviewed layout;
+  - the odometer;
+  - any typed note.
+
+  The file keeps relative time only. Its provenance line carries the month, the consent version, the app version, the garage model and year, and random tester and vehicle keys that are not derived from the VIN. The upload is refused if a learned VIN serial survives anywhere.
+- **Backend.** One Cloudflare R2 bucket behind a small Worker (`tools/beta-backend`).
+  - There are no accounts. Each install generates an id and a secret, and the Worker stores only the secret's SHA-256.
+  - Uploads go in parts of 16 MiB or less, with a manifest last.
+  - Per-install daily and global byte caps and a daily registration cap bound the cost.
+  - An R2 lifecycle rule deletes files 24 months after upload.
+  - The only secret is the Worker's admin token, kept as a Worker secret and in the owner's gitignored `.env`.
+  - The app needs no SDK and no new native module. Uploads use any network, and the consent text says so.
+- **Intake.** `pnpm beta:intake` downloads complete files and validates them with zod. It refuses any file the current scrubber would still change. Accepted files go under gitignored `fixtures/recordings/<model>-beta-<key>/` as local originals, and `tools/spike/redact_vin.py` makes the `.redacted.jsonl` copy beside them. Intake also deletes local copies for tombstoned testers and past retention. Beta recordings are not committed. A specific file is published only with that tester's separate written OK.
+
+**Why.** Testers will not remember to share files, and the ML work (BM1–BM3) needs every charge log and scan, with provenance. The architect compared Cloudflare R2 plus a Worker, Supabase, and a self-hosted VPS on cost at 10–50 testers, deletion, retention, auth without accounts, abuse limits, secrets and the app's needs. R2 plus a Worker was the cheapest (the architect's recollection of prices: about $0 to $1.30 a month at 50 testers in year one; the owner verifies before creating the account). It is also the only option with retention enforced by the platform, and it needs only JS on the phone.
+
+**Amends ADR-007 and ADR-009** ("no backend", "no accounts, no backend … before Phase 3") for beta data only. There are still no accounts, payments or LLM proxy. **Amends ADR-014** ("the VIN stays on the device"): uploads carry at most VIN characters 1–11, as committed fixtures do under ADR-017. A beta recording can make a model `verified` only if its tester agreed to publication. **Amends ADR-017 and AGENTS.md hard rule 2 in practice:** `pnpm beta:intake` is a recording tool. Deleting a tester's local copies on their request or at retention is the one allowed removal of a recording. **Unchanged:** read-only toward the vehicle (T2.9 sends no command to a car), `obd-core` purity (the scrubber and schema are pure TypeScript), immutable recordings, and split-by-vehicle-and-session (`docs/ML.md`).
