@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await */
 // T0.9 Stage A: docs/specs/T0.9-codes-report-flow.md Verification "Stage A". The real runner and console run over a fake
 // that answers from a tracked redacted recording; the app's markdown must equal the heading plus that recording's block
-// in the committed T0.7 artifact.
+// in the committed T0.7 artifact. T0.9b E1-E3 (docs/specs/T0.9b-one-and-done-captures.md) then save the run with finishRun.
 // Vitest runs in Node; Expo's mobile typecheck intentionally omits Node typings.
 // @ts-expect-error Node built-in types are not part of the mobile compilation target.
 import { readFileSync } from "node:fs";
@@ -12,6 +12,8 @@ import { PROMPT_WAIT_MS, runCapture } from "../src/capture.js";
 import { CODES_SCAN_COMMANDS, codesReportMarkdown, codesScanStop } from "../src/codesScan.js";
 import { ConsoleSession } from "../src/console.js";
 import { RecordingBuffer } from "../src/recording.js";
+import { finishRun } from "../src/runFiles.js";
+import { FakeTargets } from "./fakeTargets.js";
 
 const readText = readFileSync as (path: URL, encoding: "utf8" | "latin1") => string;
 const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
@@ -22,6 +24,8 @@ const load = (rel: string) => parseRecording(readText(repoFile(rel), "latin1"));
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 const VEHICLE = "2024 Chevrolet Equinox EV";
 const DATE = "2026-09-25";
+const JSONL = "2026-09-25-phone-console.jsonl";
+const MD = "2026-09-25-codes-report.md";
 
 /** Text after "<!-- <path> -->\n" up to the next "<!-- ", without the one joining "\n". */
 function artifactBlock(path: string): string {
@@ -85,7 +89,15 @@ describe("codes scan E2E", () => {
       expect(transport.writes).toEqual(CODES_SCAN_COMMANDS.map((command) => `${command}\r`));
       expect(transport.violations).toEqual([]);
       const markdown = await codesReportMarkdown(recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result });
-      expect(markdown).toBe(`# Codes report: ${VEHICLE}\n\nScanned ${DATE} with the phone app. Scan complete: 19 of 19 commands sent.\n\n` + artifactBlock(source));
+      const expected = `# Codes report: ${VEHICLE}\n\nScanned ${DATE} with the phone app. Scan complete: 19 of 19 commands sent.\n\n` + artifactBlock(source);
+      expect(markdown).toBe(expected);
+      // E1: both files reach the folder, the recording first.
+      const targets = new FakeTargets();
+      const outcome = await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
+      expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()], [MD, expected]]);
+      expect(outcome.report).toBe(expected);
+      expect(targets.log).toEqual([`keep:${JSONL}`, `keep:${MD}`, "folder", `write:${JSONL}`, `write:${MD}`]);
+      expect(outcome.status).toBe(`Saved ${JSONL} to the capture folder. Saved ${MD} to the capture folder.`);
     });
   }
 });
@@ -99,6 +111,13 @@ describe("codes scan failures", () => {
     expect(result.stoppedEarly?.startsWith("UNABLE TO CONNECT")).toBe(true);
     expect(recording.lines().at(-1)).toEqual({ t: 0, dir: "meta", note: expect.stringMatching(/^capture stopped /) as unknown });
     expect(await codesReportMarkdown(recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result })).toBeUndefined();
+    // E2: the recording alone is saved, ending with the stop meta.
+    const targets = new FakeTargets();
+    const outcome = await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
+    expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()]]);
+    expect((JSON.parse(recording.toJsonl().trimEnd().split("\n").at(-1) ?? "") as { note: string }).note).toMatch(/^capture stopped /);
+    expect(outcome.status.startsWith(`No module answered; no report. Saved ${JSONL}`)).toBe(true);
+    expect(outcome.report).toBeUndefined();
   });
 
   it("2: a disconnect mid-scan stops, writes nothing more, and keeps what was answered", async () => {
@@ -111,6 +130,12 @@ describe("codes scan failures", () => {
     expect(markdown).toContain("Scan stopped early after 10 of 19 commands: disconnected.");
     expect(markdown).toContain("Observed data from 5 modules: 17, 28, 40, 45, CB.");
     expect(markdown?.match(/- Readiness \(PID 01\): not read/g)).toHaveLength(5);
+    // E3: both files are saved; the recording says why it ends.
+    const targets = new FakeTargets();
+    await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
+    expect([...targets.folderFiles.keys()]).toEqual([JSONL, MD]);
+    expect(targets.folderFiles.get(JSONL)?.split("\n")).toContain('{"t": 0, "dir": "meta", "note": "Disconnected."}');
+    expect(targets.folderFiles.get(MD)).toContain("Scan stopped early after 10 of 19 commands: disconnected.");
   });
 
   it("3: a timeout with no '>' stops without writing into a busy ELM", async () => {

@@ -1,13 +1,14 @@
 import { BleManager } from "react-native-ble-plx";
-import { File, Paths } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useEffect, useRef, useState } from "react";
 import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
-import { CODES_SCAN_COMMANDS, codesReportMarkdown, codesScanStop } from "./src/codesScan.js";
+import { CODES_SCAN_COMMANDS, codesScanStop } from "./src/codesScan.js";
 import { ConsoleSession } from "./src/console.js";
 import { RecordingBuffer } from "./src/recording.js";
+import { finishRun, type RunFile, type SaveTargets } from "./src/runFiles.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole, vehicleAvailability, vehicleEvidence, type CatalogVehicle } from "./src/garage/catalog.js";
 import { garageDocumentStore } from "./src/garage/documentStore.js";
 import { LOCAL_INTEREST_NOTICE, createGarageFlow, type GarageState, type Interest, type Ownership } from "./src/garage/flow.js";
@@ -44,6 +45,8 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [connection, setConnection] = useState<BleConnection>();
   const connectionRef = useRef<BleConnection | undefined>(undefined);
   const session = useRef<ConsoleSession | undefined>(undefined);
+  // Manual Send uses its own unsaved session: two sessions on one transport would both record every rx.
+  const debugSession = useRef<ConsoleSession | undefined>(undefined);
   const stopScan = useRef<(() => void) | undefined>(undefined);
   const disconnectSubscription = useRef<{ remove: () => void } | undefined>(undefined);
   const [permitted, setPermitted] = useState(false);
@@ -54,9 +57,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [note, setNote] = useState("Equinox Ready, Park; one-button capture");
   const [command, setCommand] = useState("0100");
   const [transcript, setTranscript] = useState<string[]>([]);
-  const [recordingActive, setRecordingActive] = useState(false);
   const [pending, setPending] = useState(false);
-  const [frozenJsonl, setFrozenJsonl] = useState<string>();
   // The capture's async closure sees stale React state; teardown's freeze is read from here instead.
   const frozenRef = useRef<string | undefined>(undefined);
   const [capturing, setCapturing] = useState(false);
@@ -64,19 +65,19 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [captureLast, setCaptureLast] = useState("");
   const [report, setReport] = useState<string>();
 
-  // A session exists only while recording, so closing it freezes the buffer: no rx lands after Stop or disconnect.
+  // A session exists only while a run records, so closing it freezes the buffer: no rx lands after the run or a disconnect.
   const endRecording = (): string | undefined => {
     if (!session.current) return undefined;
     session.current.close(); session.current = undefined;
     const jsonl = recording.toJsonl(); frozenRef.current = jsonl;
-    setFrozenJsonl(jsonl); setRecordingActive(false);
     return jsonl;
   };
+  const closeDebugSession = () => { debugSession.current?.close(); debugSession.current = undefined; };
   const teardown = (message: string) => {
     disconnectSubscription.current?.remove(); disconnectSubscription.current = undefined;
     // A file cut short by a disconnect says why.
     if (session.current) recording.meta(message);
-    endRecording();
+    endRecording(); closeDebugSession();
     setTranscript((current) => [...current, `-- ${message}`]);
     const active = connectionRef.current; connectionRef.current = undefined; setConnection(undefined);
     void active?.transport.close().catch(() => undefined);
@@ -89,7 +90,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
       setStatus(granted ? "Bluetooth permission granted. Scan for the Veepeak." : "Bluetooth permission was denied; scanning is disabled. Grant it in Android settings and reopen the app.");
     }, (error: unknown) => { setStatus(`Permission error: ${error instanceof Error ? error.message : String(error)}`); });
     return () => {
-      stopScan.current?.(); disconnectSubscription.current?.remove(); session.current?.close();
+      stopScan.current?.(); disconnectSubscription.current?.remove(); session.current?.close(); debugSession.current?.close();
       void connectionRef.current?.transport.close().catch(() => undefined); void manager.destroy();
     };
   }, [manager]);
@@ -118,41 +119,26 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
     // A fresh session per recording: its reader starts empty and every notification lands in the started buffer.
     session.current = new ConsoleSession(connection.transport, recording);
-    setTranscript([]); setFrozenJsonl(undefined); frozenRef.current = undefined; setReport(undefined); setRecordingActive(true); setStatus("Recording started.");
+    setTranscript([]); frozenRef.current = undefined; setReport(undefined);
     return session.current;
   };
   const send = async () => {
-    if (!session.current) return;
+    if (!connection) return;
+    if (!debugSession.current) {
+      const scratch = new RecordingBuffer();
+      scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
+      // A new session starts in the unknown state, so its first command must be ATZ or ATI (X-2026-09-24-first-write).
+      debugSession.current = new ConsoleSession(connection.transport, scratch);
+    }
+    const debug = debugSession.current;
     setPending(true);
-    try { const response = await session.current.send(command); setTranscript((current) => [...current, `> ${command}`, `${response}>`]); }
+    try { const response = await debug.send(command); setTranscript((current) => [...current, `> ${command}`, `${response}>`]); }
     catch (error) { setStatus(`Command error: ${error instanceof Error ? error.message : String(error)}`); }
     finally { setPending(false); }
   };
-  const stopRecording = () => { endRecording(); setStatus("Recording stopped and frozen."); };
-  /** Writes a new file and opens the share sheet; returns the file name. */
-  const exportFile = async (content: string, slug: string, extension: string, mimeType: string, dialogTitle: string): Promise<string> => {
-    const base = localFilename(slug, extension); const stem = base.slice(0, -extension.length);
-    let suffix = 1; let file = new File(Paths.cache, base);
-    while (file.exists) { suffix++; file = new File(Paths.cache, `${stem}-${String(suffix)}${extension}`); }
-    file.create(); // throws if the file exists; never overwrite an export
-    file.write(content);
-    await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
-    return file.name;
-  };
-  const exportJsonl = (jsonl: string) => exportFile(jsonl, "phone-console", ".jsonl", "application/x-ndjson", "Export OBD recording");
-  const shareReport = (markdown: string) => exportFile(markdown, "codes-report", ".md", "text/markdown", "Share codes report");
-  const exportRecording = async () => {
-    if (!frozenJsonl) return;
-    try { setStatus(`Exported ${await exportJsonl(frozenJsonl)}.`); }
-    catch (error) { setStatus(`Export error: ${error instanceof Error ? error.message : String(error)}`); }
-  };
-  const shareCurrentReport = async () => {
-    if (!report) return;
-    try { setStatus(`Share sheet opened for ${await shareReport(report)}.`); }
-    catch (error) { setStatus(`Share error: ${error instanceof Error ? error.message : String(error)}`); }
-  };
   const capture = async (kind: "recording" | "codes") => {
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox capture unavailable for this model year."); return; }
+    closeDebugSession();
     const active = startRecording();
     if (!active) return;
     setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus(kind === "codes" ? "Running codes scan…" : "Capturing…");
@@ -173,20 +159,9 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
         : `Capture stopped at step ${String(step)} of ${String(result.total)} (${stepCommand}): ${result.stoppedEarly}.`;
       setStatus(summary);
       if (!jsonl) return;
-      if (kind === "codes") {
-        // The raw recording is not exported automatically (T0.9 Decision 5).
-        const keep = "Tap Export recording to save the raw recording.";
-        let markdown: string | undefined;
-        try { markdown = await codesReportMarkdown(jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }); }
-        catch (error) { setStatus(`Report error: ${error instanceof Error ? error.message : String(error)} ${keep}`); return; }
-        if (markdown === undefined) { setStatus(`No module answered; no report. ${summary} ${keep}`); return; }
-        setReport(markdown);
-        try { setStatus(`${summary} Share sheet opened for ${await shareReport(markdown)}. ${keep}`); }
-        catch (error) { setStatus(`${summary} Share error: ${error instanceof Error ? error.message : String(error)} ${keep}`); }
-        return;
-      }
-      try { setStatus(`${summary} Share sheet opened for ${await exportJsonl(jsonl)}; choose where to save it.`); }
-      catch (error) { setStatus(`${summary} Export error: ${error instanceof Error ? error.message : String(error)}`); }
+      // Saved before capturing ends, so no new run can replace the buffer while a file is unsaved (the 2026-09-24 loss).
+      const outcome = await finishRun(kind, jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }, phoneTargets);
+      setReport(outcome.report); setStatus(`${summary} ${outcome.status}`);
     } finally { setCapturing(false); }
   };
 
@@ -198,22 +173,49 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing} onPress={startScan} />
     <Button title="Disconnect" color={colors.buttonBackground} disabled={!connection || pending} onPress={() => { teardown("Disconnected by user."); }} />
     <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting} onPress={() => void connect(item)} />} />
-    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!recordingActive} />
-    <Button title={recordingActive ? "Stop recording" : "Start recording"} color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || pending || capturing || (!recordingActive && !connection)} onPress={recordingActive ? stopRecording : startRecording} />
-    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || recordingActive || pending || capturing} onPress={() => void capture("recording")} />
-    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || recordingActive || pending || capturing} onPress={() => void capture("codes")} />
+    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing} />
+    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing} onPress={() => void capture("recording")} />
+    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing} onPress={() => void capture("codes")} />
     {captureStep ? <Text style={{ color: colors.text }}>{captureStep}</Text> : null}
     {captureLast ? <Text style={{ color: colors.muted }}>{captureLast}</Text> : null}
     <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" />
-    <Button title="Send" color={colors.buttonBackground} disabled={!connection || !recordingActive || pending || capturing} onPress={() => void send()} />
-    <Button title="Export recording" color={colors.buttonBackground} disabled={!frozenJsonl || capturing} onPress={() => void exportRecording()} />
-    <Button title="Share report" color={colors.buttonBackground} disabled={!report || capturing} onPress={() => void shareCurrentReport()} />
+    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing} onPress={() => void send()} />
     {report ? <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{report}</Text></ScrollView> : null}
     <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
   </View>;
 }
 
 const garageFlow = createGarageFlow(garageDocumentStore);
+
+const DIALOG_TITLES: Record<RunFile["slug"], string> = { "phone-console": "Export OBD recording", "codes-report": "Share codes report" };
+const captureFolderFile = () => new File(Paths.document, "capture-folder.txt");
+
+// docs/specs/T0.9b-one-and-done-captures.md: a private copy under captures/, then the SAF folder picked once, else the share sheet.
+const phoneTargets: SaveTargets = {
+  keep(file) {
+    const dir = new Directory(Paths.document, "captures");
+    dir.create({ intermediates: true, idempotent: true });
+    const base = localFilename(file.slug, file.extension); const stem = base.slice(0, -file.extension.length);
+    let suffix = 1; let kept = new File(dir, base);
+    while (kept.exists) { suffix++; kept = new File(dir, `${stem}-${String(suffix)}${file.extension}`); }
+    kept.create(); // throws if the file exists; never overwrite a capture
+    kept.write(file.content);
+    return kept.name;
+  },
+  async folder() {
+    const remembered = captureFolderFile();
+    let dir: Directory;
+    if (remembered.exists) dir = new Directory((await remembered.text()).trim());
+    else { dir = await Directory.pickDirectoryAsync(); remembered.write(dir.uri); }
+    // SAF content:// folders take createFile; File.create does not work there.
+    return { write: (name, file) => { dir.createFile(name, file.mimeType).write(file.content); } };
+  },
+  forgetFolder() {
+    // A failed delete is ignored: the next folder write fails again and falls back to the share sheet.
+    try { const remembered = captureFolderFile(); if (remembered.exists) remembered.delete(); } catch { /* see above */ }
+  },
+  share: (name, file) => Sharing.shareAsync(new File(Paths.document, "captures", name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
+};
 
 export function App() {
   const colors = palettes[useColorScheme() === "dark" ? "dark" : "light"];

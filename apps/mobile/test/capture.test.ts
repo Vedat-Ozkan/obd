@@ -5,6 +5,8 @@ import type { Transport } from "obd-core/transport";
 import { CAPTURE_COMMANDS, runCapture, type CaptureProgress } from "../src/capture.js";
 import { ConsoleSession, normalizeReadOnlyCommand } from "../src/console.js";
 import { RecordingBuffer } from "../src/recording.js";
+import { finishRun } from "../src/runFiles.js";
+import { FakeTargets } from "./fakeTargets.js";
 
 // Verbatim rx chunks after tx "0100\r": fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl lines 25-41.
 const EQUINOX_0100_RX = ["SEAR", "CH", "I", "NG", ".", "..", "\r", "18DAF14506410080", "000001\r18DAF1CB0", "6410080000001\r18", "DAF1400641008000", "0001\r18DAF128064", "100BFFFF997\r18DA", "F117064100800800", "13\r", "\r", ">"];
@@ -14,6 +16,8 @@ const HAPPY: Record<string, string[]> = {
   ATZ: ["\r\rELM327 v1.5\r\r>"], ATE0: ["OK\r\r>"], ATL0: ["OK\r\r>"], ATS0: ["OK\r\r>"], ATH1: ["OK\r\r>"], ATSP0: ["OK\r\r>"],
   "0100": EQUINOX_0100_RX, "020000": ["NO DATA\r\r>"], "020200": ["NO DATA\r\r>"], "03": EQUINOX_03_RX,
 };
+const HEADING = { vehicle: "2024 Chevrolet Equinox EV", date: "2026-09-25" };
+const JSONL = "2026-09-25-phone-console.jsonl";
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 
 /** Replies from a script on write; "none" = no reply ever, "throw" = the write rejects. Flags any write made while a '>' is outstanding. */
@@ -76,6 +80,12 @@ describe("runCapture", () => {
     });
     expect(outcomes(progress)).toEqual([["ATZ", "data"], ["ATE0", "ok"], ["ATL0", "ok"], ["ATS0", "ok"], ["ATH1", "ok"], ["ATSP0", "ok"], ["0100", "data"], ["020000", "nodata"], ["020200", "nodata"], ["03", "data"]]);
     expect(progress[13].response).toBe(EQUINOX_0100_RX.join("").slice(0, -1));
+    // T0.9b E4: a plain capture saves exactly the recording, and no report.
+    const targets = new FakeTargets();
+    const outcome = await finishRun("recording", recording.toJsonl(), { ...HEADING, result }, targets);
+    expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()]]);
+    expect(outcome.report).toBeUndefined();
+    expect(targets.log.filter((entry) => entry.endsWith(".md"))).toEqual([]);
   });
 
   it("C3: error replies are recorded and the run continues", async () => {
@@ -135,6 +145,10 @@ describe("runCapture", () => {
     expect(result).toEqual({ sent: 7, total: 10, stoppedEarly: "disconnected" });
     expect(transport.writes.at(-1)).toBe("0100\r"); expect(transport.writes).toHaveLength(7);
     expect(recording.lines()).toHaveLength(linesAtClose);
+    // T0.9b E5: the partial recording is still saved.
+    const targets = new FakeTargets();
+    await finishRun("recording", recording.toJsonl(), { ...HEADING, result }, targets);
+    expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()]]);
   });
 
   // docs/specs/X-2026-09-24-first-write.md Verification, isolated test 12 (spec name C5).
