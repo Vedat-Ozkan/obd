@@ -1,0 +1,5 @@
+{"t":0,"dir":"meta","synthetic":true,"note":"synthetic PID 42 control-module supply; power state unknown; no Equinox support claim"}
+{"t":1,"dir":"tx","data":"ATRV\r"}
+{"t":2,"dir":"rx","data":"?\r\r>"}
+{"t":3,"dir":"tx","data":"0142\r"}
+{"t":4,"dir":"rx","data":"18DAF11704414230D4\r\r>"}

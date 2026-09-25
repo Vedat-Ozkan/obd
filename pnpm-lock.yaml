@@ -74,6 +74,8 @@ importers:
         specifier: ~19.2.2
         version: 19.2.18
 
+  packages/obd-battery: {}
+
   packages/obd-core:
     dependencies:
       zod:

@@ -194,6 +194,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     <Text style={{ color: colors.text, fontWeight: "bold" }}>2024 Chevrolet Equinox EV debug console and capture only</Text>
     <Text style={{ color: colors.text }}>{status}</Text>
     <Text style={{ color: colors.muted }}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
+    <Text style={{ color: colors.text }}>Unplug the OBD dongle from the car after each check. Disconnecting Bluetooth leaves the dongle powered; it can drain the 12 V battery while the vehicle is off.</Text>
     <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing} onPress={startScan} />
     <Button title="Disconnect" color={colors.buttonBackground} disabled={!connection || pending} onPress={() => { teardown("Disconnected by user."); }} />
     <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting} onPress={() => void connect(item)} />} />
