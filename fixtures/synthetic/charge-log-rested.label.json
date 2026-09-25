@@ -1,0 +1,51 @@
+{
+  "car": "none",
+  "session": "charge",
+  "condition": "fault",
+  "reference": {
+    "method": "synthetic-generator",
+    "capacity_ah": 12,
+    "capacity_kwh": 3.744,
+    "soc_start": 39.2416,
+    "soc_end": 80.2994
+  },
+  "fault": {
+    "id": "cell-imbalance",
+    "detail": "record 21 of 80 (module 3) held 30 mV below the others",
+    "injected_at_s": 0
+  },
+  "windows": {
+    "preRest": {
+      "start": 35.35,
+      "end": 665.35
+    },
+    "charge": {
+      "start": 805.35,
+      "end": 1705.35
+    },
+    "postRest": {
+      "start": 1715.35,
+      "end": 3515.35
+    }
+  },
+  "weak_group": {
+    "index": 21,
+    "module": 3
+  },
+  "planted": {
+    "current_gap": {
+      "seconds": 15,
+      "at": 20.35
+    },
+    "group_gap": {
+      "seconds": 20,
+      "at": 0.75
+    },
+    "not_80_group_set": {
+      "at": 5.75,
+      "valid": 79
+    }
+  },
+  "notes": "Generator truth for a synthetic charge log. The capacity is synthetic, not the car's; the scalings are the decoder's own, so only the P1 recording checks them.",
+  "synthetic": true
+}

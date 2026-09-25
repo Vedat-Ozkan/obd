@@ -15,6 +15,7 @@
     "test": "pnpm --filter './packages/*' --filter './apps/*' -r test && vitest run tools/relay/server.test.ts",
     "replay": "tsx packages/obd-core/scripts/replay.ts",
     "codes-report": "tsx packages/obd-core/scripts/codes-report.ts",
+    "charge-log": "tsx packages/obd-battery/scripts/charge-log.ts",
     "relay": "tsx tools/relay/server.ts",
     "hil:smoke": "tsx tools/relay/hil-smoke.ts"
   },
