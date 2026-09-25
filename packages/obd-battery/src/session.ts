@@ -191,14 +191,17 @@ export async function chargeLogFromRecording(lines: readonly RecordingLine[], re
     const session = new Elm327Session(new ReplayTransport(segment));
     let target = "";
     try {
-      for (const line of segment) {
-        if (line.dir !== "tx") continue;
+      const txs = segment.filter((line) => line.dir === "tx");
+      for (const [i, line] of txs.entries()) {
         const command = line.data.replace(/\r$/, "");
         try {
           const response = await session.send(command, { retry: false, timeoutMs: 500 });
           if (command.startsWith("ATSH ")) target = command.slice(-4, -2);
           const did = /^22 ([0-9A-F]{4})$/.exec(command)?.[1];
-          if (did !== undefined) builder.add(line.t, target, did, response.frames);
+          // Only the answered attempt adds a sample: not an error reply the live logger stopped on (Decision 17), and not an
+          // attempt core retried, i.e. one whose next tx in this segment is the same command (Decision 18).
+          const retried = txs.at(i + 1)?.data === line.data;
+          if (did !== undefined && response.kind !== "error" && !retried) builder.add(line.t, target, did, response.frames);
         } catch (error) {
           if (!(error instanceof ElmSessionError && error.kind === "timeout")) throw error;
         }

@@ -1,0 +1,488 @@
+// T2.4 Stage B1 failure modes 1–13, the Decision 16 error split and Decisions 17 and 18: docs/specs/T2.4-charge-logger.md §Verification, Stage B1. Each run drives
+// runChargeLog against a fake ELM on a fake clock; the flushed file is the artifact (/tmp/t2.4-b1-<case>.jsonl).
+// Everything the fake ELM answers is synthetic. Its reply encodings follow the spec's §Sources scalings.
+// @ts-expect-error Node built-in types are not part of the mobile target.
+import { writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { latin1Decode, latin1Encode, parseRecording, type RecordingLine } from "obd-core/recording";
+import type { Transport } from "obd-core/transport";
+import { importObdbMode22 } from "obd-core/vehicles";
+import signalsetJson from "obd-core/vehicles/equinox-signalset";
+import { ChargeLogBuilder, chargeLogFromRecording, chargePhases, MAX_GAP_S, POST_REST_S, span, type ChargeLog } from "obd-battery/session";
+import { allowedCommand } from "../../../packages/obd-core/src/elm/guard.js";
+import { MAX_RUN_S, RECOVERY_WAIT_S, runChargeLog, SILENT_STOP_S, WAIT_FOR_CHARGE_S, type ChargeLogResult, type StreamTargets } from "../src/chargeLogger.js";
+import { RecordingBuffer } from "../src/recording.js";
+
+const write = writeFileSync as (path: string, text: string) => void;
+const signals = importObdbMode22(signalsetJson);
+const FILE = "2026-09-25-charge-log.jsonl";
+const META = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "synthetic fake ELM, T2.4 B1 test", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
+const SLOW = 120_000;
+
+beforeEach(() => { vi.useFakeTimers({ now: new Date("2026-09-25T00:00:00Z") }); });
+afterEach(() => { vi.useRealTimers(); });
+
+// ---- The fake ELM --------------------------------------------------------------------------------------------
+
+/** Seconds since the fake clock started the run. */
+type Clock = () => number;
+interface Plan {
+  /** Pack current (A, negative = into the pack) at run time s. */
+  amps(s: number): number;
+  /** Overrides the reply: a string (with '>'), null = never answer, "lost" = the write rejects. */
+  inject?(command: string, s: number): string | null | undefined;
+  /** Every 22 read answers NO DATA. */
+  silent?: boolean;
+  /** Default 20–30 ms, a deterministic jitter so sample times are not an exact 5 s grid (Decision 10). */
+  latencyMs?: number;
+}
+
+const hex = (bytes: readonly number[]) => bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join("");
+const u16 = (value: number) => [(value >> 8) & 0xff, value & 0xff];
+/** ISO-TP frames as the ELM prints them with ATH1 and ATS0 (same layout as the Stage A synthetic generator). */
+function frames(module: string, did: string, data: readonly number[]): string {
+  const header = `18DAF1${module}`;
+  const payload = [0x62, parseInt(did.slice(0, 2), 16), parseInt(did.slice(2), 16), ...data];
+  if (payload.length <= 7) return `${header}${hex([payload.length, ...payload])}\r\r>`;
+  const lines = [`${header}${hex([0x10 | (payload.length >> 8), payload.length & 0xff, ...payload.slice(0, 6)])}`];
+  for (let i = 6, n = 1; i < payload.length; i += 7, n++) lines.push(`${header}${hex([0x20 | (n & 0x0f), ...payload.slice(i, i + 7)])}`);
+  return `${lines.join("\r")}\r\r>`;
+}
+// CB/2AE1–2AE7: 80 records [u16 x 0.0001 V][module 1–10] plus 4 zero records (spec §Sources; Decision 8).
+const GROUP_RECORDS = (() => {
+  const records = Array.from({ length: 80 }, (_, i) => [...u16(39000 + (i % 5) * 2), Math.floor(i / 8) + 1]).flat();
+  while (records.length < 7 * 36) records.push(0, 0, 0);
+  return records;
+})();
+const GROUP_DIDS = ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7"];
+
+class FakeElm implements Transport {
+  private target = "";
+  private lost = false;
+  private writes = 0;
+  private readonly listeners = new Set<(bytes: Uint8Array) => void>();
+  constructor(private readonly plan: Plan, private readonly clock: Clock) {}
+
+  write(bytes: Uint8Array): Promise<void> {
+    const command = latin1Decode(bytes).replace(/\r$/, "");
+    const injected = this.lost ? "lost" : this.plan.inject?.(command, this.clock());
+    if (injected === "lost") { this.lost = true; return Promise.reject(new Error("BLE link lost")); }
+    const reply = injected === undefined ? this.answer(command) : injected;
+    if (reply !== null) setTimeout(() => { this.listeners.forEach((cb) => { cb(latin1Encode(reply)); }); }, this.plan.latencyMs ?? 20 + (this.writes++ % 11));
+    return Promise.resolve();
+  }
+
+  onData(cb: (bytes: Uint8Array) => void): () => void { this.listeners.add(cb); return () => { this.listeners.delete(cb); }; }
+  close(): Promise<void> { this.lost = true; this.listeners.clear(); return Promise.resolve(); }
+
+  private answer(command: string): string {
+    // Init replies as in fixtures/synthetic/battery-diagnosis-full-scan.jsonl lines 2–40 (copied from the spike).
+    if (command === "ATZ") return "\r\rELM327 v1.5\r\r>";
+    if (command === "ATI") return "ELM327 v1.5\r\r>";
+    if (command === "ATDPN") return "A0\r\r>";
+    if (command === "ATRV") return "12.7V\r\r>";
+    if (command === "0100") return "18DAF1CB06410080000001\r\r>";
+    if (command.startsWith("ATSH DA")) this.target = command.slice(7, 9);
+    if (command.startsWith("AT")) return "OK\r\r>";
+    const did = command.slice(3);
+    if (this.plan.silent) return "NO DATA\r\r>";
+    const s = this.clock();
+    // 17/2414 s16 / 20 A; 17/2885 u16 / 100 V; CB/27AF u16 / 100 kWh; CB/2B43 byte x 100/255 %; CB/2AF5 u16 / 10000 V (spec §Sources).
+    if (this.target === "17" && did === "2414") return frames("17", did, u16(Math.round(this.plan.amps(s) * 20) & 0xffff));
+    if (this.target === "17" && did === "2885") return frames("17", did, u16(33000));
+    if (this.target === "CB" && did === "27AF") return frames("CB", did, u16(4000));
+    if (this.target === "CB" && did === "2B43") return frames("CB", did, [128]);
+    if (this.target === "CB" && did === "2AF5") return frames("CB", did, [...u16(39004), ...u16(39000), ...u16(39008)]);
+    const group = GROUP_DIDS.indexOf(did);
+    if (this.target === "CB" && group >= 0) return frames("CB", did, GROUP_RECORDS.slice(group * 36, group * 36 + 36));
+    // 27C6, 276D, 2AF7, 2AF1 are polled raw with no sourced payload here: NO DATA is a valid reply.
+    return "NO DATA\r\r>";
+  }
+}
+
+// ---- The harness ------------------------------------------------------------------------------------------------
+
+class MemoryStream implements StreamTargets {
+  content = "";
+  readonly appends: { text: string; buffered: number }[] = [];
+  copies = 0;
+  created = 0;
+  copyError?: Error;
+  constructor(private readonly recording: RecordingBuffer) {}
+  create(): string { this.created++; return FILE; }
+  append(name: string, text: string): void {
+    expect(name).toBe(FILE);
+    this.appends.push({ text, buffered: this.recording.lines().length });
+    this.content += text;
+  }
+  copyToFolder(name: string): Promise<void> {
+    expect(name).toBe(FILE);
+    this.copies++;
+    return this.copyError ? Promise.reject(this.copyError) : Promise.resolve();
+  }
+}
+
+interface Options {
+  /** n = 1 for the first call. Returns a transport or throws. */
+  connect?: (n: number, clock: Clock) => Transport;
+  stopAt?: number;
+  copyError?: Error;
+  /** Set true by a test to request a stop, e.g. from inside a plan's inject. */
+  stop?: { requested: boolean };
+  /** Called after each status line is recorded; may throw. */
+  onStatus?: (line: string) => void;
+}
+
+interface Run { result: ChargeLogResult; lines: RecordingLine[]; stream: MemoryStream; recording: RecordingBuffer; statuses: string[]; connects: number; endS: number }
+
+async function run(name: string, plan: Plan, options: Options = {}): Promise<Run> {
+  const t0 = Date.now() / 1000;
+  const clock: Clock = () => Date.now() / 1000 - t0;
+  const recording = new RecordingBuffer(() => Date.now() / 1000);
+  recording.start(META);
+  const stream = new MemoryStream(recording);
+  if (options.copyError) stream.copyError = options.copyError;
+  const statuses: string[] = [];
+  let connects = 0;
+  const running = runChargeLog({
+    connect: async () => {
+      connects++;
+      await Promise.resolve();
+      return options.connect ? options.connect(connects, clock) : new FakeElm(plan, clock);
+    },
+    recording,
+    signals,
+    now: () => Date.now() / 1000,
+    sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+    onStatus: (line) => { statuses.push(line); options.onStatus?.(line); },
+    stream,
+    stopRequested: () => options.stop?.requested === true || (options.stopAt !== undefined && clock() >= options.stopAt),
+  });
+  let settled = false;
+  running.then(() => { settled = true; }, () => { settled = true; });
+  const done = () => settled;
+  while (!done()) {
+    await vi.advanceTimersToNextTimerAsync();
+    if (!done() && vi.getTimerCount() === 0) { await Promise.resolve(); if (!done() && vi.getTimerCount() === 0) throw new Error(`${name}: run stuck with no timer pending`); }
+  }
+  const result = await running;
+  const endS = clock();
+  write(`/tmp/t2.4-b1-${name}.jsonl`, stream.content);
+  const lines = parseRecording(stream.content);
+  expectSafeAndFirstWrite(lines);
+  expect(stream.copies).toBe(1);
+  expect(result.file).toBe(FILE);
+  const last = lines.at(-1);
+  expect(last?.dir === "meta" && String(last.note)).toContain(result.stopReason);
+  return { result, lines, stream, recording, statuses, connects, endS };
+}
+
+const txs = (lines: readonly RecordingLine[]) => lines.filter((l) => l.dir === "tx").map((l) => l.data.replace(/\r$/, ""));
+const isBoundary = (l: RecordingLine) => l.dir === "meta" && l.event === "charge-log session";
+const boundaries = (lines: readonly RecordingLine[]) => lines.filter(isBoundary).map((l) => (l.dir === "meta" ? l.reason : undefined));
+
+/** Failure mode 12 in every case, plus the first-write rule for every fresh session. */
+function expectSafeAndFirstWrite(lines: readonly RecordingLine[]): void {
+  for (const command of txs(lines)) {
+    expect(allowedCommand(command), command).toBeDefined();
+    expect(command.replace(/ /g, "")).not.toBe("0902");
+    expect(command.replace(/ /g, "")).not.toBe("224193");
+  }
+  expect(lines.findIndex((l) => l.dir === "tx")).toBeGreaterThan(lines.findIndex(isBoundary));
+  lines.forEach((line, i) => {
+    if (!isBoundary(line)) return;
+    const next = lines.slice(i + 1).find((l) => l.dir === "tx" || isBoundary(l));
+    if (next?.dir === "tx") expect(next.data).toBe("ATZ\r");
+  });
+}
+
+/** The next tx after the first tx of `command` at or after run time `s`, and the lines in between. */
+function after(lines: readonly RecordingLine[], command: string, s: number): { between: RecordingLine[]; next?: string } {
+  const at = lines.findIndex((l) => l.dir === "tx" && l.data === `${command}\r` && l.t >= s);
+  expect(at, `${command} after ${String(s)} s`).toBeGreaterThan(0);
+  const nextAt = lines.findIndex((l, i) => i > at && l.dir === "tx");
+  return { between: lines.slice(at + 1, nextAt < 0 ? lines.length : nextAt), ...(nextAt < 0 ? {} : { next: lines[nextAt].dir === "tx" ? lines[nextAt].data.replace(/\r$/, "") : "" }) };
+}
+
+const REST = 0.5;
+const CHARGE = -20;
+/** Rest 0–700 s, 20 s other, charge 720–1020 s, then rest. */
+const happyAmps = (s: number) => (s < 700 ? REST : s < 720 ? -3 : s < 1020 ? CHARGE : REST);
+
+async function replay(text: string) {
+  vi.useRealTimers();
+  const log = await chargeLogFromRecording(parseRecording(text), FILE, signals);
+  return { log, phases: chargePhases(log) };
+}
+
+// ---- Failure modes ------------------------------------------------------------------------------------------------
+
+it("1 + 10: happy path stops by itself after the post-charge rest; every flush is crash safe", async () => {
+  const r = await run("happy", { amps: happyAmps });
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged", saved: `Saved ${FILE} to the capture folder.` });
+  expect(r.endS).toBeGreaterThanOrEqual(1020 + POST_REST_S);
+  expect(r.endS).toBeLessThan(1020 + POST_REST_S + 30);
+  expect(boundaries(r.lines)).toEqual(["start"]);
+  expect(r.statuses.some((s) => s.includes("Do not plug in yet"))).toBe(true);
+  expect(r.statuses).toContain("Plug in the charger now.");
+  // 10: drain() leaves nothing flushed in memory; every flush ends on a whole line after a complete exchange.
+  expect(r.stream.appends.length).toBeGreaterThan((1020 + POST_REST_S) / 30 - 2);
+  expect(r.stream.appends.every((a) => a.buffered === 0 && a.text.endsWith("\n"))).toBe(true);
+  expect(r.recording.lines()).toEqual([]);
+  let snapshot = "";
+  const snapshots: string[] = [];
+  for (const a of r.stream.appends) { snapshot += a.text; snapshots.push(snapshot); }
+  const { log, phases } = await replay(r.stream.content);
+  for (const [i, text] of snapshots.entries()) {
+    if (i % 10 !== 0 && i !== snapshots.length - 1) continue;
+    const lines = parseRecording(text);
+    const lastTx = lines.findLastIndex((l) => l.dir === "tx");
+    expect(lines.slice(lastTx + 1).some((l) => l.dir === "rx" && l.data.includes(">")), `snapshot ${String(i)}`).toBe(true);
+    await chargeLogFromRecording(lines, FILE, signals);
+  }
+  // 1: the flushed file replays into all three windows and a passing gate.
+  expect(phases.preRest && phases.charge && phases.postRest && phases.postRestRun).toBeTruthy();
+  expect(phases.currentGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);
+  expect(phases.groupGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);
+  const post = phases.postRestRun ?? { start: 0, end: 0 };
+  expect(span(post.start, post.end)).toBeGreaterThanOrEqual(POST_REST_S);
+  expect(log.groups.length).toBeGreaterThan(0);
+}, SLOW);
+
+it("2: one CAN ERROR is retried by core and starts no recovery", async () => {
+  let fired = false;
+  const r = await run("can-error-retry", {
+    amps: () => REST,
+    inject: (command, s) => { if (command === "22 2AF5" && s >= 10 && !fired) { fired = true; return "CAN ERROR\r\r>"; } return undefined; },
+  }, { stopAt: 30 });
+  expect(fired).toBe(true);
+  expect(after(r.lines, "22 2AF5", 10).next).toBe("22 2AF5");
+  expect(txs(r.lines).filter((c) => c === "ATZ")).toHaveLength(1);
+  expect(boundaries(r.lines)).toEqual(["start"]);
+  expect(r.result.stopReason).toBe("disconnect pressed");
+}, SLOW);
+
+it("3: LV RESET mid-cycle ends the cycle; the next write is ATZ of a new session after a boundary", async () => {
+  let fired = false;
+  const r = await run("lv-reset", {
+    amps: () => REST,
+    inject: (command, s) => { if (command === "22 2AE3" && s >= 20 && !fired) { fired = true; return "LV RESET\r\r>"; } return undefined; },
+  }, { stopAt: 60 });
+  const { between, next } = after(r.lines, "22 2AE3", 20);
+  expect(next).toBe("ATZ");
+  expect(between.filter(isBoundary).map((l) => l.dir === "meta" && l.reason)).toEqual(["lv-reset"]);
+  const reset = r.lines.find((l) => l.dir === "meta" && l.reason === "lv-reset");
+  const resetAt = reset?.t ?? Infinity;
+  const lvLine = r.lines.find((l) => l.dir === "rx" && l.data.includes("LV RESET"));
+  expect(resetAt - (lvLine?.t ?? 0)).toBeGreaterThanOrEqual(RECOVERY_WAIT_S);
+  const { log } = await replay(r.stream.content);
+  expect(log.sessions?.map((s) => s.reason)).toEqual(["start", "lv-reset"]);
+  expect(log.current.some((p) => p.t > resetAt)).toBe(true);
+}, SLOW);
+
+it("3b: LV RESET at ATRV stops init before 0100; a first CAN ERROR at ATDPN is retried by core", async () => {
+  let resets = 0;
+  const lv = await run("init-lv-reset", {
+    amps: () => REST,
+    inject: (command) => { if (command === "ATRV" && resets === 0) { resets++; return "LV RESET\r\r>"; } return undefined; },
+  }, { stopAt: 30 });
+  expect(after(lv.lines, "ATRV", 0).next).toBe("ATZ");
+  expect(boundaries(lv.lines)).toEqual(["start", "lv-reset"]);
+  const firstAtz = lv.lines.filter((l) => l.dir === "tx" && l.data === "ATZ\r").map((l) => l.t);
+  expect(firstAtz[1] - firstAtz[0]).toBeGreaterThanOrEqual(RECOVERY_WAIT_S);
+
+  let errors = 0;
+  const can = await run("init-can-error", {
+    amps: () => REST,
+    inject: (command) => { if (command === "ATDPN" && errors === 0) { errors++; return "CAN ERROR\r\r>"; } return undefined; },
+  }, { stopAt: 30 });
+  expect(after(can.lines, "ATDPN", 0).next).toBe("ATDPN");
+  expect(txs(can.lines).filter((c) => c === "ATZ")).toHaveLength(1);
+  expect(boundaries(can.lines)).toEqual(["start"]);
+  expect(txs(can.lines)).toContain("0100");
+}, SLOW);
+
+it("4: a reply with no '>' is followed by no write until a new session writes ATZ", async () => {
+  let fired = false;
+  const r = await run("timeout", {
+    amps: () => REST,
+    inject: (command, s) => { if (command === "22 2885" && s >= 20 && !fired) { fired = true; return null; } return undefined; },
+  }, { stopAt: 60 });
+  const { between, next } = after(r.lines, "22 2885", 20);
+  expect(next).toBe("ATZ");
+  expect(between.filter(isBoundary).map((l) => l.dir === "meta" && l.reason)).toEqual(["timeout"]);
+  expect(r.connects).toBe(1);
+}, SLOW);
+
+it("5: a lost transport reconnects and logs on; when reconnecting keeps failing, the run stops and still saves", async () => {
+  const lostAt = (plan: Plan): Plan => ({ ...plan, inject: (command, s) => (s >= 30 && command === "22 2414" ? "lost" : undefined) });
+  const plan: Plan = { amps: () => REST };
+  const recover = await run("disconnect-recover", plan, {
+    connect: (n, clock) => (n === 1 ? new FakeElm(lostAt(plan), clock) : new FakeElm(plan, clock)),
+    stopAt: 70,
+  });
+  expect(recover.connects).toBe(2);
+  expect(boundaries(recover.lines)).toEqual(["start", "disconnect"]);
+  expect(after(recover.lines, "22 2414", 30).next).toBe("ATZ");
+  const { log } = await replay(recover.stream.content);
+  expect(log.current.some((p) => p.t > 40)).toBe(true);
+
+  vi.useFakeTimers({ now: new Date("2026-09-25T00:00:00Z") });
+  const giveUp = await run("disconnect-give-up", plan, {
+    connect: (n, clock) => { if (n === 1) return new FakeElm(lostAt(plan), clock); throw new Error("dongle not found"); },
+  });
+  expect(giveUp.result).toMatchObject({ complete: false, stopReason: "no current for 10 min" });
+  expect(giveUp.connects).toBeGreaterThan(2);
+  expect(giveUp.endS).toBeGreaterThanOrEqual(30 + SILENT_STOP_S - 5);
+  expect(giveUp.endS).toBeLessThan(30 + SILENT_STOP_S + 10);
+  expect(boundaries(giveUp.lines)).toEqual(["start"]);
+}, SLOW);
+
+it("6: modules that answer NO DATA for 10 min stop the run as partial", async () => {
+  const r = await run("silent", { amps: () => REST, silent: true });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "no current for 10 min" });
+  expect(r.endS).toBeGreaterThanOrEqual(SILENT_STOP_S);
+  expect(r.endS).toBeLessThan(SILENT_STOP_S + 10);
+}, SLOW);
+
+it("7: no charge within an hour of the pre-charge rest stops the run as partial", async () => {
+  const r = await run("no-charge", { amps: () => REST });
+  expect(r.result.complete).toBe(false);
+  expect(r.result.stopReason).toContain("no charge");
+  expect(r.endS).toBeGreaterThanOrEqual(600 + WAIT_FOR_CHARGE_S);
+  expect(r.endS).toBeLessThan(600 + WAIT_FOR_CHARGE_S + 30);
+}, SLOW);
+
+it("8: the 16 h limit stops the run as partial", async () => {
+  // A slow ELM (4 s per reply, under the 5 s timeout) keeps a 16 h run to a few hundred cycles.
+  const r = await run("max-run", { amps: () => CHARGE, latencyMs: 4000 });
+  expect(r.result.complete).toBe(false);
+  expect(r.result.stopReason).toContain("16 h");
+  expect(r.endS).toBeGreaterThanOrEqual(MAX_RUN_S);
+  expect(r.endS).toBeLessThan(MAX_RUN_S + 200);
+}, SLOW);
+
+it("9: Disconnect pressed lets the command in flight complete, then stops, flushes and copies", async () => {
+  const stop = { requested: false };
+  const r = await run("stop-requested", {
+    amps: () => REST,
+    inject: (command, s) => { if (command === "22 2B43" && s >= 20) stop.requested = true; return undefined; },
+  }, { stop });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "disconnect pressed" });
+  const { between, next } = after(r.lines, "22 2B43", 20);
+  expect(next).toBeUndefined();
+  expect(between.some((l) => l.dir === "rx" && l.data.includes("622B43"))).toBe(true);
+}, SLOW);
+
+it("11: a failed copy to the folder still resolves and names the private file", async () => {
+  const r = await run("copy-fails", { amps: () => REST }, { stopAt: 15, copyError: new Error("no capture folder remembered") });
+  expect(r.result.saved).toBe(`NOT SAVED to the capture folder: no capture folder remembered. The log is in app storage (captures/${FILE}).`);
+  expect(r.stream.content.length).toBeGreaterThan(0);
+}, SLOW);
+
+it("13: a core retry on the first post-charge 2414 leaves the live samples and the replayed samples identical", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  let fired = false;
+  const r = await run("retry-timestamps", {
+    // A fixed latency: the reviewer's reproduction, where the pre-send clock made the replayed post-rest 1799.48 s.
+    amps: happyAmps, latencyMs: 20,
+    inject: (command, s) => { if (command === "22 2414" && s >= 1020 && !fired) { fired = true; return "CAN ERROR\r\r>"; } return undefined; },
+  });
+  expect(fired).toBe(true);
+  expect(after(r.lines, "22 2414", 1020).next).toBe("22 2414");
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  await expectLiveEqualsReplay(r, logs);
+}, SLOW);
+
+it("13 (Decision 17): a core retry on group DIDs 2AE3 and 2AE7 in the post-charge rest keeps the live and replayed logs identical", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const fired = new Set<string>();
+  // The default jitter, not a fixed latency: sample times are off the 5 s grid.
+  const r = await run("retry-group", {
+    amps: happyAmps,
+    inject: (command, s) => {
+      const at = command === "22 2AE3" ? 1500 : command === "22 2AE7" ? 1600 : undefined;
+      if (at === undefined || s < at || fired.has(command)) return undefined;
+      fired.add(command);
+      return "CAN ERROR\r\r>";
+    },
+  });
+  expect([...fired].sort()).toEqual(["22 2AE3", "22 2AE7"]);
+  expect(after(r.lines, "22 2AE3", 1500).next).toBe("22 2AE3");
+  expect(after(r.lines, "22 2AE7", 1600).next).toBe("22 2AE7");
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  await expectLiveEqualsReplay(r, logs);
+}, SLOW);
+
+/** The 2AE3 reply with its first consecutive-frame line missing: core gets a data reply with an incomplete message and retries it. */
+const missingCf = () => frames("CB", "2AE3", GROUP_RECORDS.slice(2 * 36, 3 * 36)).split("\r").filter((_, i) => i !== 1).join("\r");
+
+for (const cycles of [[1500], [1500, 1505, 1510]]) {
+  it(`13 (Decision 18): a core retry on 22 2AE3 after a lost consecutive frame, in ${String(cycles.length)} cycle(s), keeps the live and replayed logs identical`, async () => {
+    const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+    const fired = new Set<number>();
+    const r = await run(cycles.length === 1 ? "retry-cf" : "retry-cf-3", {
+      amps: happyAmps,
+      inject: (command, s) => {
+        const at = cycles.find((c) => s >= c && s < c + 5);
+        if (command !== "22 2AE3" || at === undefined || fired.has(at)) return undefined;
+        fired.add(at);
+        return missingCf();
+      },
+    });
+    expect([...fired]).toEqual(cycles);
+    for (const at of cycles) expect(after(r.lines, "22 2AE3", at).next).toBe("22 2AE3");
+    expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+    await expectLiveEqualsReplay(r, logs);
+  }, SLOW);
+}
+
+/** Failure mode 13: the log the live stop decision used equals the replay of the flushed file, and the replay gate passes. */
+async function expectLiveEqualsReplay(r: Run, logs: { mock: { results: { value: unknown }[] }; mockRestore(): void }): Promise<void> {
+  // The last log() before the run stopped is the one the live stop decision used.
+  const live = logs.mock.results.at(-1)?.value as ChargeLog;
+  logs.mockRestore();
+  const { log, phases } = await replay(r.stream.content);
+  // toEqual ignores undefined keys: the replay's sessions and states are the only fields the live builder lacks.
+  expect({ ...log, sessions: undefined, states: undefined }).toEqual(live);
+  expect(phases).toEqual(chargePhases(live));
+  expect(phases.preRest && phases.charge && phases.postRest && phases.postRestRun).toBeTruthy();
+  expect(phases.currentGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);
+  expect(phases.groupGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);
+  const post = phases.postRestRun ?? { start: 0, end: 0 };
+  expect(span(post.start, post.end)).toBeGreaterThanOrEqual(POST_REST_S);
+}
+
+it("Decision 16: an error that is not a link error stops the run as partial, flushed and copied, with no reconnect", async () => {
+  let thrown = false;
+  const r = await run("callback-error", { amps: happyAmps }, {
+    onStatus: (line) => { if (line === "Plug in the charger now." && !thrown) { thrown = true; throw new Error("status display failed"); } },
+  });
+  expect(thrown).toBe(true);
+  expect(r.result).toMatchObject({ complete: false, stopReason: "status display failed" });
+  expect(boundaries(r.lines)).toEqual(["start"]);
+  expect(r.connects).toBe(1);
+  expect(r.endS).toBeLessThan(720);
+  expect(r.recording.lines()).toEqual([]);
+
+  // The same between sessions: the status after an LV RESET throws.
+  vi.useFakeTimers({ now: new Date("2026-09-25T00:00:00Z") });
+  const between = await run("callback-error-between", {
+    amps: () => REST,
+    inject: (command, s) => (command === "22 2AE3" && s >= 20 ? "LV RESET\r\r>" : undefined),
+  }, { onStatus: (line) => { if (line.startsWith("Lost the ELM327")) throw new Error("status display failed"); } });
+  expect(between.result).toMatchObject({ complete: false, stopReason: "status display failed" });
+  expect(boundaries(between.lines)).toEqual(["start"]);
+  expect(between.endS).toBeLessThan(30);
+
+  // Decision 17: the final "Charge log stopped" status throws; the run still resolves with its result and the file saved.
+  vi.useFakeTimers({ now: new Date("2026-09-25T00:00:00Z") });
+  const final = await run("callback-error-final", { amps: () => REST }, {
+    stopAt: 15,
+    onStatus: (line) => { if (line.startsWith("Charge log stopped")) throw new Error("status display failed"); },
+  });
+  expect(final.result).toMatchObject({ complete: false, stopReason: "disconnect pressed", saved: `Saved ${FILE} to the capture folder.` });
+  expect(final.statuses.at(-1)).toMatch(/^Charge log stopped: disconnect pressed\./);
+  expect(final.stream.content.length).toBeGreaterThan(0);
+  expect(final.recording.lines()).toEqual([]);
+}, SLOW);

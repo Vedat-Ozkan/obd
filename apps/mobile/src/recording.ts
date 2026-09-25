@@ -22,9 +22,12 @@ export class RecordingBuffer {
     this.recordingLines = [{ t: 0, dir: "meta", ...meta }];
   }
 
-  tx(data: string): void {
+  /** Returns the line's t (a charge-log sample's time, T2.4 Decision 15). */
+  tx(data: string): number {
     this.requireStarted();
-    this.recordingLines.push({ t: this.timestamp(), dir: "tx", data });
+    const t = this.timestamp();
+    this.recordingLines.push({ t, dir: "tx", data });
+    return t;
   }
 
   rx(bytes: Uint8Array): void {
@@ -32,9 +35,16 @@ export class RecordingBuffer {
     this.recordingLines.push({ t: this.timestamp(), dir: "rx", data: latin1Decode(bytes) });
   }
 
-  meta(note: string): void {
+  /** A string is written as {note}; a record is written as its own keys (the charge-log session boundary, T2.4 Decision 9). */
+  meta(note: string | Readonly<Record<string, string>>): void {
     this.requireStarted();
-    this.recordingLines.push({ t: this.timestamp(), dir: "meta", note });
+    if (typeof note !== "string" && ("t" in note || "dir" in note)) throw new Error("A meta record cannot set t or dir");
+    this.recordingLines.push({ t: this.timestamp(), dir: "meta", ...(typeof note === "string" ? { note } : note) });
+  }
+
+  /** Seconds since start, on the same scale as the lines' t. */
+  elapsed(): number {
+    return this.timestamp();
   }
 
   lines(): readonly RecordingLine[] {
@@ -44,6 +54,14 @@ export class RecordingBuffer {
   // Python json.dumps form (", " and ": ", \u escapes outside printable ASCII): tools/spike/redact_vin.py refuses any other form (ADR-017).
   toJsonl(): string {
     return this.recordingLines.map(pythonJsonLine).join("\n") + (this.recordingLines.length > 0 ? "\n" : "");
+  }
+
+  /** JSONL (same Python form as toJsonl) of the lines added since the last drain; those lines are dropped from memory.
+   *  A run that drains must not call toJsonl or lines. */
+  drain(): string {
+    const text = this.toJsonl();
+    this.recordingLines = [];
+    return text;
   }
 
   private requireStarted(): void {
