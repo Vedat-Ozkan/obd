@@ -91,4 +91,4 @@ Architect writes a spec, implementer builds to it, reviewer gates it. `/feature 
 
 - TypeScript: strict, ESM, named exports only, `zod` at package boundaries, `vitest`. Small files, small functions. Comments explain why, not what.
 - Python (laptop bridge and planned isolated ML workspace): `uv`, `ruff`, type hints, `pytest`. Training dependencies stay out of the bridge and normal fixture-based CI.
-- Commit messages: imperative subject, body says what was verified. No commits unless the user asks.
+- Commit messages: imperative subject, body says what was verified. The Claude Code orchestrator may commit a task after the reviewer approves it, staging only that task's files by path (never another tool's in-flight work). Other agents commit only when the user asks.

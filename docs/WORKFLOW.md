@@ -20,7 +20,7 @@ Three roles, three subagents in `.claude/agents/`, one orchestrating skill (`/fe
   → implementer builds, reports
   → reviewer runs checks, returns verdict
   → on REQUEST_CHANGES: fresh implementer with findings, review again (max 2 loops)
-  → on APPROVE: orchestrator summarizes; user commits and ticks the task
+  → on APPROVE: orchestrator summarizes, commits the task's files by path, and ticks the task
 ```
 
 Fresh implementer per loop is deliberate: an implementer that just argued for its design is a worse fixer than one reading the findings cold.
@@ -77,4 +77,4 @@ Not before the `obd-core` interfaces have survived two tasks unchanged (expected
 - A separate "tester" agent: tests are the implementer's job and their adequacy is the reviewer's.
 - A planner above the architect: `docs/PLAN.md` is the plan; the user reprioritizes it.
 - Automated prompt optimization for the diagnostic turn: with fewer than fifty labeled cases it overfits.
-- Auto-merge: the user commits.
+- Auto-merge or unreviewed commits: the Claude Code orchestrator commits only after APPROVE, and only that task's files; pushing stays with the user.
