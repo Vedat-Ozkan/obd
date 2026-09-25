@@ -2,16 +2,24 @@ import { BleManager } from "react-native-ble-plx";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useEffect, useRef, useState } from "react";
+import type { Transport } from "obd-core/transport";
+import { importObdbMode22 } from "obd-core/vehicles";
+import signalsetJson from "obd-core/vehicles/equinox-signalset";
+import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
 import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
+import { runAndSaveBatteryDiagnosis } from "./src/batteryDiagnosisFlow.js";
+import { createBatteryReportHistory } from "./src/batteryReports.js";
+import { batteryReportsDocumentStore, keepPrivateBatteryScan } from "./src/batteryReportsDocumentStore.js";
+import { batteryReportRows, removeGarageVehicleWithReports } from "./src/batteryScan.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "./src/codesScan.js";
 import { ConsoleSession } from "./src/console.js";
 import { RecordingBuffer } from "./src/recording.js";
 import { finishRun, type RunFile, type SaveTargets } from "./src/runFiles.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole, vehicleAvailability, vehicleEvidence, type CatalogVehicle } from "./src/garage/catalog.js";
 import { garageDocumentStore } from "./src/garage/documentStore.js";
-import { LOCAL_INTEREST_NOTICE, createGarageFlow, type GarageState, type Interest, type Ownership } from "./src/garage/flow.js";
+import { LOCAL_INTEREST_NOTICE, createGarageFlow, type GarageState, type GarageVehicle, type Interest, type Ownership } from "./src/garage/flow.js";
 
 function localDate(): string {
   const date = new Date();
@@ -37,7 +45,7 @@ const palettes = {
   dark: { background: "#121212", text: "#EDEDED", muted: "#B3B3B3", border: "#8A8A8A", inputBackground: "#1E1E1E", inputText: "#EDEDED", placeholder: "#A0A0A0", consoleBackground: "#000000", consoleText: "#E6E6E6", buttonBackground: "#005A9C" },
 };
 
-function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
+function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogVehicle; entry: GarageVehicle; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void> }) {
   const colors = palettes[useColorScheme() === "dark" ? "dark" : "light"];
   const inputColors = { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.inputText };
   const [manager] = useState(() => new BleManager());
@@ -55,6 +63,7 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [status, setStatus] = useState("Requesting Bluetooth permission…");
   // Prefilled so Run capture is one tap (T0.8d Decision 4); the owner can edit it and must never type a VIN.
   const [note, setNote] = useState("Equinox Ready, Park; one-button capture");
+  const [diagnosisReady, setDiagnosisReady] = useState(false);
   const [command, setCommand] = useState("0100");
   const [transcript, setTranscript] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
@@ -64,6 +73,12 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   const [captureStep, setCaptureStep] = useState("");
   const [captureLast, setCaptureLast] = useState("");
   const [report, setReport] = useState<string>();
+  const [diagnosing, setDiagnosing] = useState(false);
+  const diagnosingRef = useRef(false);
+  const diagnosisScanActive = useRef(false);
+  const diagnosisInterruption = useRef<"cancelled" | "disconnected" | undefined>(undefined);
+  const diagnosisCloseExpected = useRef(false);
+  const [canCancelDiagnosis, setCanCancelDiagnosis] = useState(false);
 
   // A session exists only while a run records, so closing it freezes the buffer: no rx lands after the run or a disconnect.
   const endRecording = (): string | undefined => {
@@ -74,6 +89,17 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
   };
   const closeDebugSession = () => { debugSession.current?.close(); debugSession.current = undefined; };
   const teardown = (message: string) => {
+    if (diagnosingRef.current) {
+      if (diagnosisScanActive.current && !diagnosisInterruption.current && !diagnosisCloseExpected.current) {
+        diagnosisInterruption.current = "disconnected";
+        diagnosisScanActive.current = false;
+        setCanCancelDiagnosis(false);
+      }
+      const active = connectionRef.current; connectionRef.current = undefined; setConnection(undefined);
+      void active?.transport.close().catch(() => undefined);
+      if (diagnosisInterruption.current === "disconnected") setStatus(`${message} Keeping the private battery scan…`);
+      return;
+    }
     disconnectSubscription.current?.remove(); disconnectSubscription.current = undefined;
     // A file cut short by a disconnect says why.
     if (session.current) recording.meta(message);
@@ -165,27 +191,74 @@ function EquinoxConsole({ vehicle }: { vehicle: CatalogVehicle }) {
     } finally { setCapturing(false); }
   };
 
+  const diagnose = async () => {
+    const active = connectionRef.current;
+    if (!active || diagnosingRef.current || capturing || pending || !canUseEquinoxConsole(vehicle)) return;
+    closeDebugSession();
+    diagnosisInterruption.current = undefined;
+    diagnosisCloseExpected.current = false;
+    diagnosingRef.current = true; diagnosisScanActive.current = true; setDiagnosing(true); setCanCancelDiagnosis(true);
+    const scanRecording = new RecordingBuffer();
+    const scannedAt = new Date().toISOString();
+    scanRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: diagnosisReady ? "battery diagnosis; Ready, Park confirmed in app" : "battery diagnosis; vehicle power state unknown", writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    const scanTransport: Transport = {
+      write: (bytes) => active.transport.write(bytes),
+      onData: (callback) => active.transport.onData(callback),
+      close: async () => { diagnosisCloseExpected.current = true; await active.transport.close(); },
+    };
+    try {
+      const outcome = await runAndSaveBatteryDiagnosis({ entry, transport: scanTransport, recording: scanRecording, scannedAt, keepScan: keepPrivateBatteryScan, history: batteryHistory, importedSignals: equinoxSignals, getInterruption: () => diagnosisInterruption.current, onProgress: (message) => { if (message === "Keeping private scan") { diagnosisScanActive.current = false; setCanCancelDiagnosis(false); } setStatus(message); } });
+      if (outcome.status === "saved") {
+        await onSaved(outcome.report);
+        setStatus(`Battery diagnosis saved: ${outcome.report.scanStatus}. Reconnect for another run.`);
+      } else if (outcome.status === "stopped") {
+        setStatus(`${outcome.reason} Private scan: ${outcome.recording}. Reconnect for another run.`);
+      } else setStatus(`${outcome.reason} Private scan: ${outcome.recording}. Reconnect for another run.`);
+    } catch (cause) {
+      setStatus(`Battery diagnosis error: ${cause instanceof Error ? cause.message : String(cause)}. Reconnect before another run.`);
+    } finally {
+      disconnectSubscription.current?.remove(); disconnectSubscription.current = undefined;
+      connectionRef.current = undefined; setConnection(undefined);
+      diagnosingRef.current = false; diagnosisScanActive.current = false; diagnosisInterruption.current = undefined; diagnosisCloseExpected.current = false; setDiagnosing(false); setCanCancelDiagnosis(false);
+      await active.transport.close().catch(() => undefined);
+    }
+  };
+  const cancelDiagnosis = () => {
+    if (!diagnosingRef.current || !diagnosisScanActive.current) return;
+    diagnosisInterruption.current = "cancelled";
+    diagnosisScanActive.current = false;
+    setCanCancelDiagnosis(false);
+    setStatus("Cancelling battery diagnosis; keeping the private scan…");
+    void connectionRef.current?.transport.close().catch(() => undefined);
+  };
+
   return <View style={[styles.container, { backgroundColor: colors.background }]}>
-    <Text style={{ color: colors.text, fontWeight: "bold" }}>2024 Chevrolet Equinox EV debug console and capture only</Text>
+    <Button title="Back to garage" color={colors.buttonBackground} disabled={diagnosing} onPress={onBack} />
+    <Text style={{ color: colors.text, fontWeight: "bold" }}>2024 Chevrolet Equinox EV · garage car {entry.id}</Text>
     <Text style={{ color: colors.text }}>{status}</Text>
     <Text style={{ color: colors.muted }}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
     <Text style={{ color: colors.text }}>Unplug the OBD dongle from the car after each check. Disconnecting Bluetooth leaves the dongle powered; it can drain the 12 V battery while the vehicle is off.</Text>
-    <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing} onPress={startScan} />
-    <Button title="Disconnect" color={colors.buttonBackground} disabled={!connection || pending} onPress={() => { teardown("Disconnected by user."); }} />
-    <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting} onPress={() => void connect(item)} />} />
-    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing} />
-    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing} onPress={() => void capture("recording")} />
-    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing} onPress={() => void capture("codes")} />
+    <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing || diagnosing} onPress={startScan} />
+    <Button title="Disconnect" color={colors.buttonBackground} disabled={!connection || pending || diagnosing || capturing} onPress={() => { teardown("Disconnected by user."); }} />
+    <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting || diagnosing} onPress={() => void connect(item)} />} />
+    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing && !diagnosing} />
+    <Button title={`Vehicle Ready and in Park for diagnosis: ${diagnosisReady ? "yes" : "unknown"}`} color={colors.buttonBackground} disabled={diagnosing} onPress={() => { setDiagnosisReady((value) => !value); }} />
+    <Button title="Run battery diagnosis" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing} onPress={() => void diagnose()} />
+    {diagnosing ? <Button title="Cancel battery diagnosis" color={colors.buttonBackground} disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
+    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing} onPress={() => void capture("recording")} />
+    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing} onPress={() => void capture("codes")} />
     {captureStep ? <Text style={{ color: colors.text }}>{captureStep}</Text> : null}
     {captureLast ? <Text style={{ color: colors.muted }}>{captureLast}</Text> : null}
-    <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" />
-    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing} onPress={() => void send()} />
+    <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" editable={!diagnosing} />
+    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing} onPress={() => void send()} />
     {report ? <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{report}</Text></ScrollView> : null}
     <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
   </View>;
 }
 
 const garageFlow = createGarageFlow(garageDocumentStore);
+const batteryHistory = createBatteryReportHistory(batteryReportsDocumentStore, garageFlow);
+const equinoxSignals = importObdbMode22(signalsetJson);
 
 const DIALOG_TITLES: Record<RunFile["slug"], string> = { "phone-console": "Export OBD recording", "codes-report": "Share codes report" };
 const captureFolderFile = () => new File(Paths.document, "capture-folder.txt");
@@ -222,18 +295,27 @@ export function App() {
   const [state, setState] = useState<GarageState>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"garage" | "picker" | "interest" | "console">("garage");
+  const [view, setView] = useState<"garage" | "picker" | "interest" | "console" | "history" | "detail">("garage");
+  const [selectedEntryId, setSelectedEntryId] = useState<string>();
+  const [reportCounts, setReportCounts] = useState<Record<string, number>>({});
+  const [historyReports, setHistoryReports] = useState<readonly BatteryDiagnosisReport[]>([]);
+  const [detail, setDetail] = useState<BatteryDiagnosisReport>();
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState<number>();
   const [tag, setTag] = useState<Ownership>("mine");
   const [interest, setInterest] = useState({ make: "", model: "", year: "", joinBeta: false });
   const [interestSaved, setInterestSaved] = useState(false);
-  const load = () => { setError(""); void garageFlow.load().then(setState, (cause: unknown) => { setError(`Garage load error: ${cause instanceof Error ? cause.message : String(cause)}`); }); };
+  const refreshReports = async (garage: GarageState) => {
+    await batteryHistory.load();
+    const counts = await Promise.all(garage.vehicles.map(async (entry) => [entry.id, (await batteryHistory.list(entry.id)).length] as const));
+    setReportCounts(Object.fromEntries(counts));
+  };
+  const load = () => { setError(""); void garageFlow.load().then(async (garage) => { await refreshReports(garage); setState(garage); }, (cause: unknown) => { setError(`Saved data load error: ${cause instanceof Error ? cause.message : String(cause)}`); }).catch((cause: unknown) => { setError(`Saved data load error: ${cause instanceof Error ? cause.message : String(cause)}`); }); };
   useEffect(load, []);
   const change = async (action: () => Promise<GarageState>, after?: () => void) => {
     setBusy(true); setError("");
-    try { setState(await action()); after?.(); }
+    try { const next = await action(); await refreshReports(next); setState(next); after?.(); }
     catch (cause) { setError(`Garage storage error: ${cause instanceof Error ? cause.message : String(cause)}`); }
     finally { setBusy(false); }
   };
@@ -249,20 +331,38 @@ export function App() {
     setInterest(saved ? { make: saved.make, model: saved.model, year: String(saved.year), joinBeta: saved.joinBeta } : { make: "", model: "", year: "", joinBeta: false });
     setInterestSaved(!!saved); setView("interest");
   };
+  const openHistory = async (id: string) => {
+    setError("");
+    try { const reports = await batteryHistory.list(id); setSelectedEntryId(id); setHistoryReports(reports); setView("history"); }
+    catch (cause) { setError(`Battery report history error: ${cause instanceof Error ? cause.message : String(cause)}`); }
+  };
+  const openSaved = async (report: BatteryDiagnosisReport) => {
+    const reports = await batteryHistory.list(report.garageVehicleId);
+    const persisted = reports.find((item) => item.scannedAt === report.scannedAt && item.recording === report.recording);
+    if (!persisted) throw new Error("Saved diagnosis could not be reopened from private history.");
+    await refreshReports(await garageFlow.load());
+    setSelectedEntryId(report.garageVehicleId); setDetail(persisted); setView("detail");
+  };
 
   if (!state) return <View style={[styles.container, { backgroundColor: colors.background }]}>
     <Text style={title}>Garage</Text><Text style={normal}>{error || "Loading saved garage…"}</Text>
     {error ? <Button title="Retry garage load" onPress={load} /> : null}
   </View>;
 
-  const consoleVehicle = SUPPORTED_VEHICLES.find((item) => item.id === "chevrolet-equinox-ev-2024");
-  if (view === "console" && consoleVehicle && canUseEquinoxConsole(consoleVehicle)) return <View style={{ flex: 1, backgroundColor: colors.background }}>
-    <Button title="Back to garage" onPress={() => { setView("garage"); }} />
-    <EquinoxConsole vehicle={consoleVehicle} />
+  const selectedEntry = state.vehicles.find((entry) => entry.id === selectedEntryId);
+  const consoleVehicle = SUPPORTED_VEHICLES.find((item) => item.id === selectedEntry?.catalogId);
+  if (view === "console" && selectedEntry && consoleVehicle && canUseEquinoxConsole(consoleVehicle)) return <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <EquinoxConsole vehicle={consoleVehicle} entry={selectedEntry} onBack={() => { setView("garage"); }} onSaved={openSaved} />
+  </View>;
+
+  if (view === "detail" && detail && selectedEntry) return <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Button title="Back to report history" onPress={() => { void openHistory(selectedEntry.id); }} />
+    {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+    <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{renderBatteryDiagnosis(detail)}</Text></ScrollView>
   </View>;
 
   return <ScrollView contentContainerStyle={[styles.garage, { backgroundColor: colors.background }]}>
-    <Text style={title}>{view === "garage" ? "Garage" : view === "picker" ? "Add a vehicle" : "Unsupported vehicle interest"}</Text>
+    <Text style={title}>{view === "garage" ? "Garage" : view === "picker" ? "Add a vehicle" : view === "history" ? `Battery reports for car ${selectedEntryId ?? ""}` : "Unsupported vehicle interest"}</Text>
     {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
     {view !== "garage" ? <Button title="Back to garage" onPress={() => { setView("garage"); }} /> : null}
     {view === "garage" ? <>
@@ -274,9 +374,11 @@ export function App() {
         return <View key={entry.id} style={[styles.card, { borderColor: colors.border }]}>
           <Text style={normal}>{vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.tier} · {entry.ownership}</Text>
           <Text style={muted}>{vehicleAvailability(vehicle)}</Text>
+          <Text style={muted}>Battery reports: {String(reportCounts[entry.id] ?? 0)}</Text>
+          <Button title="Report history" disabled={busy} onPress={() => { void openHistory(entry.id); }} />
           <Button title={entry.ownership === "mine" ? "Change to checked" : "Change to mine"} disabled={busy} onPress={() => void change(() => garageFlow.changeOwnership(entry.id, entry.ownership === "mine" ? "checked" : "mine"))} />
-          <Button title="Remove" disabled={busy} onPress={() => void change(() => garageFlow.remove(entry.id))} />
-          {canUseEquinoxConsole(vehicle) ? <Button title="Open 2024 Equinox-only debug console" disabled={busy} onPress={() => { if (canUseEquinoxConsole(vehicle)) setView("console"); }} /> : null}
+          <Button title="Remove" disabled={busy} onPress={() => void change(async () => { await removeGarageVehicleWithReports(garageFlow, batteryHistory, entry.id); return garageFlow.load(); })} />
+          {canUseEquinoxConsole(vehicle) ? <Button title="Open battery diagnosis and debug console" disabled={busy} onPress={() => { setSelectedEntryId(entry.id); setView("console"); }} /> : null}
         </View>;
       })}
       <Button title="Add supported vehicle" disabled={busy} onPress={clearPicker} />
@@ -285,6 +387,14 @@ export function App() {
         <Text style={normal}>{saved.year} {saved.make} {saved.model} · beta interest {saved.joinBeta ? "yes" : "no"}</Text>
         <Text style={muted}>{LOCAL_INTEREST_NOTICE}</Text>
         <Button title="Reopen saved interest" onPress={() => { reopenInterest(saved); }} />
+      </View>)}
+    </> : null}
+    {view === "history" ? <>
+      {historyReports.length === 0 ? <Text style={normal}>No battery reports saved for this car.</Text> : null}
+      {batteryReportRows(historyReports).map((row) => <View key={`${row.report.scannedAt}-${row.report.recording}`} style={[styles.card, { borderColor: colors.border }]}>
+        <Text style={normal}>{row.label}</Text>
+        <Text style={muted}>{row.report.recording}</Text>
+        <Button title="Open report" onPress={() => { setDetail(row.report); setView("detail"); }} />
       </View>)}
     </> : null}
     {view === "picker" ? <>

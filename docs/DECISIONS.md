@@ -164,3 +164,11 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 **Follow-ups (not implemented).** Redact at source in the phone console export, the relay, and `hil:smoke`.
 
 **Refines ADR-014** ("the VIN stays on the device"): committed fixtures carry at most the first 11 VIN characters. **Amends AGENTS.md hard rule 2.**
+
+## ADR-018: Battery diagnosis stays in the garage; PDF export waits for beta (2026-09-24)
+
+**Decision.** The app calls this feature **battery diagnosis**. Tapping Run battery diagnosis starts a fresh read-only scan and saves an internal report under the selected garage vehicle's stable entry ID. The garage opens that car's report history and detail in the app. An entry tagged `checked` uses the same diagnosis as one tagged `mine`. Alpha does not create a separate user-facing report file or PDF, or offer report sharing. Consider PDF export in beta after the in-app report and privacy behavior are verified. Private scan recordings kept for replay and internal report persistence are implementation data, not user-facing exports.
+
+**Evidence and limits.** A report shows only values the scan or a completed charge log supports, with source and signal tier. A snapshot can show SOC, cell observations, 12 V adapter supply and codes where they answer; it does not certify battery health. Capacity says NOT MEASURED until a completed charge log and reviewed estimator exist. Missing or partial replies remain visible as missing evidence. A report never borrows measurements from another garage entry or scan.
+
+**Amends ADR-014 and the Phase 2 plan.** The used-EV positioning and `mine`/`checked` garage distinction remain, while the former “pre-purchase report” label, separate report/share flow, and alpha PDF expectation are superseded. T2.6 builds the in-app report and per-car history; T2.7 covers the `checked` entry flow and remaining diagnosis coverage. Historical specs and verification evidence stay unchanged.

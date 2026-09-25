@@ -24,7 +24,7 @@ export const SUPPORTED_VEHICLES: readonly CatalogVehicle[] = models.flatMap(({ s
 
 export function vehicleAvailability(vehicle: CatalogVehicle): string {
   return vehicle.tier === "verified"
-    ? "Verified model year by a recorded 2024 Equinox EV session; battery data is not shown in this garage."
+    ? "Verified 2024 Equinox EV model year. Battery diagnosis is available after a fresh scan; capacity and health need charge evidence."
     : "Beta model year. Battery data unavailable pending a vehicle profile and live-car checks.";
 }
 

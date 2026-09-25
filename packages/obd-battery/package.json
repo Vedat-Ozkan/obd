@@ -2,6 +2,8 @@
   "name": "obd-battery",
   "private": true,
   "type": "module",
+  "exports": { "./report": "./src/report.ts" },
+  "dependencies": { "obd-core": "workspace:*", "zod": "^4.6.5" },
   "scripts": {
     "test": "vitest run"
   }

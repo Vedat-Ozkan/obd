@@ -7,7 +7,12 @@
     "./transport/relay": "./src/transport/relay.ts",
     "./elm": "./src/elm/reader.ts",
     "./recording": "./src/recording/format.ts",
-    "./report": "./src/report/replay.ts"
+    "./report": "./src/report/replay.ts",
+    "./vehicles": "./src/vehicles/index.ts",
+    "./vehicles/equinox-signalset": "./vehicles/chevrolet-equinox-ev/default.json",
+    "./vehicles/scan": "./src/vehicles/scan.ts",
+    "./elm/session": "./src/elm/session.ts",
+    "./transport/replay": "./src/transport/replay.ts"
   },
   "scripts": {
     "test": "vitest run"

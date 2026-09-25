@@ -134,7 +134,7 @@ src/
   capacity.ts    deterministic capacity estimate: integrated energy / ΔSOC, or charger kWh / ΔSOC (Gate B fallback), with error band
   imbalance.ts   cell spread vs SOC, flags
   twelve-volt.ts 12 V thresholds (sourced)
-  report.ts      BatteryReport and UsedEvReport types; embed the obd-core CodesReport
+  report.ts      BatteryDiagnosisReport: one scan's sourced observations, missing evidence, and embedded obd-core CodesReport
   templates.ts   plain-language text from templates: the offline default and the LLM fallback
   models/        on-device model evaluation (BM4), e.g. a tree ensemble loaded from JSON
 ```
@@ -195,9 +195,9 @@ A read-only allowlist is enforced in the relay, not in prompts: Mode 04 requires
 
 **Codes report (Phase 0):** connect → the app's console capture runner records a fixed list (init, PID 00/20/40 bitmaps, PID 01 readiness, PIDs 21/30/31/4D/4E, Mode 03/07/0A, `020200`; no VIN request) → the frozen recording → `codesReportFromRecording()` (replay through `Elm327Session`) → `buildCodesReport()` → render markdown → share sheet (T0.9).
 
-**Charge session (Phase 2):** logger polls the profile's battery signals into a charge log during a charge → `capacity()` and `imbalance()` → `BatteryReport` → template text → optional `summarize()` → `check()` → display (template on failure).
+**Charge session (Phase 2):** logger polls the profile's battery signals into a charge log during a charge → `capacity()` and `imbalance()` → a supported estimate with its error band can enrich that car's in-app battery diagnosis → optional `summarize()` → `check()` → display (template on failure).
 
-**Used-EV scan (Phase 2):** one snapshot of battery signals, 12 V, and the codes report → `UsedEvReport`; capacity shown only if a logged charge exists.
+**Battery diagnosis (Phase 2):** select a supported garage entry → fresh read-only scan → keep the recording privately → replay that single scan into `BatteryDiagnosisReport` (battery observations, 12 V, codes, provenance and signal tiers) → save a versioned report under the stable garage entry ID → open its in-app history and detail screen. Capacity is NOT MEASURED without a completed charge log; the snapshot makes no battery-health verdict. `mine` and `checked` entries use the same report. Alpha has no report share action or PDF; PDF export is a beta decision (ADR-018).
 
 **Assistant (Phase 2, opt-in):** question → tool calls over the user's stored sessions → answer with cited values → `check()` → display.
 

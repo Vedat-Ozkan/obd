@@ -47,6 +47,11 @@ export interface InitResult {
   response0100: ElmResponse;
 }
 
+export interface InitOptions {
+  /** Called after core's final reply and before the next init command. Throwing aborts init. */
+  onInformationalReply?: (command: "ATI" | "ATDPN" | "ATRV", response: ElmResponse) => void;
+}
+
 export type SessionErrorKind = "timeout" | "closed" | "blocked" | "init";
 
 export class ElmSessionError extends Error {
@@ -102,14 +107,14 @@ export class Elm327Session {
     });
   }
 
-  init(profile: VehicleProfile): Promise<InitResult> {
+  init(profile: VehicleProfile, options: InitOptions = {}): Promise<InitResult> {
     // Runtime check: the profile may come from outside TypeScript, and ATSP<protocol> is written verbatim.
     // Read once: the queued init must use the validated value, not a later (mutated or getter) read.
     const { protocol } = profile;
     if (!PROTOCOLS.includes(protocol)) {
       return Promise.reject(new ElmSessionError("blocked", `ATSP${protocol}`));
     }
-    return this.enqueue("ATZ", () => this.runInit(protocol));
+    return this.enqueue("ATZ", () => this.runInit(protocol, options));
   }
 
   send(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
@@ -260,15 +265,18 @@ export class Elm327Session {
     if (r.kind !== "ok") throw new ElmSessionError("init", cmd, r);
   }
 
-  private async runInit(requested: VehicleProfile["protocol"]): Promise<InitResult> {
+  private async runInit(requested: VehicleProfile["protocol"], options: InitOptions): Promise<InitResult> {
     this.reader.reset();
     // An ATZ answered with an error reset nothing; ATE0 must not follow it (docs/ELM327.md §Write safety).
     const reset = await this.run("ATZ");
     if (reset.kind === "error") throw new ElmSessionError("init", "ATZ", reset);
-    await this.run("ATI");
+    const identity = await this.run("ATI");
+    options.onInformationalReply?.("ATI", identity);
     for (const cmd of ["ATE0", "ATL0", "ATS0", "ATH1", `ATSP${requested}`]) await this.required(cmd);
-    await this.run("ATDPN");
+    const dpn = await this.run("ATDPN");
+    options.onInformationalReply?.("ATDPN", dpn);
     const rv = await this.run("ATRV");
+    options.onInformationalReply?.("ATRV", rv);
     let protocol = requested;
     let response0100 = await this.run("0100");
     if (!answered(response0100) && protocol !== "0") {
