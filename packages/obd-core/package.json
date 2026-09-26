@@ -7,6 +7,8 @@
     "./transport/relay": "./src/transport/relay.ts",
     "./elm": "./src/elm/reader.ts",
     "./recording": "./src/recording/format.ts",
+    "./recording/scrub": "./src/recording/scrub.ts",
+    "./recording/provenance": "./src/recording/provenance.ts",
     "./report": "./src/report/replay.ts",
     "./vehicles": "./src/vehicles/index.ts",
     "./vehicles/equinox-signalset": "./vehicles/chevrolet-equinox-ev/default.json",

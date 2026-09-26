@@ -31,8 +31,10 @@ export interface RunOutcome {
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 /** After a run's recording is frozen: keeps and delivers the recording, and for a codes run builds, keeps and
- *  delivers the report. Never throws. Every file ends in exactly one status sentence. */
-export async function finishRun(kind: "recording" | "codes", jsonl: string, heading: ReportHeading, targets: SaveTargets): Promise<RunOutcome> {
+ *  delivers the report. Never throws. Every file ends in exactly one status sentence. `upload` (T2.9 beta outbox) gets
+ *  the recording only, after every save sentence is settled; its sentence, or its rejection reason, is appended. */
+export async function finishRun(kind: "recording" | "codes", jsonl: string, heading: ReportHeading, targets: SaveTargets,
+  upload?: (jsonl: string) => Promise<string | undefined>): Promise<RunOutcome> {
   const files: RunFile[] = [];
   const names = new Map<RunFile, string>();
   const sentences = new Map<RunFile, string>();
@@ -68,6 +70,11 @@ export async function finishRun(kind: "recording" | "codes", jsonl: string, head
       catch (error) { sentences.set(file, `NOT SAVED ${name}: ${message(error)}. A copy stays in app storage (captures/${name}).`); }
     }
   }
-  const status = [lead, ...files.map((file) => sentences.get(file))].filter((sentence) => sentence !== undefined).join(" ");
+  let beta: string | undefined;
+  if (upload) {
+    try { beta = await upload(jsonl); }
+    catch (error) { beta = `Not queued for beta upload: ${message(error)}.`; }
+  }
+  const status = [lead, ...files.map((file) => sentences.get(file)), beta].filter((sentence) => sentence !== undefined).join(" ");
   return report === undefined ? { status } : { report, status };
 }
