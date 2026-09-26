@@ -16,7 +16,8 @@
           "isBackgroundEnabled": false,
           "neverForLocation": false
         }
-      ]
+      ],
+      "./plugins/withChargeLogService"
     ],
     "extra": {
       "eas": {

@@ -1,15 +1,18 @@
 import { BleManager } from "react-native-ble-plx";
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import BackgroundService from "react-native-background-actions";
 import { useEffect, useRef, useState } from "react";
 import type { Transport } from "obd-core/transport";
 import { importObdbMode22 } from "obd-core/vehicles";
 import signalsetJson from "obd-core/vehicles/equinox-signalset";
 import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
-import { Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { AppState, Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
 import { runAndSaveBatteryDiagnosis } from "./src/batteryDiagnosisFlow.js";
+import { runChargeLog, type StreamTargets } from "./src/chargeLogger.js";
+import { createChargeRunRecord } from "./src/chargeRun.js";
 import { createBatteryReportHistory } from "./src/batteryReports.js";
 import { batteryReportsDocumentStore, keepPrivateBatteryScan } from "./src/batteryReportsDocumentStore.js";
 import { batteryReportRows, removeGarageVehicleWithReports } from "./src/batteryScan.js";
@@ -79,6 +82,11 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
   const diagnosisInterruption = useRef<"cancelled" | "disconnected" | undefined>(undefined);
   const diagnosisCloseExpected = useRef(false);
   const [canCancelDiagnosis, setCanCancelDiagnosis] = useState(false);
+  // A charge log outlives this screen: its foreground-service task owns the transport and the manager until it ends (chargeRun).
+  const [chargeLogging, setChargeLogging] = useState(() => chargeRun.current() !== undefined);
+  const mounted = useRef(true);
+  // Decision 21: set while the notification permission and the picker are open, before the run record is begun.
+  const chargeStarting = useRef(false);
 
   // A session exists only while a run records, so closing it freezes the buffer: no rx lands after the run or a disconnect.
   const endRecording = (): string | undefined => {
@@ -111,12 +119,18 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
   };
 
   useEffect(() => {
+    mounted.current = true;
+    let runLine = false;
+    const unmountRun = chargeRun.mount((line, running) => { runLine = true; setStatus(line); setChargeLogging(running); });
     void requestBlePermission().then((granted) => {
       setPermitted(granted);
+      if (runLine) return; // the running log's status, or its final line, stays on screen
       setStatus(granted ? "Bluetooth permission granted. Scan for the Veepeak." : "Bluetooth permission was denied; scanning is disabled. Grant it in Android settings and reopen the app.");
     }, (error: unknown) => { setStatus(`Permission error: ${error instanceof Error ? error.message : String(error)}`); });
     return () => {
+      mounted.current = false;
       stopScan.current?.(); disconnectSubscription.current?.remove(); session.current?.close(); debugSession.current?.close();
+      if (!unmountRun()) return; // the run's own end closes the transport and destroys the manager
       void connectionRef.current?.transport.close().catch(() => undefined); void manager.destroy();
     };
   }, [manager]);
@@ -149,7 +163,7 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
     return session.current;
   };
   const send = async () => {
-    if (!connection) return;
+    if (!connection || chargeStarting.current) return;
     if (!debugSession.current) {
       const scratch = new RecordingBuffer();
       scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
@@ -164,6 +178,7 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
   };
   const capture = async (kind: "recording" | "codes") => {
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox capture unavailable for this model year."); return; }
+    if (chargeStarting.current) return;
     closeDebugSession();
     const active = startRecording();
     if (!active) return;
@@ -193,7 +208,7 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
 
   const diagnose = async () => {
     const active = connectionRef.current;
-    if (!active || diagnosingRef.current || capturing || pending || !canUseEquinoxConsole(vehicle)) return;
+    if (!active || diagnosingRef.current || chargeRun.current() || chargeStarting.current || capturing || pending || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
     diagnosisInterruption.current = undefined;
     diagnosisCloseExpected.current = false;
@@ -223,6 +238,71 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
       await active.transport.close().catch(() => undefined);
     }
   };
+  // docs/specs/T2.4-charge-logger.md Stage B2: one tap; the run stops and saves by itself.
+  const chargeLog = async () => {
+    const active = connectionRef.current;
+    if (!active || chargeRun.current() || chargeStarting.current || diagnosingRef.current || capturing || pending || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
+    closeDebugSession();
+    const release = async (line: string) => {
+      connectionRef.current = undefined; setConnection(undefined);
+      // The logger closes its own link; this also covers a run that never connected (its log file could not be created).
+      await active.transport.close().catch(() => undefined);
+      chargeRun.end(line);
+    };
+    const notStarted = (line: string) => { chargeStarting.current = false; setStatus(line); };
+    chargeStarting.current = true; setStatus("Starting the charge log…");
+    // A denial only hides the notification; the run still starts.
+    if (Platform.OS === "android" && Platform.Version >= 33) await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
+    // Resolved now, in the foreground, so the run never needs a picker at its end.
+    try { await phoneTargets.folder(); }
+    catch (error) {
+      notStarted(`Charge log not started: no capture folder (${error instanceof Error ? error.message : String(error)}).`);
+      return;
+    }
+    // Decision 21: begun only now; a picker that never settles (activity destroyed) leaves no record behind.
+    // An unmounted console's cleanup already closed the link and destroyed the manager.
+    if (!mounted.current) { chargeStarting.current = false; return; }
+    if (connectionRef.current !== active) {
+      notStarted("Charge log not started: the dongle disconnected. Reconnect and try again.");
+      return;
+    }
+    const run = chargeRun.begin(active, manager, "Starting the charge log…");
+    chargeStarting.current = false;
+    // The logger reconnects by itself after a link loss; the screen's teardown must not close its transport.
+    disconnectSubscription.current?.remove(); disconnectSubscription.current = undefined;
+    const logRecording = new RecordingBuffer();
+    logRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    let connected = false;
+    let notified = 0;
+    const task = async () => {
+      const result = await runChargeLog({
+        connect: async () => {
+          if (!connected) { connected = true; return active.transport; }
+          return (await connectVeepeak(manager, active.deviceId)).transport;
+        },
+        recording: logRecording,
+        signals: equinoxSignals,
+        now: () => Date.now() / 1000,
+        sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+        onStatus: (line) => {
+          chargeRun.status(line);
+          if (Date.now() - notified < NOTIFICATION_INTERVAL_MS) return;
+          void BackgroundService.updateNotification({ taskDesc: line }).then(() => { notified = Date.now(); }, () => undefined);
+        },
+        stream: phoneTargets,
+        stopRequested: () => run.stop,
+      });
+      try {
+        if (result.file !== "" && result.saved.includes("NOT SAVED")) { deferredShare = result.file; shareDeferred(); }
+        await release(`Charge log stopped: ${result.stopReason} (${result.complete ? "complete" : "partial"}). ${result.saved} Reconnect for another run.`);
+      } finally { await BackgroundService.stop(); }
+    };
+    try {
+      await BackgroundService.start(task, { taskName: "charge-log", taskTitle: "Charge log running", taskDesc: "Starting the charge log.", taskIcon: { name: "ic_launcher", type: "mipmap" }, foregroundServiceType: ["connectedDevice"] });
+    } catch (error) {
+      await release(`Charge log not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}). Reconnect before another run.`);
+    }
+  };
   const cancelDiagnosis = () => {
     if (!diagnosingRef.current || !diagnosisScanActive.current) return;
     diagnosisInterruption.current = "cancelled";
@@ -233,24 +313,29 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
   };
 
   return <View style={[styles.container, { backgroundColor: colors.background }]}>
-    <Button title="Back to garage" color={colors.buttonBackground} disabled={diagnosing} onPress={onBack} />
+    <Button title="Back to garage" color={colors.buttonBackground} disabled={diagnosing || chargeLogging} onPress={onBack} />
     <Text style={{ color: colors.text, fontWeight: "bold" }}>2024 Chevrolet Equinox EV · garage car {entry.id}</Text>
     <Text style={{ color: colors.text }}>{status}</Text>
     <Text style={{ color: colors.muted }}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
     <Text style={{ color: colors.text }}>Unplug the OBD dongle from the car after each check. Disconnecting Bluetooth leaves the dongle powered; it can drain the 12 V battery while the vehicle is off.</Text>
-    <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing || diagnosing} onPress={startScan} />
-    <Button title="Disconnect" color={colors.buttonBackground} disabled={!connection || pending || diagnosing || capturing} onPress={() => { teardown("Disconnected by user."); }} />
+    <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing || diagnosing || chargeLogging} onPress={startScan} />
+    <Button title="Disconnect" color={colors.buttonBackground} disabled={!chargeLogging && (!connection || pending || diagnosing || capturing)} onPress={() => {
+      // During a charge log, Disconnect only asks the run to stop; the run saves the partial log and closes the link itself.
+      if (chargeRun.current()) { chargeRun.requestStop("Stopping the charge log after the current command…"); return; }
+      teardown("Disconnected by user.");
+    }} />
     <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting || diagnosing} onPress={() => void connect(item)} />} />
-    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing && !diagnosing} />
+    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing && !diagnosing && !chargeLogging} />
     <Button title={`Vehicle Ready and in Park for diagnosis: ${diagnosisReady ? "yes" : "unknown"}`} color={colors.buttonBackground} disabled={diagnosing} onPress={() => { setDiagnosisReady((value) => !value); }} />
-    <Button title="Run battery diagnosis" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing} onPress={() => void diagnose()} />
+    <Button title="Run battery diagnosis" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void diagnose()} />
     {diagnosing ? <Button title="Cancel battery diagnosis" color={colors.buttonBackground} disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
-    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing} onPress={() => void capture("recording")} />
-    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing} onPress={() => void capture("codes")} />
+    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("recording")} />
+    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("codes")} />
+    <Button title="Run charge log" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void chargeLog()} />
     {captureStep ? <Text style={{ color: colors.text }}>{captureStep}</Text> : null}
     {captureLast ? <Text style={{ color: colors.muted }}>{captureLast}</Text> : null}
     <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" editable={!diagnosing} />
-    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing} onPress={() => void send()} />
+    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void send()} />
     {report ? <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{report}</Text></ScrollView> : null}
     <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
   </View>;
@@ -263,8 +348,12 @@ const equinoxSignals = importObdbMode22(signalsetJson);
 const DIALOG_TITLES: Record<RunFile["slug"], string> = { "phone-console": "Export OBD recording", "codes-report": "Share codes report" };
 const captureFolderFile = () => new File(Paths.document, "capture-folder.txt");
 
+const NOTIFICATION_INTERVAL_MS = 30_000; // spec T2.4 B2: the notification text changes at most every 30 s
+const COPY_CHUNK_BYTES = 1 << 20; // a charge log is tens of MB; never read it into one string
+
 // docs/specs/T0.9b-one-and-done-captures.md: a private copy under captures/, then the SAF folder picked once, else the share sheet.
-const phoneTargets: SaveTargets = {
+// T2.4 B2 adds the charge log's streaming save (StreamTargets): append to the private file, then a chunked copy to the folder.
+const phoneTargets: SaveTargets & StreamTargets = {
   keep(file) {
     const dir = new Directory(Paths.document, "captures");
     dir.create({ intermediates: true, idempotent: true });
@@ -288,7 +377,42 @@ const phoneTargets: SaveTargets = {
     try { const remembered = captureFolderFile(); if (remembered.exists) remembered.delete(); } catch { /* see above */ }
   },
   share: (name, file) => Sharing.shareAsync(new File(Paths.document, "captures", name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
+  create() {
+    const dir = new Directory(Paths.document, "captures");
+    dir.create({ intermediates: true, idempotent: true });
+    const stem = `${localDate()}-charge-log`;
+    let suffix = 1; let kept = new File(dir, `${stem}.jsonl`);
+    while (kept.exists) { suffix++; kept = new File(dir, `${stem}-${String(suffix)}.jsonl`); }
+    kept.create(); // throws if the file exists; never overwrite a capture
+    return kept.name;
+  },
+  append(name, text) { new File(Paths.document, "captures", name).write(text, { append: true }); },
+  async copyToFolder(name) {
+    const remembered = captureFolderFile();
+    if (!remembered.exists) throw new Error("no capture folder is remembered");
+    const dir = new Directory((await remembered.text()).trim());
+    const source = new File(Paths.document, "captures", name).open(FileMode.ReadOnly);
+    try {
+      const target = dir.createFile(name, "application/x-ndjson").open(FileMode.Append);
+      try { for (let chunk = source.readBytes(COPY_CHUNK_BYTES); chunk.length > 0; chunk = source.readBytes(COPY_CHUNK_BYTES)) target.writeBytes(chunk); }
+      finally { target.close(); }
+    } finally { source.close(); }
+  },
 };
+
+// A charge log whose folder copy failed offers its private copy once, the next time the app is in the foreground.
+// share() only reads the file's name, MIME type and slug (the dialog title for a JSONL recording); content is unused.
+let deferredShare: string | undefined;
+const shareDeferred = () => {
+  const name = deferredShare;
+  if (name === undefined || AppState.currentState !== "active") return;
+  deferredShare = undefined;
+  void phoneTargets.share(name, { slug: "phone-console", extension: ".jsonl", mimeType: "application/x-ndjson", content: "" }).catch(() => undefined);
+};
+AppState.addEventListener("change", shareDeferred);
+
+// Decision 20: one record per JS runtime, so a console recreated with the activity still sees and stops the run.
+const chargeRun = createChargeRunRecord<BleConnection, BleManager>();
 
 export function App() {
   const colors = palettes[useColorScheme() === "dark" ? "dark" : "light"];
