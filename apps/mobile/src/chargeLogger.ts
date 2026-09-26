@@ -2,15 +2,14 @@ import { Elm327Session, ElmSessionError, type ElmResponse, type SendOptions } fr
 import { latin1Decode } from "obd-core/recording";
 import type { Transport } from "obd-core/transport";
 import { genericProfile, scanMode22Profile, type ObdbMode22Signal } from "obd-core/vehicles";
-import { CHARGE_LOG_PROFILE, ChargeLogBuilder, chargePhases, isRecoveryGap, MAX_GAP_S, POST_REST_S, PRE_REST_S, REST_CURRENT_A, span, type ChargePhases, type Point, type Window } from "obd-battery/session";
+import { bridgedRecoveries, CHARGE_CURRENT_A, CHARGE_LOG_PROFILE, ChargeLogBuilder, chargePhases, CYCLE_S, gateFailures, isRecoveryGap, MAX_GAP_S, POST_REST_S, PRE_REST_S, REST_CURRENT_A, span, TRANSITION_S, type ChargePhases, type Point, type Window } from "obd-battery/session";
 import type { RecordingBuffer } from "./recording.js";
 
 // Behavior: docs/specs/T2.4-charge-logger.md §Interfaces (Stage B1), §Policy values, §Sources (init, per-cycle
 // setup and reply handling), Decisions 3 and 9. Read-only: the only commands are genericProfile's init and
 // scanMode22Profile(CHARGE_LOG_PROFILE), both through Elm327Session's allowlist.
 
-// Policy values (spec §Policy values; Decision 3).
-export const CYCLE_S = 5;
+// Policy values (spec §Policy values; Decision 3). CYCLE_S lives in obd-battery/session, which Decision 22's group-set limit uses.
 export const FLUSH_S = 30;
 export const RECOVERY_WAIT_S = 5;
 export const SILENT_STOP_S = 600;
@@ -45,7 +44,7 @@ export interface StreamTargets {
 export interface ChargeLogResult {
   /** Private name. */
   file: string;
-  /** True only when a post-charge rest of POST_REST_S was logged. */
+  /** True only when a post-charge rest of POST_REST_S was logged and the replay gate's conditions pass (Decision 24). */
   complete: boolean;
   stopReason: string;
   /** One status sentence: saved to folder, or NOT SAVED to folder with the private path. */
@@ -131,23 +130,38 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
   let preRestDoneAt: number | undefined;
   let phases: ChargePhases | undefined;
   let complete = false;
+  /** Decision 25: the time of the last charging-class current sample. */
+  let lastCharging: number | undefined;
+  /** Decision 25: why the post-charge rest cannot pass as the log stands, once a charge window exists. */
+  let unpassable: string | undefined;
+  /** Decision 24: the gate's failed conditions once the post-charge rest is logged; a logged rest with any is partial. */
+  let gateFailed: string[] = [];
   // A function, not the variable inline: TypeScript keeps the declaration's narrowing across the closures that set it.
   const isComplete = (): boolean => complete;
 
-  /** After each cycle: the newest current samples, the phases, and the status line. */
+  /** After each cycle, also one a failure cut short (Decision 22): the newest current samples, the phases, and the status line. */
   const update = (): string => {
     const log = builder.log();
+    const bridged = bridgedRecoveries(log.current, log.recoveries);
     for (const point of log.current.slice(seen)) {
       if (Math.abs(point.value) > REST_CURRENT_A) restRun = undefined;
-      else if (restRun !== undefined && previous !== undefined && (span(previous.t, point.t) <= MAX_GAP_S || isRecoveryGap(previous.t, point.t, log.recoveries))) restRun.end = point.t;
+      else if (restRun !== undefined && previous !== undefined && (span(previous.t, point.t) <= MAX_GAP_S || isRecoveryGap(previous.t, point.t, bridged))) restRun.end = point.t;
       else restRun = { start: point.t, end: point.t };
+      if (point.value <= -CHARGE_CURRENT_A) lastCharging = point.t;
       previous = point;
       lastCurrent = point.t;
     }
     seen = log.current.length;
     phases = chargePhases(log);
     const post = phases.postRestRun;
-    complete = post !== undefined && span(post.start, post.end) >= POST_REST_S;
+    const logged = post !== undefined && span(post.start, post.end) >= POST_REST_S;
+    gateFailed = logged ? gateFailures(phases) : [];
+    complete = logged && gateFailed.length === 0;
+    // Decision 25: stopFor acts on this only TRANSITION_S after the last charging sample, while the windows can still move.
+    const last = log.current.at(-1);
+    unpassable = phases.charge === undefined ? undefined
+      : post === undefined ? `no post-charge rest within ${String(TRANSITION_S)} s of the charge`
+      : !logged && last !== undefined && last.t > post.end ? "post-charge rest interrupted" : undefined;
     if (phases.charge === undefined && preRestDoneAt === undefined && restRun !== undefined && span(restRun.start, restRun.end) >= PRE_REST_S) preRestDoneAt = restRun.end;
     if (post !== undefined) return `Charge done. Resting ${clock(span(post.start, post.end))} of ${clock(POST_REST_S)}.`;
     if (phases.charge !== undefined) return `Charging. ${clock(span(phases.charge.start, phases.charge.end))} logged.`;
@@ -160,6 +174,8 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     const elapsed = recording.elapsed();
     if (deps.stopRequested()) return "disconnect pressed";
     if (complete) return "post-charge rest logged";
+    if (gateFailed.length > 0) return `post-charge rest logged; gate FAIL: ${gateFailed.join("; ")}`;
+    if (unpassable !== undefined && lastCharging !== undefined && elapsed - lastCharging >= TRANSITION_S) return unpassable;
     if (deps.now() - start >= MAX_RUN_S) return "16 h limit reached";
     if (elapsed - lastCurrent >= SILENT_STOP_S) return "no current for 10 min";
     if (preRestDoneAt !== undefined && phases?.charge === undefined && elapsed - preRestDoneAt >= WAIT_FOR_CHARGE_S) return "no charge within 60 min after the pre-charge rest";
@@ -232,6 +248,8 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
         complete = false;
         break;
       }
+      // Decision 22: the samples decoded before the failure count, so "no current for 10 min" never fires while current is read.
+      update();
       reason = reasonFor(failure);
       if (reason === "disconnect") { await link.close(); link = undefined; }
       deps.onStatus(`Lost the ELM327 (${message(failure)}). New session in ${String(RECOVERY_WAIT_S)} s.`);

@@ -5,10 +5,9 @@ import { parseRecording, type RecordingLine } from "../../obd-core/src/recording
 import { importObdbMode22 } from "../../obd-core/src/vehicles/obdb/import.js";
 import { BMS_LABEL, bmsEnergyCapacity, INTEGRATED_LABEL, integratedCurrentCapacity, powerCheck, type CapacityEstimate } from "../src/capacity.js";
 import { groupImbalance } from "../src/imbalance.js";
-import { chargeLogFromRecording, chargePhases, largestGap, MAX_GAP_S, POST_REST_S, span, type ChargePhases, type Window } from "../src/session.js";
+import { chargeLogFromRecording, chargePhases, gapText, gateFailures, largestGap, num, shortPostRest, type ChargePhases, type Window } from "../src/session.js";
 
 // Layout: docs/specs/T2.4-charge-logger.md §Summary artifact. `num` is the convention in src/report.ts (4 decimals).
-const num = (value: number) => String(Math.round(value * 10000) / 10000);
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
 /** BM2 selection threshold, printed but not enforced (docs/ML.md §Methods). */
@@ -16,7 +15,6 @@ const BM2_MIN_DELTA_SOC = 30;
 
 const window = (name: string, w: Window | undefined, extra = "") =>
   w === undefined ? `${name}: not found` : `${name}: t=${num(w.start)}–${num(w.end)} (${num(w.end - w.start)} s)${extra}`;
-const gapText = (gap: { seconds: number; at: number }) => `${num(gap.seconds)} s at t=${num(gap.at)}`;
 /** Decision 19: recovery gaps are counted and printed, never a failed condition. */
 const recoveryText = (gaps: ChargePhases["recoveryGaps"]) =>
   gaps.length === 0 ? "recovery gaps: 0" : `recovery gaps: ${String(gaps.length)}, longest ${num(Math.max(...gaps.map((g) => g.seconds)))} s`;
@@ -30,13 +28,6 @@ function capacityLines(estimate: CapacityEstimate): string[] {
     `  Bounded terms (worst case, added linearly): ${estimate.terms.map((t) => `${t.name} ${num(t.value)} ${t.unit}`).join("; ")}`,
     `  Unbounded: ${estimate.unbounded.join("; ")}`,
   ];
-}
-
-/** Decision 10: an uncut post-charge rest run shorter than POST_REST_S is a failed condition for the gate and BM2 selection. */
-function shortPostRest(phases: ChargePhases): string | undefined {
-  const rest = phases.postRestRun;
-  if (rest === undefined || span(rest.start, rest.end) >= POST_REST_S) return undefined;
-  return `post-charge rest ${num(span(rest.start, rest.end))} s < ${String(POST_REST_S)} s`;
 }
 
 function bm2Line(estimate: CapacityEstimate, phases: ChargePhases): string {
@@ -75,14 +66,7 @@ export async function chargeLogSummary(lines: readonly RecordingLine[], recordin
     return inside.reduce((sum, p) => sum + p.value, 0) / inside.length;
   })();
 
-  const failed = [
-    phases.preRest ? undefined : "no pre-charge rest window",
-    phases.charge ? undefined : "no charge window",
-    phases.postRest ? undefined : "no post-charge rest window",
-    shortPostRest(phases),
-    phases.currentGap.seconds > MAX_GAP_S ? `largest current gap ${gapText(phases.currentGap)} > ${String(MAX_GAP_S)} s` : undefined,
-    phases.groupGap.seconds > MAX_GAP_S ? `largest group-set gap ${gapText(phases.groupGap)} > ${String(MAX_GAP_S)} s` : undefined,
-  ].filter((f) => f !== undefined);
+  const failed = gateFailures(phases);
   const sessions = log.sessions ?? [];
   const dropped = log.droppedGroupSets;
   const incomplete = dropped.filter((d) => d.reason === "incomplete").length;

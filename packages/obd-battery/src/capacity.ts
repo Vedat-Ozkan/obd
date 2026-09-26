@@ -1,4 +1,4 @@
-import { isRecoveryGap, largestGap, MAX_GAP_S, span, type ChargeLog, type ChargePhases, type Point } from "./session.js";
+import { bridgedRecoveries, isRecoveryGap, largestGap, MAX_GAP_S, span, type ChargeLog, type ChargePhases, type Point } from "./session.js";
 
 // Formulas and labels: docs/specs/T2.4-charge-logger.md §Estimates and error budgets (ADR-016).
 
@@ -48,7 +48,9 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
   if (start === undefined || end === undefined) return { status: "not-estimated", method, reason: "no SOC sample in a rest window" };
   const inside = log.current.filter((p) => p.t > start.t && p.t < end.t);
   const samples = [{ t: start.t, value: currentAt(log.current, start.t) }, ...inside, { t: end.t, value: currentAt(log.current, end.t) }];
-  const gap = largestGap(samples, undefined, log.recoveries);
+  // Decision 22: only bridged recoveries, the same ones the windows were built with.
+  const bridged = bridgedRecoveries(log.current, log.recoveries);
+  const gap = largestGap(samples, undefined, bridged);
   if (gap.seconds > MAX_GAP_S) return { status: "not-estimated", method, reason: `current gap of ${String(gap.seconds)} s at t=${String(gap.at)}` };
   const deltaSoc = end.value - start.value;
   if (deltaSoc <= 0) return { status: "not-estimated", method, reason: `SOC did not rise (${String(start.value)} % to ${String(end.value)} %)` };
@@ -60,7 +62,7 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
     ampSeconds += ((samples[i].value + samples[i - 1].value) / 2) * dt;
     spread += Math.abs(samples[i].value - samples[i - 1].value) * dt;
     // Decision 19: the current during a recovery gap was not observed; bound it by the larger |I| on either side.
-    if (isRecoveryGap(samples[i - 1].t, samples[i].t, log.recoveries)) {
+    if (isRecoveryGap(samples[i - 1].t, samples[i].t, bridged)) {
       const value = (Math.max(Math.abs(samples[i - 1].value), Math.abs(samples[i].value)) * span(samples[i - 1].t, samples[i].t)) / 3600;
       recoveries.push({ name: `recovery gap at t=${String(samples[i - 1].t)}`, value, unit: "Ah" });
     }

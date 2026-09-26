@@ -1,4 +1,4 @@
-// T2.4 Stage B1 failure modes 1–13, the Decision 16 error split and Decisions 17–19: docs/specs/T2.4-charge-logger.md §Verification, Stage B1. Each run drives
+// T2.4 Stage B1 failure modes 1–13, the Decision 16 error split and Decisions 17–19 and 22–25: docs/specs/T2.4-charge-logger.md §Verification, Stage B1. Each run drives
 // runChargeLog against a fake ELM on a fake clock; the flushed file is the artifact (/tmp/t2.4-b1-<case>.jsonl).
 // Everything the fake ELM answers is synthetic. Its reply encodings follow the spec's §Sources scalings.
 // @ts-expect-error Node built-in types are not part of the mobile target.
@@ -8,7 +8,7 @@ import { latin1Decode, latin1Encode, parseRecording, type RecordingLine } from "
 import type { Transport } from "obd-core/transport";
 import { importObdbMode22 } from "obd-core/vehicles";
 import signalsetJson from "obd-core/vehicles/equinox-signalset";
-import { ChargeLogBuilder, chargeLogFromRecording, chargePhases, largestGap, MAX_GAP_S, POST_REST_S, RECOVERY_GAP_S, span, type ChargeLog, type ChargePhases } from "obd-battery/session";
+import { ChargeLogBuilder, chargeLogFromRecording, chargePhases, CYCLE_S, largestGap, MAX_GAP_S, MAX_RECOVERIES_PER_RUN, POST_REST_S, PRE_REST_S, RECOVERY_GAP_S, span, TRANSITION_S, type ChargeLog, type ChargePhases } from "obd-battery/session";
 import { integratedCurrentCapacity } from "../../../packages/obd-battery/src/capacity.js";
 import { allowedCommand } from "../../../packages/obd-core/src/elm/guard.js";
 import { MAX_RUN_S, RECOVERY_WAIT_S, runChargeLog, SILENT_STOP_S, WAIT_FOR_CHARGE_S, type ChargeLogResult, type StreamTargets } from "../src/chargeLogger.js";
@@ -497,11 +497,14 @@ for (const [probe, command, first] of [["K", "22 2AE3", missingCf], ["L", "22 24
   }, SLOW);
 }
 
+/** Decision 22: the charge current steps from CHARGE to this while the recovery gap is open, so max(|I|) and min(|I|) differ. */
+const STEP = -30;
+
 it("Decision 19: a timeout recovery during the charge widens the integrated-current band by max(|I|) x gap / 3600 Ah", async () => {
   const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
   let fired = false;
   const r = await run("recovery-charge", {
-    amps: happyAmps,
+    amps: (s) => (s >= 875 && s < 1020 ? STEP : happyAmps(s)),
     soc: (s) => (s < 720 ? 100 : s < 1020 ? 100 + Math.floor((s - 720) / 6) : 150),
     inject: (command, s) => { if (command === "22 2885" && s >= 870 && !fired) { fired = true; return null; } return undefined; },
   });
@@ -515,7 +518,9 @@ it("Decision 19: a timeout recovery during the charge widens the integrated-curr
   const gap = span(before.t, next.t);
   expect(gap).toBeGreaterThan(MAX_GAP_S);
   expect(phases.recoveryGaps).toEqual([{ seconds: gap, at: before.t }]);
-  const term = (Math.max(Math.abs(before.value), Math.abs(next.value)) * gap) / 3600;
+  // Decision 22: different |I| on each side; the term uses the larger one, the step after the gap.
+  expect([before.value, next.value]).toEqual([CHARGE, STEP]);
+  const term = (Math.abs(STEP) * gap) / 3600;
 
   const estimate = integratedCurrentCapacity(log, phases);
   if (estimate.status !== "estimated") throw new Error(estimate.reason);
@@ -532,7 +537,8 @@ it("Decision 19: a timeout recovery during the charge widens the integrated-curr
   expect(estimate.band - without).toBeCloseTo((Math.abs(estimate.value) * term) / Math.abs(input("Q")), 12);
 }, SLOW);
 
-it("Decision 19: a recovery gap over 20 s still ends the post-charge rest run; the run is not complete and the gate fails", async () => {
+it("Decision 19: a recovery gap over 20 s still ends the post-charge rest run; the run stops as interrupted (Decision 23) and the gate fails", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
   const lost: Plan = { amps: happyAmps, inject: (command, s) => (s >= 1500 && command === "22 2414" ? "lost" : undefined) };
   const r = await run("recovery-long", { amps: happyAmps }, {
     connect: (n, clock) => {
@@ -540,20 +546,294 @@ it("Decision 19: a recovery gap over 20 s still ends the post-charge rest run; t
       if (n <= 4) throw new Error("dongle not found");
       return new FakeElm({ amps: happyAmps }, clock);
     },
-    stopAt: 1020 + POST_REST_S + 60,
   });
   expect(boundaries(r.lines)).toEqual(["start", "disconnect"]);
-  expect(r.result).toMatchObject({ complete: false, stopReason: "disconnect pressed" });
-  const { log, phases } = await replay(r.stream.content);
+  expect(r.result).toMatchObject({ complete: false, stopReason: "post-charge rest interrupted" });
+  const { log, phases } = await expectSameLog(r, logs);
   // The gap is not skipped as a recovery gap, so it ends the post-charge rest run before the boundary.
   const boundary = r.lines.find((l) => l.dir === "meta" && l.reason === "disconnect")?.t ?? NaN;
   expect(largestGap(log.current, undefined, log.recoveries).seconds).toBeGreaterThan(RECOVERY_GAP_S);
   expect(phases.postRestRun?.end).toBeLessThan(boundary);
+  // Decision 23: it stops in the first cycle after the split, not at the 16 h limit.
+  expect(r.endS).toBeLessThan(boundary + 3 * CYCLE_S);
   expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: .*post-charge rest [\d.]+ s < 1800 s/);
 }, SLOW);
 
-/** Failure mode 13: the log the live stop decision used equals the replay of the flushed file, and the replay gate passes. */
-async function expectLiveEqualsReplay(r: Run, logs: { mock: { results: { value: unknown }[] }; mockRestore(): void }): Promise<{ log: ChargeLog; phases: ChargePhases }> {
+/** The gap between the last sample before `t` and the first after it. */
+function gapAcross(samples: readonly { t: number }[], t: number): { seconds: number; at: number } {
+  const before = samples.filter((p) => p.t < t).at(-1);
+  const next = samples.find((p) => p.t > t);
+  if (before === undefined || next === undefined) throw new Error(`no samples around t=${String(t)}`);
+  return { seconds: span(before.t, next.t), at: before.t };
+}
+const boundaryTimes = (lines: readonly RecordingLine[]) => lines.filter((l) => isBoundary(l) && l.dir === "meta" && l.reason !== "start").map((l) => l.t);
+
+// Decision 22 (a): the B1b review's PROBE-B2. The link drops at 22 2AF5 and two reconnects fail: the current gap is under
+// RECOVERY_GAP_S, and the group-set gap, which also lost the cycle in flight, runs one cycle longer.
+it("Decision 22 (a): a link loss on 22 2AF5 with two failed reconnects in the post-charge rest stops complete; live equals replay and the gate passes", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const lost: Plan = { amps: happyAmps, inject: (command, s) => (s >= 1500 && command === "22 2AF5" ? "lost" : undefined) };
+  const r = await run("recovery-link-2AF5", { amps: happyAmps }, {
+    connect: (n, clock) => {
+      if (n === 1) return new FakeElm(lost, clock);
+      if (n <= 3) throw new Error("dongle not found");
+      return new FakeElm({ amps: happyAmps }, clock);
+    },
+  });
+  expect(r.connects).toBe(4);
+  expect(boundaries(r.lines)).toEqual(["start", "disconnect"]);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { log, phases } = await expectLiveEqualsReplay(r, logs);
+  const [boundary] = boundaryTimes(r.lines);
+  const current = gapAcross(log.current, boundary);
+  const groups = gapAcross(log.groups, boundary);
+  expect(current.seconds).toBeGreaterThan(MAX_GAP_S);
+  expect(current.seconds).toBeLessThanOrEqual(RECOVERY_GAP_S);
+  expect(groups.seconds).toBeGreaterThan(RECOVERY_GAP_S);
+  expect(groups.seconds).toBeLessThanOrEqual(RECOVERY_GAP_S + CYCLE_S);
+  expect(phases.recoveryGaps).toEqual([current]);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS \(.*, recovery gaps: 1, longest [\d.]+ s\)$/);
+}, SLOW);
+
+// Decision 22 (b): one timeout recovery at each of four cycles in the post-charge rest. The 4th gap ends the rest run.
+it("Decision 22 (b): a 4th recovery gap in the post-charge rest ends the run; the logger stops as interrupted (Decision 23) and the gate fails", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const at = [1200, 1300, 1400, 1500];
+  const fired = new Set<number>();
+  const r = await run("recovery-rest-4", {
+    amps: happyAmps,
+    inject: (command, s) => {
+      const t = at.find((a) => s >= a && s < a + 50);
+      if (command !== "22 2414" || t === undefined || fired.has(t)) return undefined;
+      fired.add(t);
+      return null;
+    },
+  });
+  expect([...fired]).toEqual(at);
+  expect(boundaries(r.lines)).toEqual(["start", "timeout", "timeout", "timeout", "timeout"]);
+  expect(r.result).toMatchObject({ complete: false, stopReason: "post-charge rest interrupted" });
+  const { log, phases } = await expectSameLog(r, logs);
+  const times = boundaryTimes(r.lines);
+  for (const t of times) {
+    expect(gapAcross(log.current, t).seconds).toBeGreaterThan(MAX_GAP_S);
+    expect(gapAcross(log.current, t).seconds).toBeLessThanOrEqual(RECOVERY_GAP_S);
+  }
+  expect(phases.recoveryGaps).toHaveLength(MAX_RECOVERIES_PER_RUN);
+  expect(phases.postRestRun?.end).toBe(gapAcross(log.current, times[MAX_RECOVERIES_PER_RUN]).at);
+  // Decision 23: it stops in the first cycle after the split, not at the 16 h limit.
+  expect(r.endS).toBeLessThan(times[MAX_RECOVERIES_PER_RUN] + 3 * CYCLE_S);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: post-charge rest [\d.]+ s < 1800 s \(recovery gaps: 3, longest [\d.]+ s\)$/);
+}, SLOW);
+
+// Decision 22 (d): the B1b review's PROBE-C fault, 22 2AF1 unanswered in every cycle, here for 690 s of the rest before the
+// charge. Each cycle's current is decoded before 2AF1 fails, so it is recorded and there is no "no current for 10 min" stop.
+it("Decision 22 (d): a DID after 2414 that fails every cycle for over 10 min does not stop the run for lack of current", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const late = (s: number) => happyAmps(s - 700);
+  const r = await run("recovery-every-cycle", { amps: late, inject: (command, s) => (command === "22 2AF1" && s >= 10 && s < 700 ? null : undefined) });
+  expect(boundaryTimes(r.lines).length).toBeGreaterThan(SILENT_STOP_S / 15);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { log } = await expectLiveEqualsReplay(r, logs);
+  expect(log.current.filter((p) => p.t > 10 && p.t < 700).length).toBeGreaterThan(SILENT_STOP_S / 15);
+}, SLOW);
+
+// Decision 23: the B1b review's PROBE-C exactly, 22 2AF1 unanswered in every cycle from 1030 s, in the post-charge rest. The 4th
+// recovery gap splits the rest run, and the logger stops then instead of polling to the 16 h limit.
+it("Decision 23: a DID that fails every cycle through the post-charge rest stops the run as interrupted after the 4th recovery gap", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const r = await run("recovery-rest-persistent", { amps: happyAmps, inject: (command, s) => (command === "22 2AF1" && s >= 1030 ? null : undefined) });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "post-charge rest interrupted" });
+  const { log, phases } = await expectSameLog(r, logs);
+  const times = boundaryTimes(r.lines);
+  expect(times.length).toBeGreaterThan(MAX_RECOVERIES_PER_RUN);
+  expect(phases.recoveryGaps).toHaveLength(MAX_RECOVERIES_PER_RUN);
+  expect(phases.postRestRun?.end).toBe(gapAcross(log.current, times[MAX_RECOVERIES_PER_RUN]).at);
+  // Decision 25: it stops once TRANSITION_S has passed since the last charging sample (a session here is one 5 s timeout
+  // plus RECOVERY_WAIT_S), not at the 16 h limit.
+  const tc = lastCharging(log);
+  expect(r.endS).toBeGreaterThanOrEqual(tc + TRANSITION_S);
+  expect(r.endS).toBeLessThan(Math.max(times[MAX_RECOVERIES_PER_RUN], tc + TRANSITION_S) + 3 * CYCLE_S);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: post-charge rest [\d.]+ s < 1800 s \(recovery gaps: 3, longest [\d.]+ s\)$/);
+}, SLOW);
+
+// Decision 24, the B1c review's probes A and A2: the charge window is provisional while charging can resume, so a rest
+// between two charging runs is not the post-charge rest the stop rule tests.
+for (const [name, amps] of [
+  // Probe A: charge 120 s, rest 30 s, charge 900 s, then rest.
+  ["charge-pause", (s: number) => (s < 700 ? REST : s < 720 ? -3 : s < 840 ? CHARGE : s < 870 ? REST : s < 1770 ? CHARGE : REST)],
+  // Probe A2: charge 90 s, one rest sample, charge 900 s, then rest.
+  ["charge-dip", (s: number) => (s < 700 ? REST : s < 720 ? -3 : s < 810 ? CHARGE : s < 815 ? REST : s < 1715 ? CHARGE : REST)],
+] as const) {
+  it(`Decision 24: a rest during the charge (${name}) does not stop the run; it stops complete after the post-charge rest and the gate passes`, async () => {
+    const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+    const r = await run(name, { amps });
+    expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+    const { phases } = await expectLiveEqualsReplay(r, logs);
+    expect(phases.charge?.start).toBeGreaterThan(800);
+    expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS /);
+  }, SLOW);
+}
+
+/** A timeout recovery at the first 22 2414 of each `at` window: the reply never comes, and a timeout session follows. */
+const timeoutsAt = (at: readonly number[], fired: Set<number>) => (command: string, s: number) => {
+  const t = at.find((a) => s >= a && s < a + 50);
+  if (command !== "22 2414" || t === undefined || fired.has(t)) return undefined;
+  fired.add(t);
+  return null;
+};
+
+// Decision 23 rule 1, review probe C: the recovery at the end of the charge is a class change, so it is bridged and not
+// counted; three counted gaps in the post-charge rest then stay within MAX_RECOVERIES_PER_RUN.
+it("Decision 23: a recovery at a class change is bridged but not counted; three more in the post-charge rest still stop complete", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const at = [1017, 1300, 1500, 1700];
+  const fired = new Set<number>();
+  const r = await run("recovery-class-change", { amps: happyAmps, inject: timeoutsAt(at, fired) });
+  expect([...fired]).toEqual(at);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { log, phases } = await expectLiveEqualsReplay(r, logs);
+  const [first] = boundaryTimes(r.lines);
+  const across = log.current.filter((p) => p.t < first).at(-1);
+  const next = log.current.find((p) => p.t > first);
+  expect([across?.value, next?.value]).toEqual([CHARGE, REST]);
+  expect(phases.recoveryGaps).toHaveLength(4);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS \(.*, recovery gaps: 4, longest [\d.]+ s\)$/);
+}, SLOW);
+
+/** Charge 720–1320 s, then rest. */
+const longChargeAmps = (s: number) => (s < 700 ? REST : s < 720 ? -3 : s < 1320 ? CHARGE : REST);
+
+// Decision 22 (b), review probe D: the cap is per run, so the post-charge rest starts with none counted.
+it("Decision 22 (b): three counted recovery gaps in the charge and three in the post-charge rest stop complete", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const at = [800, 950, 1100, 1500, 1700, 1900];
+  const fired = new Set<number>();
+  const r = await run("recovery-cap-reset", { amps: longChargeAmps, inject: timeoutsAt(at, fired) });
+  expect([...fired]).toEqual(at);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { phases } = await expectLiveEqualsReplay(r, logs);
+  expect(phases.recoveryGaps).toHaveLength(6);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS \(.*, recovery gaps: 6, longest [\d.]+ s\)$/);
+}, SLOW);
+
+// Decision 24, review probe E: a 4th counted gap in the charge fails the gate, so the phone does not say complete.
+it("Decision 24: a 4th counted recovery gap in the charge stops partial after the post-charge rest, naming the gate's failed condition", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const at = [800, 950, 1100, 1250];
+  const fired = new Set<number>();
+  const r = await run("recovery-charge-4", { amps: longChargeAmps, inject: timeoutsAt(at, fired) });
+  expect([...fired]).toEqual(at);
+  const { log, phases } = await expectSameLog(r, logs);
+  const gate = await gateLine(r.stream.content);
+  expect(gate).toMatch(/^Gate \(T2\.4 verify line\): FAIL: .*largest current gap [\d.]+ s at t=[\d.]+ > 10 s/);
+  const failed = gate.replace(/^Gate \(T2\.4 verify line\): FAIL: /, "").replace(/ \(recovery gaps: .*\)$/, "");
+  expect(r.result).toMatchObject({ complete: false, stopReason: `post-charge rest logged; gate FAIL: ${failed}` });
+  // Decision 25 (M8): the integrated-current estimate uses the bridged recoveries, so the 4th gap, which holds a boundary
+  // and lasts under RECOVERY_GAP_S but is not bridged, is a current gap there too.
+  const [, , , fourth] = boundaryTimes(r.lines);
+  const estimate = integratedCurrentCapacity(log, phases);
+  expect(estimate).toMatchObject({ status: "not-estimated", reason: `current gap of ${String(gapAcross(log.current, fourth).seconds)} s at t=${String(gapAcross(log.current, fourth).at)}` });
+}, SLOW);
+
+// Decision 24, review probe F: the first rest run after the charge is cut by a non-rest, non-charging taper; the run
+// stops as interrupted TRANSITION_S after the last charging sample (Decision 25) instead of polling to the 16 h limit.
+it("Decision 24: a taper that splits the first post-charge rest stops the run as interrupted", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const amps = (s: number) => (s < 1020 ? happyAmps(s) : s < 1030 ? -1.5 : s < 1040 ? -2.5 : REST);
+  const r = await run("taper-flicker", { amps });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "post-charge rest interrupted" });
+  const { log } = await expectSameLog(r, logs);
+  const tc = lastCharging(log);
+  expect(r.endS).toBeGreaterThanOrEqual(tc + TRANSITION_S);
+  expect(r.endS).toBeLessThan(tc + TRANSITION_S + CYCLE_S + RECOVERY_WAIT_S);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: .*post-charge rest [\d.]+ s < 1800 s/);
+}, SLOW);
+
+/** The t of the last charging-class current sample (Decision 25's tc). */
+const lastCharging = (log: ChargeLog) => log.current.filter((p) => p.value <= CHARGE).at(-1)?.t ?? NaN;
+
+// Decision 25, re-review probe P1: a restart after a charge pause passes through one −3 A sample span. The pause's rest run
+// ended short, but charging resumes within TRANSITION_S, so the run goes on and the longer charge becomes the window.
+it("Decision 25: a charge pause whose restart passes through a −3 A span stops complete; the gate passes (probe P1)", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const amps = (s: number) => (s < 700 ? REST : s < 720 ? -3 : s < 840 ? CHARGE : s < 870 ? REST : s < 880 ? -3 : s < 1770 ? CHARGE : REST);
+  const r = await run("charge-pause-ramp", { amps });
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { phases } = await expectLiveEqualsReplay(r, logs);
+  expect(phases.charge?.start).toBeGreaterThan(880);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS /);
+}, SLOW);
+
+// Decision 25, probe P2: −3 A for 400 s after the charge, then rest. No rest run starts within TRANSITION_S of the charge,
+// so the log cannot pass; the run stops then instead of polling to the 16 h limit (stopAt only bounds a failing run).
+it("Decision 25: a −3 A taper longer than TRANSITION_S after the charge stops partial with no post-charge rest (probe P2)", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const amps = (s: number) => (s < 1020 ? happyAmps(s) : s < 1420 ? -3 : REST);
+  const r = await run("taper-long", { amps }, { stopAt: 2000 });
+  expect(r.result).toMatchObject({ complete: false, stopReason: `no post-charge rest within ${String(TRANSITION_S)} s of the charge` });
+  const { log, phases } = await expectSameLog(r, logs);
+  expect(phases.charge).toBeDefined();
+  expect(phases.postRestRun).toBeUndefined();
+  const tc = lastCharging(log);
+  expect(r.endS).toBeGreaterThanOrEqual(tc + TRANSITION_S);
+  expect(r.endS).toBeLessThan(tc + TRANSITION_S + CYCLE_S + RECOVERY_WAIT_S);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: .*no post-charge rest window/);
+}, SLOW);
+
+// Decision 25, probe P3 (Decision 23 rule 1, M10): three LV RESET recoveries at 22 2AE3 leave current gaps under MAX_GAP_S,
+// which are not counted; the one timeout at 22 2AF1 after them leaves the only counted gap, so the rest run holds.
+it("Decision 25: three short LV RESET recovery gaps and one timeout gap in the post-charge rest stop complete (probe P3)", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const fired = new Set<number>();
+  const r = await run("recovery-short-gaps", {
+    amps: happyAmps,
+    inject: (command, s) => {
+      const t = [1300, 1400, 1500, 1600].find((a) => s >= a && s < a + 50);
+      const target = t === 1600 ? "22 2AF1" : "22 2AE3";
+      if (t === undefined || command !== target || fired.has(t)) return undefined;
+      fired.add(t);
+      return t === 1600 ? null : "LV RESET\r\r>";
+    },
+  });
+  expect(fired.size).toBe(4);
+  expect(boundaries(r.lines)).toEqual(["start", "lv-reset", "lv-reset", "lv-reset", "timeout"]);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { log, phases } = await expectLiveEqualsReplay(r, logs);
+  const gaps = boundaryTimes(r.lines).map((t) => gapAcross(log.current, t).seconds);
+  for (const gap of gaps.slice(0, 3)) expect(gap).toBeLessThanOrEqual(MAX_GAP_S);
+  expect(gaps[3]).toBeGreaterThan(MAX_GAP_S);
+  expect(gaps[3]).toBeLessThanOrEqual(RECOVERY_GAP_S);
+  expect(phases.recoveryGaps).toHaveLength(4);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS \(.*, recovery gaps: 4, longest [\d.]+ s\)$/);
+}, SLOW);
+
+// Decision 25 (M9, M12): four counted recovery gaps early in the pre-charge rest; the 4th ends that rest run. The count
+// starts again with the next run, so three more there are bridged (M9), and the phone's pre-rest clock restarts with it (M12).
+it("Decision 25: after a 4th recovery gap ends a rest run, the next run bridges three more, live and in the pre-rest clock", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const at = [50, 100, 150, 200, 700, 900, 1100];
+  const fired = new Set<number>();
+  const T0 = Date.now() / 1000;
+  let plugAt: number | undefined;
+  const r = await run("recovery-cap-reset-prerest", {
+    amps: (s) => (s < 1300 ? REST : s < 1320 ? -3 : s < 1620 ? CHARGE : REST),
+    inject: timeoutsAt(at, fired),
+  }, { onStatus: (line) => { if (line === "Plug in the charger now." && plugAt === undefined) plugAt = Date.now() / 1000 - T0; } });
+  expect([...fired]).toEqual(at);
+  expect(r.result).toMatchObject({ complete: true, stopReason: "post-charge rest logged" });
+  const { log, phases } = await expectLiveEqualsReplay(r, logs);
+  const fourth = boundaryTimes(r.lines)[MAX_RECOVERIES_PER_RUN];
+  const restart = log.current.find((p) => p.t > fourth)?.t ?? NaN;
+  expect(phases.preRest?.start).toBe(restart);
+  expect(phases.recoveryGaps).toHaveLength(3);
+  expect(plugAt).toBeGreaterThanOrEqual(restart + PRE_REST_S);
+  expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): PASS \(.*, recovery gaps: 3, longest [\d.]+ s\)$/);
+}, SLOW);
+
+type LogSpy = { mock: { results: { value: unknown }[] }; mockRestore(): void };
+
+/** The log the live stop decision used equals the replay of the flushed file, and so do their phases. */
+async function expectSameLog(r: Run, logs: LogSpy): Promise<{ log: ChargeLog; phases: ChargePhases }> {
   // The last log() before the run stopped is the one the live stop decision used.
   const live = logs.mock.results.at(-1)?.value as ChargeLog;
   logs.mockRestore();
@@ -561,6 +841,12 @@ async function expectLiveEqualsReplay(r: Run, logs: { mock: { results: { value: 
   // toEqual ignores undefined keys: the replay's sessions and states are the only fields the live builder lacks.
   expect({ ...log, sessions: undefined, states: undefined }).toEqual(live);
   expect(phases).toEqual(chargePhases(live));
+  return { log, phases };
+}
+
+/** Failure mode 13: the live log equals the replay, and the replay gate passes. */
+async function expectLiveEqualsReplay(r: Run, logs: LogSpy): Promise<{ log: ChargeLog; phases: ChargePhases }> {
+  const { log, phases } = await expectSameLog(r, logs);
   expect(phases.preRest && phases.charge && phases.postRest && phases.postRestRun).toBeTruthy();
   expect(phases.currentGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);
   expect(phases.groupGap.seconds).toBeLessThanOrEqual(MAX_GAP_S);

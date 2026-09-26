@@ -25,6 +25,10 @@ export const CHARGE_LOG_PROFILE: VehicleProfile = {
 export const MAX_GAP_S = 10;
 /** Decision 19: the longest gap a recorded session recovery may leave without ending a run or failing the gate. */
 export const RECOVERY_GAP_S = 20;
+/** The phone's poll cycle. Decision 22: a recovery also loses the cycle in flight, so a group-set gap may run one cycle longer. */
+export const CYCLE_S = 5;
+/** Decision 22: recovery gaps over MAX_GAP_S bridged within one run; the next one ends the run. */
+export const MAX_RECOVERIES_PER_RUN = 3;
 export const REST_CURRENT_A = 2.0;
 export const CHARGE_CURRENT_A = 5.0;
 export const MIN_CHARGE_S = 60;
@@ -67,10 +71,10 @@ export interface ChargePhases {
   preRest?: Window; charge?: Window; postRest?: Window;
   /** Decision 10: the uncut post-charge rest run; postRest is this run clipped to POST_REST_S. The gate tests this run's length. */
   postRestRun?: Window;
-  /** Largest gap between consecutive samples that is not a recovery gap, with where it starts, over the gate span (preRest.start to postRest.end), or the whole log when either rest is missing. */
+  /** Largest gap between consecutive samples that is not a bridged recovery gap, with where it starts, over the gate span (preRest.start to postRest.end), or the whole log when either rest is missing. */
   currentGap: { seconds: number; at: number };
   groupGap: { seconds: number; at: number };
-  /** Decision 19: the current's recovery gaps over the same span. They pass the gate and are counted. */
+  /** Decision 19: the current's bridged recovery gaps over the same span. They pass the gate and are counted. */
   recoveryGaps: readonly { seconds: number; at: number }[];
 }
 
@@ -228,17 +232,17 @@ export async function chargeLogFromRecording(lines: readonly RecordingLine[], re
   return { ...builder.log(), sessions, states };
 }
 
-/** Decision 19: the gap from a to b holds a recovery boundary and lasts at most RECOVERY_GAP_S. */
-export const isRecoveryGap = (a: number, b: number, recoveries: readonly number[]) =>
-  span(a, b) <= RECOVERY_GAP_S && recoveries.some((t) => t > a && t < b);
+/** Decision 19: the gap from a to b holds a recovery boundary and lasts at most `limit` (Decision 22: RECOVERY_GAP_S for current, one cycle more for group sets). */
+export const isRecoveryGap = (a: number, b: number, recoveries: readonly number[], limit = RECOVERY_GAP_S) =>
+  span(a, b) <= limit && recoveries.some((t) => t > a && t < b);
 
-/** Largest gap between consecutive samples with both inside `within` (the whole list without one), skipping recovery gaps; where it starts. */
-export function largestGap(samples: readonly { t: number }[], within?: Window, recoveries: readonly number[] = []): { seconds: number; at: number } {
+/** Largest gap between consecutive samples with both inside `within` (the whole list without one), skipping recovery gaps up to `limit`; where it starts. */
+export function largestGap(samples: readonly { t: number }[], within?: Window, recoveries: readonly number[] = [], limit = RECOVERY_GAP_S): { seconds: number; at: number } {
   const inside = within === undefined ? samples : samples.filter((s) => s.t >= within.start && s.t <= within.end);
   let gap = { seconds: inside.length < 2 ? Infinity : 0, at: inside.length > 0 ? inside[0].t : (within?.start ?? 0) };
   for (let i = 1; i < inside.length; i++) {
     const seconds = span(inside[i - 1].t, inside[i].t);
-    if (seconds > gap.seconds && !isRecoveryGap(inside[i - 1].t, inside[i].t, recoveries)) gap = { seconds, at: inside[i - 1].t };
+    if (seconds > gap.seconds && !isRecoveryGap(inside[i - 1].t, inside[i].t, recoveries, limit)) gap = { seconds, at: inside[i - 1].t };
   }
   return gap;
 }
@@ -252,7 +256,32 @@ function recoveryGaps(samples: readonly { t: number }[], recoveries: readonly nu
 type CurrentClass = "rest" | "charge" | "other";
 const classOf = (amps: number): CurrentClass => Math.abs(amps) <= REST_CURRENT_A ? "rest" : amps <= -CHARGE_CURRENT_A ? "charge" : "other";
 
-/** Maximal runs of consecutive current samples in one class; a gap > MAX_GAP_S ends a run unless it is a recovery gap (Decision 19). */
+/**
+ * Decision 22: the recovery boundaries that are bridged. A current gap over MAX_GAP_S that holds a boundary is bridged when it
+ * lasts at most RECOVERY_GAP_S and fewer than MAX_RECOVERIES_PER_RUN such gaps were bridged since its run began; otherwise it
+ * ends the run and the boundaries in it are not bridged, so no signal's gap across them is either. A gap between two
+ * classes starts a new run and is not counted. Shared by replay and the phone's automatic stop.
+ */
+export function bridgedRecoveries(current: readonly Point[], recoveries: readonly number[]): number[] {
+  const unbridged = new Set<number>();
+  let count = 0;
+  for (let i = 1; i < current.length; i++) {
+    const a = current[i - 1].t;
+    const b = current[i].t;
+    const same = classOf(current[i - 1].value) === classOf(current[i].value);
+    if (!same) count = 0;
+    if (span(a, b) <= MAX_GAP_S) continue;
+    if (isRecoveryGap(a, b, recoveries) && (!same || count < MAX_RECOVERIES_PER_RUN)) {
+      if (same) count++;
+      continue;
+    }
+    count = 0;
+    for (const t of recoveries) if (t > a && t < b) unbridged.add(t);
+  }
+  return recoveries.filter((t) => !unbridged.has(t));
+}
+
+/** Maximal runs of consecutive current samples in one class; a gap > MAX_GAP_S ends a run unless it is a bridged recovery gap (Decisions 19, 22). */
 function runs(current: readonly Point[], recoveries: readonly number[]): { kind: CurrentClass; start: number; end: number }[] {
   const out: { kind: CurrentClass; start: number; end: number }[] = [];
   for (const [i, p] of current.entries()) {
@@ -266,7 +295,8 @@ function runs(current: readonly Point[], recoveries: readonly number[]): { kind:
 }
 
 export function chargePhases(log: ChargeLog): ChargePhases {
-  const all = runs(log.current, log.recoveries);
+  const bridged = bridgedRecoveries(log.current, log.recoveries);
+  const all = runs(log.current, bridged);
   let charge: Window | undefined;
   for (const run of all) {
     if (run.kind === "charge" && span(run.start, run.end) >= MIN_CHARGE_S && (charge === undefined || span(run.start, run.end) > span(charge.start, charge.end))) {
@@ -290,8 +320,31 @@ export function chargePhases(log: ChargeLog): ChargePhases {
   const gate = preRest !== undefined && postRest !== undefined ? { start: preRest.start, end: postRest.end } : undefined;
   return {
     ...(preRest ? { preRest } : {}), ...(charge ? { charge } : {}), ...(postRest ? { postRest } : {}), ...(postRestRun ? { postRestRun } : {}),
-    currentGap: largestGap(log.current, gate, log.recoveries),
-    groupGap: largestGap(log.groups, gate, log.recoveries),
-    recoveryGaps: recoveryGaps(log.current, log.recoveries, gate),
+    currentGap: largestGap(log.current, gate, bridged),
+    groupGap: largestGap(log.groups, gate, bridged, RECOVERY_GAP_S + CYCLE_S),
+    recoveryGaps: recoveryGaps(log.current, bridged, gate),
   };
+}
+
+/** The summary's number format (src/report.ts convention, 4 decimals); scripts/charge-log.ts imports it (Decision 25). */
+export const num = (value: number) => String(Math.round(value * 10000) / 10000);
+export const gapText = (gap: { seconds: number; at: number }) => `${num(gap.seconds)} s at t=${num(gap.at)}`;
+
+/** Decision 10: an uncut post-charge rest run shorter than POST_REST_S is a failed condition for the gate and BM2 selection. */
+export function shortPostRest(phases: ChargePhases): string | undefined {
+  const rest = phases.postRestRun;
+  if (rest === undefined || span(rest.start, rest.end) >= POST_REST_S) return undefined;
+  return `post-charge rest ${num(span(rest.start, rest.end))} s < ${String(POST_REST_S)} s`;
+}
+
+/** The T2.4 verify line's failed conditions, empty on PASS. Shared by `pnpm charge-log` and the phone's stop (Decision 24). */
+export function gateFailures(phases: ChargePhases): string[] {
+  return [
+    phases.preRest ? undefined : "no pre-charge rest window",
+    phases.charge ? undefined : "no charge window",
+    phases.postRest ? undefined : "no post-charge rest window",
+    shortPostRest(phases),
+    phases.currentGap.seconds > MAX_GAP_S ? `largest current gap ${gapText(phases.currentGap)} > ${String(MAX_GAP_S)} s` : undefined,
+    phases.groupGap.seconds > MAX_GAP_S ? `largest group-set gap ${gapText(phases.groupGap)} > ${String(MAX_GAP_S)} s` : undefined,
+  ].filter((f) => f !== undefined);
 }
