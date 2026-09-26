@@ -46,5 +46,5 @@ One paragraph. What outcome is visible to a user or to a test when this is done.
 - ...
 
 ## Decisions
-(filled in by the orchestrator after the user answers open questions)
+(owner answers recorded here by the orchestrator; once a task is running, new decisions go in `docs/task-runs/<task-id>.md`, not here)
 ```

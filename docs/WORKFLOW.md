@@ -58,6 +58,15 @@ If the relay is unreachable (phone not in the car, app not in relay mode, car of
 
 Two tools run this loop: Claude Code (`/feature`, agents in `.claude/`) and Codex (`$obd-feature`, agents in `.codex/`; see `CODEX.md`). They share the specs, the gates above, and one progress record per task: `docs/task-runs/<task-id>.md`. The record is the handoff; nothing else is.
 
+**One home per kind of fact.** Duplicated state is how records and specs balloon, and divergent copies are how agents act on stale decisions:
+
+- **Decisions** live in the task record (and in an ADR when they change the roadmap) — not as running amendments inside the spec.
+- **Scope, sources, and verification items** live in the spec — not restated in the record.
+- **Verification evidence** lives in the record as PASS/FAIL/NOT RUN lines plus the named artifact — not as full command transcripts.
+- The **current state** of a record is the short block at the top; history below is one line per stage.
+
+When a document would restate another, cite it instead.
+
 Rules, the same for both tools:
 
 1. **One tool, one role at a time.** Never run Claude and Codex, or two roles, on the same task concurrently. A transfer stops the current role first.

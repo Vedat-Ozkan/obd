@@ -1,5 +1,12 @@
 # X-2026-09-23-write-safety task run
 
+## Current state (as of 2026-09-25)
+
+- **Stage:** CLOSED 2026-09-24 with owner-accepted follow-ups. Final round 3 **APPROVE**; repair 2/2 used; escalation 0. Committed (`ebb44db`).
+- **Delivered:** `src/elm/guard.ts` — reject empty/whitespace sends; block UDS reset/clear services from a sourced table; block `ATCAF0`; the header/protocol sequence rule (owner-accepted addition); `docs/ELM327.md` §Write safety; ARCHITECTURE notes. Replay byte-identical; five mutations caught; datasheet citations checked against ELM327DSJ (temp copy, not committed).
+- **Follow-ups carried:** the Mode 06 length source, residual sentence, and discovery-runtime items went to T0.7 A1 (closed there); the first-write gap went to `X-2026-09-24-first-write` (closed there).
+- **Next action:** none; this guard is what the relay (`T0.6a`) now delegates to.
+
 ## Ownership
 
 - Last tool: Claude

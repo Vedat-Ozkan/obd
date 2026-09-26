@@ -2,6 +2,30 @@
 
 Short architecture decision records. Newest last. A decision can be reversed; when it is, add a new entry rather than editing the old one.
 
+## Status index (a reader can stop here when a superseded ADR is only context)
+
+| ADR | Status |
+|---|---|
+| 001 Android only until Phase 3 | Current |
+| 002 No local GPU in Phases 0–2 | Restored for training by ADR-012 (battery models train on CPU); GPU work stays out of the app and bridge |
+| 003 HIL bridge on a laptop | Amended by ADR-013: the phone is the bridge; laptop kept for the T0.2 spike and as fallback |
+| 004 Equinox EV replaces Bolt; EV work behind a spike | Current (gate passed 2026-09-23) |
+| 005 pnpm monorepo, strict TS, uv for Python | Current |
+| 006 One frontier model per turn | Amended by ADR-012: the turn is the report summary / battery assistant |
+| 007 BYOK; no backend until distribution | Amended by ADR-007 amendment (proxy prerequisite for paid LLM) and ADR-019 (beta upload backend only) |
+| 008 Read-only toward the vehicle; Mode 04 only write | Current, enforced in code by the relay allowlist (ADR-013) |
+| 009 App sold at a modest price | Current, as amended by 012/014: template report one-time; LLM feature needs a usage cap |
+| 010 OBDb signalsets CC-BY-SA-4.0, contribute upstream | Current |
+| 011 ML1–ML6 LLM fine-tuning track | **Withdrawn by ADR-012** |
+| 012 Battery health is the product; gas-car diagnosis and fine-tuning withdrawn | Current, as amended by 014–016, 018 |
+| 013 Phone is the bridge; MCP relay | Current |
+| 014 Used-EV health check; Ultium first | Current, as amended by 018 (in-app diagnosis, PDF deferred) |
+| 015 Equinox EV required; ICE cars optional bench | Current |
+| 016 Measurement-first battery ML; LLM only explains | Current |
+| 017 Committed recordings mask VIN serial | Current; raw-original commits up to `c88dffa` accepted by owner |
+| 018 Battery diagnosis stays in the garage; PDF waits for beta | Current |
+| 019 Automatic beta upload via Cloudflare R2 + Worker | Current (accepted 2026-09-25) |
+
 ## ADR-001: Android only until Phase 3 (2026-09-16)
 
 **Decision.** Build and test on Android. iOS is a Phase 3 stretch via EAS Build.

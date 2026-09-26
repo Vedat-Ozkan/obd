@@ -1,6 +1,6 @@
 # Plan
 
-Revised 2026-09-22 (ADR-012, ADR-013) and 2026-09-23 (ADR-014, ADR-015, ADR-016): the product is a used-EV battery health check, with GM Ultium as the first verified platform, other makes added through beta testers, and an opt-in LLM summary and assistant; the gas-car diagnosis engine and the LLM fine-tuning track are withdrawn; the phone replaces the laptop as the hardware bridge, exposed to agents through MCP. Assumptions: full-time effort (40+ h/week), Android only, 2024 Equinox EV as the required Phase 0 vehicle, Chrysler 200 and Elantra available only as optional bench cars (no hybrid or PHEV owned), Veepeak OBDCheck BLE dongle, development in WSL2; the laptop is used for the T0.2 spike, after which the phone is the bridge (ADR-013). Delivery order is Phase 0 → Phase 2 → BM1–BM7 → Phase 3. Within Phase 0: T0.3 → T0.8 → T0.4 → T0.5 → T0.6 → the rest. Existing task IDs remain stable; withdrawn tasks stay listed, struck through. All future dates are provisional. See [ML.md](ML.md) and ADR-012.
+Revised through ADR-019 (2026-09-25): the product is a used-EV battery health check, Ultium first, other makes via beta testers, with an opt-in LLM summary and assistant; the gas-car diagnosis engine and LLM fine-tuning track are withdrawn; the phone is the hardware bridge, exposed to agents through MCP. Assumptions: full-time effort, Android only, 2024 Equinox EV as the required Phase 0 vehicle, Veepeak OBDCheck BLE dongle, development in WSL2. Delivery order is Phase 0 → Phase 2 → BM1–BM7 → Phase 3. Within Phase 0: T0.3 → T0.8 → T0.4 → T0.5 → T0.6 → the rest. Existing task IDs remain stable; withdrawn tasks stay listed, struck through. All future dates are provisional. See [ML.md](ML.md) and ADR-012.
 
 Each task has a **verify** line. That line is the definition of done; the reviewer checks it, not the description. Tasks are sized for one implementer session (S: half a day, M: a day, L: two days). Anything larger gets split by the architect.
 
@@ -27,18 +27,7 @@ Not in Phase 0: any LLM call in the app, EV-specific decoding beyond the spike, 
 
 ## ~~Phase 1: Diagnostic engine for gas cars~~ (withdrawn by ADR-012)
 
-Kept for history. The foreground-service work from T1.1 moves into T2.4, because charging sessions last hours.
-
-| ID | Task | Status |
-|---|---|---|
-| ~~T1.1~~ | Drive logger: Android foreground service, PID polling with a priority schedule. | Withdrawn; foreground service moves to T2.4 |
-| ~~T1.2~~ | Symptom anchor button. | Withdrawn |
-| ~~T1.3~~ | `obd-diagnose` feature extraction over drive logs. | Withdrawn |
-| ~~T1.4~~ | `obd-diagnose` case object. | Withdrawn |
-| ~~T1.5~~ | `obd-diagnose` LLM diagnostic turn. | Withdrawn |
-| ~~T1.6~~ | Induced-fault ground truth on the ICE cars. | Withdrawn |
-| ~~T1.7~~ | `obd-eval` diagnostic harness. | Withdrawn; `obd-eval` is reused by BM2–BM5 |
-| ~~T1.8~~ | App case screen and BYOK key entry. | Withdrawn; BYOK key entry moves to T2.10 |
+Kept for history. All tasks T1.1–T1.8 are withdrawn. T1.1's foreground-service work moves into T2.4 (charging sessions last hours); T1.7's `obd-eval` harness is reused by BM2–BM5; T1.8's BYOK key entry moves to T2.10. See ADR-011 and ADR-012 for what was planned and why it was dropped.
 
 ## Phase 2: Used-EV battery health check, Ultium first (Oct 19 – Dec 4; provisional)
 

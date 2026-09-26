@@ -1,5 +1,13 @@
 # X-2026-09-23-vin-redaction task run
 
+## Current state (as of 2026-09-25)
+
+- **Stage:** CLOSED 2026-09-23 (no hardware items). Review round 2 **APPROVE**; repair 1/2 used; escalation 0. Implemented as ADR-017; committed (`4e2c832`).
+- **Delivered:** `tools/spike/redact_vin.py` (+ tests) masking VIN serials in place (line numbers unchanged); `*.redacted.jsonl` committed copies for both spikes; originals local and gitignored; AGENTS.md rule 2 amended; discovery DID `4193` (VIN ×4 at payload offsets 3/20/37/54) folded in by owner override and removed from the watch list.
+- **Known history caveat:** commits up to `c88dffa` contain the unredacted originals; the owner accepted this over a history rewrite (ADR-017).
+- **Later extension:** the upload-path scrubber (T2.9 Stage A) ports these rules to TypeScript with parity checks — see `docs/task-runs/T2.9.md`.
+- **Next action:** none.
+
 ## Ownership
 
 - Last tool: Claude

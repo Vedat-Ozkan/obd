@@ -1,5 +1,12 @@
 # X-2026-09-24-first-write task run
 
+## Current state (as of 2026-09-25)
+
+- **Stage:** CLOSED 2026-09-24. Stage A re-review **APPROVE** (repair 1/2 used: the `startsIdle === false` mutant killed by a no-member F1 case); Stage B round 1 **APPROVE**; escalation 0. Committed (`ebb44db`).
+- **Delivered:** the unknown-state first-write rule in `Elm327Session` and `ConsoleSession` (ATZ/ATI only until a clean reply; STOPPED restarts; drain; `init()` requires a clean ATZ); `Transport.startsIdle` replay exemption; console allowlist gains `ATI`; the six A2 doc follow-ups applied to `docs/ELM327.md` §Write safety (recorded-DID examples, general drop-count sentence, count-digit-`0` wording, `init()` cover, console naming, comment rewrap).
+- **Known residual (reviewer-accepted):** a multi-error reply is classified by its first line only; the console does not drain a late non-error reply while ATZ/ATI is pending.
+- **Next action:** none.
+
 ## Ownership
 
 - Last tool: Claude

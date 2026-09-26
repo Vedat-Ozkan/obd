@@ -29,14 +29,15 @@ export interface EcuName {
 // conventions "VIN check digit".
 const VIN_CHARS = /^[0-9A-HJ-NPR-Z]{17}$/;
 
-// 49 CFR 565.15(c) Table III assigned values, copied in docs/ELM327.md §J1979 conventions "VIN check digit".
+// 49 CFR 565.15(c) Table III assigned values (retrieved 2026-09-23 via the eCFR versioner API); see
+// docs/ELM327.md §J1979 conventions "VIN check digit" and test/vin.test.ts for the CFR sample.
 const LETTER_VALUES: Readonly<Record<string, number>> = {
   A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8,
   J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9,
   S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9,
 };
 
-// 49 CFR 565.15(c) Table IV weight factors, positions 1-17 (position 9 = 0 as in Table VI); same row as above.
+// 49 CFR 565.15(c) Table IV weight factors, positions 1-17 (position 9 = 0 as in Table VI).
 const WEIGHTS: readonly number[] = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
 
 // ADR-017 serial mask at positions 12-17 (tools/spike/redact_vin.py MASK).
