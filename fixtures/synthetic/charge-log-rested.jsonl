@@ -1,4 +1,4 @@
-{"t":0,"dir":"meta","synthetic":true,"car":"none","dongle":"none","script":"packages/obd-battery/scripts/synthetic-charge-log.ts","note":"synthetic charge log for T2.4 Stage A: 12 Ah synthetic capacity (not the car's), one cell group 30 mV low, a 79-record group set, a 2AE3 NO DATA cycle and a 15 s current gap before the pre-rest; encodings follow the decoder's sourced scalings (docs/specs/T2.4-charge-logger.md, Sources); timestamps invented"}
+{"t":0,"dir":"meta","synthetic":true,"car":"none","dongle":"none","script":"packages/obd-battery/scripts/synthetic-charge-log.ts","note":"synthetic charge log for T2.4 Stage A: 12 Ah synthetic capacity (not the car's), one cell group 30 mV low, a 79-record group set, a 2AE3 NO DATA cycle and a 15 s current gap before the pre-rest, and a 15 s timeout-recovery gap with a session boundary during the charge (no timed-out command or re-init recorded); encodings follow the decoder's sourced scalings (docs/specs/T2.4-charge-logger.md, Sources); timestamps invented"}
 {"t":0,"dir":"meta","event":"charge-log session","reason":"start"}
 {"t":0,"dir":"tx","data":"ATSP7\r"}
 {"t":0.02,"dir":"rx","data":"OK\r\r>"}
@@ -5588,50 +5588,51 @@
 {"t":1256.02,"dir":"rx","data":"18DAF1CB1027622AE6985808\r18DAF1CB21985A08985C0898\r18DAF1CB225E089860099858\r18DAF1CB2309985A09985C09\r18DAF1CB24985E0998600998\r18DAF1CB255809985A09\r\r>"}
 {"t":1256.05,"dir":"tx","data":"22 2AE7\r"}
 {"t":1256.07,"dir":"rx","data":"18DAF1CB1027622AE7985C0A\r18DAF1CB21985E0A98600A98\r18DAF1CB22580A985A0A985C\r18DAF1CB230A985E0A98600A\r18DAF1CB2400000000000000\r18DAF1CB250000000000\r\r>"}
-{"t":1265,"dir":"tx","data":"ATSP7\r"}
-{"t":1265.02,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.05,"dir":"tx","data":"ATCP 18\r"}
-{"t":1265.07,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.1,"dir":"tx","data":"ATSH DA17F1\r"}
-{"t":1265.12,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.15,"dir":"tx","data":"ATCRA 18DAF117\r"}
-{"t":1265.17,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.2,"dir":"tx","data":"ATFCSH 18DA17F1\r"}
-{"t":1265.22,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.25,"dir":"tx","data":"ATFCSD 300000\r"}
-{"t":1265.27,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.3,"dir":"tx","data":"ATFCSM 1\r"}
-{"t":1265.32,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.35,"dir":"tx","data":"22 2414\r"}
-{"t":1265.37,"dir":"rx","data":"18DAF11705622414FE70\r\r>"}
-{"t":1265.4,"dir":"tx","data":"22 2885\r"}
-{"t":1265.42,"dir":"rx","data":"18DAF1170562288579E0\r\r>"}
-{"t":1265.45,"dir":"tx","data":"ATSH DACBF1\r"}
-{"t":1265.47,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.5,"dir":"tx","data":"ATCRA 18DAF1CB\r"}
-{"t":1265.52,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.55,"dir":"tx","data":"ATFCSH 18DACBF1\r"}
-{"t":1265.57,"dir":"rx","data":"OK\r\r>"}
-{"t":1265.6,"dir":"tx","data":"22 27AF\r"}
-{"t":1265.62,"dir":"rx","data":"18DAF1CB056227AF00E7\r\r>"}
-{"t":1265.65,"dir":"tx","data":"22 2B43\r"}
-{"t":1265.67,"dir":"rx","data":"18DAF1CB04622B439E\r\r>"}
-{"t":1265.7,"dir":"tx","data":"22 2AF5\r"}
-{"t":1265.72,"dir":"rx","data":"18DAF1CB1009622AF5985897\r18DAF1CB212C9860\r\r>"}
-{"t":1265.75,"dir":"tx","data":"22 2AE1\r"}
-{"t":1265.77,"dir":"rx","data":"18DAF1CB1027622AE1985801\r18DAF1CB21985A01985C0198\r18DAF1CB225E019860019858\r18DAF1CB2301985A01985C01\r18DAF1CB24985E0298600298\r18DAF1CB255802985A02\r\r>"}
-{"t":1265.8,"dir":"tx","data":"22 2AE2\r"}
-{"t":1265.82,"dir":"rx","data":"18DAF1CB1027622AE2985C02\r18DAF1CB21985E0298600298\r18DAF1CB225802985A03985C\r18DAF1CB2303985E03986003\r18DAF1CB24972C03985A0398\r18DAF1CB255C03985E03\r\r>"}
-{"t":1265.85,"dir":"tx","data":"22 2AE3\r"}
-{"t":1265.87,"dir":"rx","data":"18DAF1CB1027622AE3986004\r18DAF1CB21985804985A0498\r18DAF1CB225C04985E049860\r18DAF1CB2304985804985A04\r18DAF1CB24985C05985E0598\r18DAF1CB256005985805\r\r>"}
-{"t":1265.9,"dir":"tx","data":"22 2AE4\r"}
-{"t":1265.92,"dir":"rx","data":"18DAF1CB1027622AE4985A05\r18DAF1CB21985C05985E0598\r18DAF1CB226005985806985A\r18DAF1CB2306985C06985E06\r18DAF1CB2498600698580698\r18DAF1CB255A06985C06\r\r>"}
-{"t":1265.95,"dir":"tx","data":"22 2AE5\r"}
-{"t":1265.97,"dir":"rx","data":"18DAF1CB1027622AE5985E07\r18DAF1CB2198600798580798\r18DAF1CB225A07985C07985E\r18DAF1CB2307986007985807\r18DAF1CB24985A08985C0898\r18DAF1CB255E08986008\r\r>"}
-{"t":1266,"dir":"tx","data":"22 2AE6\r"}
-{"t":1266.02,"dir":"rx","data":"18DAF1CB1027622AE6985808\r18DAF1CB21985A08985C0898\r18DAF1CB225E089860099858\r18DAF1CB2309985A09985C09\r18DAF1CB24985E0998600998\r18DAF1CB255809985A09\r\r>"}
-{"t":1266.05,"dir":"tx","data":"22 2AE7\r"}
-{"t":1266.07,"dir":"rx","data":"18DAF1CB1027622AE7985C0A\r18DAF1CB21985E0A98600A98\r18DAF1CB22580A985A0A985C\r18DAF1CB230A985E0A98600A\r18DAF1CB2400000000000000\r18DAF1CB250000000000\r\r>"}
+{"t":1269,"dir":"meta","event":"charge-log session","reason":"timeout"}
+{"t":1270,"dir":"tx","data":"ATSP7\r"}
+{"t":1270.02,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.05,"dir":"tx","data":"ATCP 18\r"}
+{"t":1270.07,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.1,"dir":"tx","data":"ATSH DA17F1\r"}
+{"t":1270.12,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.15,"dir":"tx","data":"ATCRA 18DAF117\r"}
+{"t":1270.17,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.2,"dir":"tx","data":"ATFCSH 18DA17F1\r"}
+{"t":1270.22,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.25,"dir":"tx","data":"ATFCSD 300000\r"}
+{"t":1270.27,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.3,"dir":"tx","data":"ATFCSM 1\r"}
+{"t":1270.32,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.35,"dir":"tx","data":"22 2414\r"}
+{"t":1270.37,"dir":"rx","data":"18DAF11705622414FE70\r\r>"}
+{"t":1270.4,"dir":"tx","data":"22 2885\r"}
+{"t":1270.42,"dir":"rx","data":"18DAF1170562288579E0\r\r>"}
+{"t":1270.45,"dir":"tx","data":"ATSH DACBF1\r"}
+{"t":1270.47,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.5,"dir":"tx","data":"ATCRA 18DAF1CB\r"}
+{"t":1270.52,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.55,"dir":"tx","data":"ATFCSH 18DACBF1\r"}
+{"t":1270.57,"dir":"rx","data":"OK\r\r>"}
+{"t":1270.6,"dir":"tx","data":"22 27AF\r"}
+{"t":1270.62,"dir":"rx","data":"18DAF1CB056227AF00E8\r\r>"}
+{"t":1270.65,"dir":"tx","data":"22 2B43\r"}
+{"t":1270.67,"dir":"rx","data":"18DAF1CB04622B439E\r\r>"}
+{"t":1270.7,"dir":"tx","data":"22 2AF5\r"}
+{"t":1270.72,"dir":"rx","data":"18DAF1CB1009622AF5985897\r18DAF1CB212C9860\r\r>"}
+{"t":1270.75,"dir":"tx","data":"22 2AE1\r"}
+{"t":1270.77,"dir":"rx","data":"18DAF1CB1027622AE1985801\r18DAF1CB21985A01985C0198\r18DAF1CB225E019860019858\r18DAF1CB2301985A01985C01\r18DAF1CB24985E0298600298\r18DAF1CB255802985A02\r\r>"}
+{"t":1270.8,"dir":"tx","data":"22 2AE2\r"}
+{"t":1270.82,"dir":"rx","data":"18DAF1CB1027622AE2985C02\r18DAF1CB21985E0298600298\r18DAF1CB225802985A03985C\r18DAF1CB2303985E03986003\r18DAF1CB24972C03985A0398\r18DAF1CB255C03985E03\r\r>"}
+{"t":1270.85,"dir":"tx","data":"22 2AE3\r"}
+{"t":1270.87,"dir":"rx","data":"18DAF1CB1027622AE3986004\r18DAF1CB21985804985A0498\r18DAF1CB225C04985E049860\r18DAF1CB2304985804985A04\r18DAF1CB24985C05985E0598\r18DAF1CB256005985805\r\r>"}
+{"t":1270.9,"dir":"tx","data":"22 2AE4\r"}
+{"t":1270.92,"dir":"rx","data":"18DAF1CB1027622AE4985A05\r18DAF1CB21985C05985E0598\r18DAF1CB226005985806985A\r18DAF1CB2306985C06985E06\r18DAF1CB2498600698580698\r18DAF1CB255A06985C06\r\r>"}
+{"t":1270.95,"dir":"tx","data":"22 2AE5\r"}
+{"t":1270.97,"dir":"rx","data":"18DAF1CB1027622AE5985E07\r18DAF1CB2198600798580798\r18DAF1CB225A07985C07985E\r18DAF1CB2307986007985807\r18DAF1CB24985A08985C0898\r18DAF1CB255E08986008\r\r>"}
+{"t":1271,"dir":"tx","data":"22 2AE6\r"}
+{"t":1271.02,"dir":"rx","data":"18DAF1CB1027622AE6985808\r18DAF1CB21985A08985C0898\r18DAF1CB225E089860099858\r18DAF1CB2309985A09985C09\r18DAF1CB24985E0998600998\r18DAF1CB255809985A09\r\r>"}
+{"t":1271.05,"dir":"tx","data":"22 2AE7\r"}
+{"t":1271.07,"dir":"rx","data":"18DAF1CB1027622AE7985C0A\r18DAF1CB21985E0A98600A98\r18DAF1CB22580A985A0A985C\r18DAF1CB230A985E0A98600A\r18DAF1CB2400000000000000\r18DAF1CB250000000000\r\r>"}
 {"t":1275,"dir":"tx","data":"ATSP7\r"}
 {"t":1275.02,"dir":"rx","data":"OK\r\r>"}
 {"t":1275.05,"dir":"tx","data":"ATCP 18\r"}

@@ -2,7 +2,7 @@ import { Elm327Session, ElmSessionError, type ElmResponse, type SendOptions } fr
 import { latin1Decode } from "obd-core/recording";
 import type { Transport } from "obd-core/transport";
 import { genericProfile, scanMode22Profile, type ObdbMode22Signal } from "obd-core/vehicles";
-import { CHARGE_LOG_PROFILE, ChargeLogBuilder, chargePhases, MAX_GAP_S, POST_REST_S, PRE_REST_S, REST_CURRENT_A, span, type ChargePhases, type Point, type Window } from "obd-battery/session";
+import { CHARGE_LOG_PROFILE, ChargeLogBuilder, chargePhases, isRecoveryGap, MAX_GAP_S, POST_REST_S, PRE_REST_S, REST_CURRENT_A, span, type ChargePhases, type Point, type Window } from "obd-battery/session";
 import type { RecordingBuffer } from "./recording.js";
 
 // Behavior: docs/specs/T2.4-charge-logger.md §Interfaces (Stage B1), §Policy values, §Sources (init, per-cycle
@@ -139,7 +139,7 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     const log = builder.log();
     for (const point of log.current.slice(seen)) {
       if (Math.abs(point.value) > REST_CURRENT_A) restRun = undefined;
-      else if (restRun !== undefined && previous !== undefined && span(previous.t, point.t) <= MAX_GAP_S) restRun.end = point.t;
+      else if (restRun !== undefined && previous !== undefined && (span(previous.t, point.t) <= MAX_GAP_S || isRecoveryGap(previous.t, point.t, log.recoveries))) restRun.end = point.t;
       else restRun = { start: point.t, end: point.t };
       previous = point;
       lastCurrent = point.t;
@@ -204,7 +204,9 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
       const session = new CycleSession(link.view, deps, builder, () => lastTx);
       let failure: unknown;
       try {
-        recording.meta({ event: "charge-log session", reason });
+        const boundary = recording.meta({ event: "charge-log session", reason });
+        // Decision 19: the live log knows the boundary as replay does, so a short recovery gap does not end a run.
+        if (reason !== "start") builder.recovery(boundary);
         deps.onStatus("Starting the ELM327.");
         await session.init(genericProfile, {
           onInformationalReply(command, response) { if (response.kind === "error") throw new ReplyError(response, command); },

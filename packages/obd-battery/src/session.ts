@@ -23,6 +23,8 @@ export const CHARGE_LOG_PROFILE: VehicleProfile = {
 
 // Policy values, not vehicle constants (spec §Policy values; Decision 3).
 export const MAX_GAP_S = 10;
+/** Decision 19: the longest gap a recorded session recovery may leave without ending a run or failing the gate. */
+export const RECOVERY_GAP_S = 20;
 export const REST_CURRENT_A = 2.0;
 export const CHARGE_CURRENT_A = 5.0;
 export const MIN_CHARGE_S = 60;
@@ -53,6 +55,8 @@ export interface ChargeLog {
   groups: readonly GroupSet[];
   cellMinMax: readonly CellMinMax[];
   droppedGroupSets: readonly DroppedGroupSet[];
+  /** t of each "charge-log session" boundary whose reason is not "start" (Decision 19). Live and replay both fill it. */
+  recoveries: readonly number[];
   /** Filled by chargeLogFromRecording; ChargeLogBuilder.log() leaves both out (Decision 12). */
   sessions?: readonly SessionMark[];
   states?: readonly StateMark[];
@@ -63,9 +67,11 @@ export interface ChargePhases {
   preRest?: Window; charge?: Window; postRest?: Window;
   /** Decision 10: the uncut post-charge rest run; postRest is this run clipped to POST_REST_S. The gate tests this run's length. */
   postRestRun?: Window;
-  /** Largest gap between consecutive samples, with where it starts, over the gate span (preRest.start to postRest.end), or the whole log when either rest is missing. */
+  /** Largest gap between consecutive samples that is not a recovery gap, with where it starts, over the gate span (preRest.start to postRest.end), or the whole log when either rest is missing. */
   currentGap: { seconds: number; at: number };
   groupGap: { seconds: number; at: number };
+  /** Decision 19: the current's recovery gaps over the same span. They pass the gate and are counted. */
+  recoveryGaps: readonly { seconds: number; at: number }[];
 }
 
 /** Data after the 62 <DID> echo from the target module, or undefined. */
@@ -89,6 +95,7 @@ export class ChargeLogBuilder {
   private readonly groups: GroupSet[] = [];
   private readonly cellMinMax: CellMinMax[] = [];
   private readonly dropped: DroppedGroupSet[] = [];
+  private readonly recoveries: number[] = [];
   /** The 2AE1–2AE7 set being read: its start time and the payloads so far; undefined when none is open. */
   private open: { t: number; parts: Uint8Array[] } | undefined;
   private readonly signals: readonly ObdbMode22Signal[];
@@ -125,6 +132,11 @@ export class ChargeLogBuilder {
         if (min !== undefined && max !== undefined) this.cellMinMax.push({ t, min, max });
       }
     }
+  }
+
+  /** A "charge-log session" boundary with a reason other than "start", at its meta line's t (Decision 19). */
+  recovery(t: number): void {
+    this.recoveries.push(t);
   }
 
   // CB/2AE1–2AE7: 3-byte records [u16 x 0.0001 V][module 1–10] (spec §Sources; Decision 8).
@@ -164,6 +176,7 @@ export class ChargeLogBuilder {
       current: [...this.current], packVolts: [...this.packVolts], energyKwh: [...this.energyKwh], soc: [...this.soc],
       groups: [...this.groups], cellMinMax: [...this.cellMinMax],
       droppedGroupSets: this.open === undefined ? [...this.dropped] : [...this.dropped, { t: this.open.t, reason: "incomplete" }],
+      recoveries: [...this.recoveries],
     };
   }
 }
@@ -179,7 +192,9 @@ export async function chargeLogFromRecording(lines: readonly RecordingLine[], re
   const segments: RecordingLine[][] = [[]];
   for (const line of lines) {
     if (isBoundary(line)) {
-      sessions.push({ t: line.t, reason: line.dir === "meta" && typeof line.reason === "string" ? line.reason : "unknown" });
+      const reason = line.dir === "meta" && typeof line.reason === "string" ? line.reason : "unknown";
+      sessions.push({ t: line.t, reason });
+      if (reason !== "start") builder.recovery(line.t);
       segments.push([]);
     } else if (line.dir === "meta" && typeof line.state === "string") {
       states.push({ t: line.t, state: line.state });
@@ -213,34 +228,45 @@ export async function chargeLogFromRecording(lines: readonly RecordingLine[], re
   return { ...builder.log(), sessions, states };
 }
 
-/** Largest gap between consecutive samples with both inside `within` (the whole list without one); where it starts. */
-export function largestGap(samples: readonly { t: number }[], within?: Window): { seconds: number; at: number } {
+/** Decision 19: the gap from a to b holds a recovery boundary and lasts at most RECOVERY_GAP_S. */
+export const isRecoveryGap = (a: number, b: number, recoveries: readonly number[]) =>
+  span(a, b) <= RECOVERY_GAP_S && recoveries.some((t) => t > a && t < b);
+
+/** Largest gap between consecutive samples with both inside `within` (the whole list without one), skipping recovery gaps; where it starts. */
+export function largestGap(samples: readonly { t: number }[], within?: Window, recoveries: readonly number[] = []): { seconds: number; at: number } {
   const inside = within === undefined ? samples : samples.filter((s) => s.t >= within.start && s.t <= within.end);
   let gap = { seconds: inside.length < 2 ? Infinity : 0, at: inside.length > 0 ? inside[0].t : (within?.start ?? 0) };
   for (let i = 1; i < inside.length; i++) {
     const seconds = span(inside[i - 1].t, inside[i].t);
-    if (seconds > gap.seconds) gap = { seconds, at: inside[i - 1].t };
+    if (seconds > gap.seconds && !isRecoveryGap(inside[i - 1].t, inside[i].t, recoveries)) gap = { seconds, at: inside[i - 1].t };
   }
   return gap;
+}
+
+/** The recovery gaps between consecutive samples with both inside `within`, in order. */
+function recoveryGaps(samples: readonly { t: number }[], recoveries: readonly number[], within?: Window): { seconds: number; at: number }[] {
+  const inside = within === undefined ? samples : samples.filter((s) => s.t >= within.start && s.t <= within.end);
+  return inside.slice(1).flatMap((s, i) => isRecoveryGap(inside[i].t, s.t, recoveries) ? [{ seconds: span(inside[i].t, s.t), at: inside[i].t }] : []);
 }
 
 type CurrentClass = "rest" | "charge" | "other";
 const classOf = (amps: number): CurrentClass => Math.abs(amps) <= REST_CURRENT_A ? "rest" : amps <= -CHARGE_CURRENT_A ? "charge" : "other";
 
-/** Maximal runs of consecutive current samples in one class; a gap > MAX_GAP_S ends a run. */
-function runs(current: readonly Point[]): { kind: CurrentClass; start: number; end: number }[] {
+/** Maximal runs of consecutive current samples in one class; a gap > MAX_GAP_S ends a run unless it is a recovery gap (Decision 19). */
+function runs(current: readonly Point[], recoveries: readonly number[]): { kind: CurrentClass; start: number; end: number }[] {
   const out: { kind: CurrentClass; start: number; end: number }[] = [];
   for (const [i, p] of current.entries()) {
     const kind = classOf(p.value);
     const last = out.at(-1);
-    if (last !== undefined && last.kind === kind && span(current[i - 1].t, p.t) <= MAX_GAP_S) last.end = p.t;
+    const joined = i > 0 && (span(current[i - 1].t, p.t) <= MAX_GAP_S || isRecoveryGap(current[i - 1].t, p.t, recoveries));
+    if (last !== undefined && last.kind === kind && joined) last.end = p.t;
     else out.push({ kind, start: p.t, end: p.t });
   }
   return out;
 }
 
 export function chargePhases(log: ChargeLog): ChargePhases {
-  const all = runs(log.current);
+  const all = runs(log.current, log.recoveries);
   let charge: Window | undefined;
   for (const run of all) {
     if (run.kind === "charge" && span(run.start, run.end) >= MIN_CHARGE_S && (charge === undefined || span(run.start, run.end) > span(charge.start, charge.end))) {
@@ -264,7 +290,8 @@ export function chargePhases(log: ChargeLog): ChargePhases {
   const gate = preRest !== undefined && postRest !== undefined ? { start: preRest.start, end: postRest.end } : undefined;
   return {
     ...(preRest ? { preRest } : {}), ...(charge ? { charge } : {}), ...(postRest ? { postRest } : {}), ...(postRestRun ? { postRestRun } : {}),
-    currentGap: largestGap(log.current, gate),
-    groupGap: largestGap(log.groups, gate),
+    currentGap: largestGap(log.current, gate, log.recoveries),
+    groupGap: largestGap(log.groups, gate, log.recoveries),
+    recoveryGaps: recoveryGaps(log.current, log.recoveries, gate),
   };
 }

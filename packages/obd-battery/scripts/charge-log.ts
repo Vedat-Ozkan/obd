@@ -17,6 +17,9 @@ const BM2_MIN_DELTA_SOC = 30;
 const window = (name: string, w: Window | undefined, extra = "") =>
   w === undefined ? `${name}: not found` : `${name}: t=${num(w.start)}–${num(w.end)} (${num(w.end - w.start)} s)${extra}`;
 const gapText = (gap: { seconds: number; at: number }) => `${num(gap.seconds)} s at t=${num(gap.at)}`;
+/** Decision 19: recovery gaps are counted and printed, never a failed condition. */
+const recoveryText = (gaps: ChargePhases["recoveryGaps"]) =>
+  gaps.length === 0 ? "recovery gaps: 0" : `recovery gaps: ${String(gaps.length)}, longest ${num(Math.max(...gaps.map((g) => g.seconds)))} s`;
 const input = (estimate: CapacityEstimate & { status: "estimated" }, name: string) => estimate.inputs.find((i) => i.name === name)?.value ?? NaN;
 
 function capacityLines(estimate: CapacityEstimate): string[] {
@@ -96,8 +99,8 @@ export async function chargeLogSummary(lines: readonly RecordingLine[], recordin
     window("Charge", charge, `, mean ${num(meanCharge)} A`),
     window("Post-charge rest", phases.postRest),
     failed.length === 0
-      ? `Gate (T2.4 verify line): PASS (largest current gap ${gapText(phases.currentGap)}, largest group-set gap ${gapText(phases.groupGap)})`
-      : `Gate (T2.4 verify line): FAIL: ${failed.join("; ")}`,
+      ? `Gate (T2.4 verify line): PASS (largest current gap ${gapText(phases.currentGap)}, largest group-set gap ${gapText(phases.groupGap)}, ${recoveryText(phases.recoveryGaps)})`
+      : `Gate (T2.4 verify line): FAIL: ${failed.join("; ")}${phases.recoveryGaps.length === 0 ? "" : ` (${recoveryText(phases.recoveryGaps)})`}`,
     power === undefined
       ? `Power check: not computed: ${charge === undefined ? "no charge window" : "no paired samples in the charge window"}`
       : `Power check: I×V ${num(power.ivKw)} kW, 27AF slope ${num(power.energySlopeKw)} kW, ratio ${num(power.ratio)}`,

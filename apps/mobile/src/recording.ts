@@ -35,11 +35,14 @@ export class RecordingBuffer {
     this.recordingLines.push({ t: this.timestamp(), dir: "rx", data: latin1Decode(bytes) });
   }
 
-  /** A string is written as {note}; a record is written as its own keys (the charge-log session boundary, T2.4 Decision 9). */
-  meta(note: string | Readonly<Record<string, string>>): void {
+  /** A string is written as {note}; a record is written as its own keys (the charge-log session boundary, T2.4 Decision 9).
+   *  Returns the line's t (the boundary's time in the live charge log, T2.4 Decision 19). */
+  meta(note: string | Readonly<Record<string, string>>): number {
     this.requireStarted();
     if (typeof note !== "string" && ("t" in note || "dir" in note)) throw new Error("A meta record cannot set t or dir");
-    this.recordingLines.push({ t: this.timestamp(), dir: "meta", ...(typeof note === "string" ? { note } : note) });
+    const t = this.timestamp();
+    this.recordingLines.push({ t, dir: "meta", ...(typeof note === "string" ? { note } : note) });
+    return t;
   }
 
   /** Seconds since start, on the same scale as the lines' t. */

@@ -44,6 +44,10 @@
     "not_80_group_set": {
       "at": 5.75,
       "valid": 79
+    },
+    "recovery_gap": {
+      "seconds": 15,
+      "at": 1255.35
     }
   },
   "notes": "Generator truth for a synthetic charge log. The capacity is synthetic, not the car's; the scalings are the decoder's own, so only the P1 recording checks them.",

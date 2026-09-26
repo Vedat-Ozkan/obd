@@ -26,6 +26,9 @@ const WEAK_RECORD = 21; // 1-based record position; module 3
 const WEAK_DROP_V = 0.03;
 /** Planted not-80 set: record 80's module byte is 0, so 79 records are valid (Decision 8). */
 const NOT_80_VALID = 79;
+/** Planted recovery (Decision 19): charge cycle 46 starts 5 s late after a "timeout" session boundary, a 15 s gap then a 5 s one. */
+const RECOVERY_CYCLE = 46;
+const RECOVERY_DELAY_MS = 5_000;
 
 const GROUP_DIDS = ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7"];
 // scanMode22Profile's commands for the decoded DIDs only (packages/obd-core/src/vehicles/scan.ts).
@@ -36,7 +39,7 @@ const CYCLE = [
 const at = (command: string) => CYCLE.indexOf(command) * STEP_MS;
 
 type Phase = "early" | "pre-rest" | "ramp" | "charge" | "post-rest";
-interface Cycle { startMs: number; phase: Phase; amps: number; groupNoData?: string; not80?: true }
+interface Cycle { startMs: number; phase: Phase; amps: number; groupNoData?: string; not80?: true; recovery?: true }
 
 function schedule(): Cycle[] {
   const cycles: Cycle[] = [];
@@ -51,7 +54,10 @@ function schedule(): Cycle[] {
   let t = 35_000;
   for (let i = 0; i < 64; i++, t += CYCLE_MS) add(t, "pre-rest", REST_A); // 630 s
   for (let i = 0; i < 13; i++, t += CYCLE_MS) add(t, "ramp", -2.5 - 0.15 * i); // 120 s in the "other" class
-  for (let i = 0; i < 91; i++, t += CYCLE_MS) add(t, "charge", CHARGE_A); // 900 s
+  for (let i = 0; i < 91; i++, t += CYCLE_MS) { // 900 s
+    if (i === RECOVERY_CYCLE) cycles.push({ startMs: t + RECOVERY_DELAY_MS, phase: "charge", amps: CHARGE_A, recovery: true });
+    else add(t, "charge", CHARGE_A);
+  }
   for (let i = 0; i < 184; i++, t += CYCLE_MS) add(t, "post-rest", REST_A); // 1830 s
   return cycles;
 }
@@ -99,10 +105,12 @@ export function generate(): { jsonl: string; label: string } {
   const avg = Math.round(counts.reduce((s, c) => s + c, 0) / counts.length);
 
   const lines: object[] = [
-    { t: 0, dir: "meta", synthetic: true, car: "none", dongle: "none", script: "packages/obd-battery/scripts/synthetic-charge-log.ts", note: `synthetic charge log for T2.4 Stage A: ${String(CAPACITY_AH)} Ah synthetic capacity (not the car's), one cell group ${String(WEAK_DROP_V * 1000)} mV low, a 79-record group set, a 2AE3 NO DATA cycle and a 15 s current gap before the pre-rest; encodings follow the decoder's sourced scalings (docs/specs/T2.4-charge-logger.md, Sources); timestamps invented` },
+    { t: 0, dir: "meta", synthetic: true, car: "none", dongle: "none", script: "packages/obd-battery/scripts/synthetic-charge-log.ts", note: `synthetic charge log for T2.4 Stage A: ${String(CAPACITY_AH)} Ah synthetic capacity (not the car's), one cell group ${String(WEAK_DROP_V * 1000)} mV low, a 79-record group set, a 2AE3 NO DATA cycle and a 15 s current gap before the pre-rest, and a 15 s timeout-recovery gap with a session boundary during the charge (no timed-out command or re-init recorded); encodings follow the decoder's sourced scalings (docs/specs/T2.4-charge-logger.md, Sources); timestamps invented` },
     { t: 0, dir: "meta", event: "charge-log session", reason: "start" },
   ];
   for (const cycle of cycles) {
+    // The boundary the phone writes before a new session's ATZ; this fixture's sessions have no init, like its first one.
+    if (cycle.recovery) lines.push({ t: (cycle.startMs - 1_000) / 1000, dir: "meta", event: "charge-log session", reason: "timeout" });
     for (const command of CYCLE) {
       const txMs = cycle.startMs + at(command);
       const t = txMs / 1000;
@@ -134,6 +142,7 @@ export function generate(): { jsonl: string; label: string } {
   };
   const early = samples.filter((_, i) => cycles[i].phase === "early");
   const groupT = (c: Cycle) => (c.startMs + at("22 2AE1")) / 1000;
+  const recovery = cycles.findIndex((c) => c.recovery);
   const label = {
     car: "none",
     session: "charge",
@@ -152,6 +161,7 @@ export function generate(): { jsonl: string; label: string } {
       current_gap: { seconds: 15, at: early[early.length - 1].t },
       group_gap: { seconds: 20, at: groupT(cycles[0]) },
       not_80_group_set: { at: groupT(cycles[1]), valid: NOT_80_VALID }, // schedule() plants it second
+      recovery_gap: { seconds: (CYCLE_MS + RECOVERY_DELAY_MS) / 1000, at: samples[recovery - 1].t },
     },
     notes: "Generator truth for a synthetic charge log. The capacity is synthetic, not the car's; the scalings are the decoder's own, so only the P1 recording checks them.",
     synthetic: true,

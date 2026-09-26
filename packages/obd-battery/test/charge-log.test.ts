@@ -25,6 +25,7 @@ interface Label {
     current_gap: { seconds: number; at: number };
     group_gap: { seconds: number; at: number };
     not_80_group_set: { at: number; valid: number };
+    recovery_gap: { seconds: number; at: number };
   };
 }
 const label = JSON.parse(read("fixtures/synthetic/charge-log-rested.label.json")) as Label;
@@ -91,6 +92,26 @@ describe("synthetic charge log (labeled synthetic)", () => {
     expect(phases.groupGap.seconds).toBeLessThanOrEqual(10);
     expect(phases.currentGap.at).toBeGreaterThanOrEqual(start);
     expect(phases.groupGap.at).toBeGreaterThanOrEqual(start);
+  });
+
+  // Decision 19: a gap with a session boundary inside and at most RECOVERY_GAP_S long does not end the charge run or fail the gate.
+  it("bridges the planted recovery gap in the charge, counts it in the gate line, and adds its band term", async () => {
+    const { lines, summary } = await load(synthetic);
+    const log = await chargeLogFromRecording(lines, synthetic, signals);
+    const phases = chargePhases(log);
+    const planted = label.planted.recovery_gap;
+    expect(planted.seconds).toBeGreaterThan(10);
+    expect(planted.at).toBeGreaterThan(label.windows.charge.start);
+    expect(planted.at + planted.seconds).toBeLessThan(label.windows.charge.end);
+    expect(log.sessions?.map((s) => s.reason)).toEqual(["start", "timeout"]);
+    expect(phases.recoveryGaps).toEqual([planted]);
+    expect(summary).toMatch(new RegExp(`\\nGate \\(T2\\.4 verify line\\): PASS \\(.*, recovery gaps: 1, longest ${String(planted.seconds)} s\\)\\n`));
+
+    const integrated = integratedCurrentCapacity(log, phases);
+    if (integrated.status !== "estimated") throw new Error(integrated.reason);
+    const at = (t: number) => log.current.find((p) => p.t === t)?.value ?? NaN;
+    const term = (Math.max(Math.abs(at(planted.at)), Math.abs(at(planted.at + planted.seconds))) * planted.seconds) / 3600;
+    expect(integrated.terms.filter((t) => t.name.startsWith("recovery gap")).map((t) => [t.value, t.unit])).toEqual([[term, "Ah"]]);
   });
 
   // Decision 10: a post-charge rest shorter than POST_REST_S (a partial run) must not pass.

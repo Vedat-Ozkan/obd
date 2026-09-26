@@ -1,21 +1,21 @@
 # Charge log: fixtures/synthetic/charge-log-rested.jsonl
 
 Synthetic: yes
-Sessions: 1: t=0 start
+Sessions: 2: t=0 start; t=1269 timeout
 Samples: current 356 (largest gap 15 s at t=20.35), pack voltage 356, energy 356, SOC 356, group sets 354 (largest gap 20 s at t=0.75), cell min/max 356
 Group sets dropped: 2 (incomplete 1; not 80 valid records 1, t=5.75 79 records)
 Pre-charge rest: t=35.35–665.35 (630 s)
 Charge: t=805.35–1705.35 (900 s), mean -20 A
 Post-charge rest: t=1715.35–3515.35 (1800 s)
-Gate (T2.4 verify line): PASS (largest current gap 10 s at t=35.35, largest group-set gap 10 s at t=35.75)
+Gate (T2.4 verify line): PASS (largest current gap 10 s at t=35.35, largest group-set gap 10 s at t=35.75, recovery gaps: 1, longest 15 s)
 Power check: I×V 6.24 kW, 27AF slope 6.2292 kW, ratio 1.0017
 
 ## Capacity (estimates, not truth)
 
 BMS-SOC-referenced: divides by the BMS's own SOC, so it is not independent of the BMS (ADR-016). Not truth.
-Integrated current ÷ ΔSOC: 11.9654 Ah ± 0.3003 Ah
+Integrated current ÷ ΔSOC: 11.9654 Ah ± 0.5027 Ah
   SOC0 → SOC1: 39.2157 % at t=655.65 → 80.3922 % at t=3505.65 (ΔSOC 41.1765 %), Q 4.9269 Ah
-  Bounded terms (worst case, added linearly): current resolution 0.0198 Ah; integration 0.0569 Ah; SOC resolution on ΔSOC 0.3922 %
+  Bounded terms (worst case, added linearly): current resolution 0.0198 Ah; integration 0.0569 Ah; SOC resolution on ΔSOC 0.3922 %; recovery gap at t=1255.35 0.0833 Ah
   Unbounded: current sensor gain and offset; BMS SOC model error and lag; temperature (not measured)
   BM2 selection: pass
 BMS figure: 27AF energy remaining ÷ SOC. A comparison, not the reference (ADR-016). Not truth.

@@ -1,4 +1,4 @@
-import { largestGap, MAX_GAP_S, type ChargeLog, type ChargePhases, type Point } from "./session.js";
+import { isRecoveryGap, largestGap, MAX_GAP_S, span, type ChargeLog, type ChargePhases, type Point } from "./session.js";
 
 // Formulas and labels: docs/specs/T2.4-charge-logger.md §Estimates and error budgets (ADR-016).
 
@@ -48,29 +48,36 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
   if (start === undefined || end === undefined) return { status: "not-estimated", method, reason: "no SOC sample in a rest window" };
   const inside = log.current.filter((p) => p.t > start.t && p.t < end.t);
   const samples = [{ t: start.t, value: currentAt(log.current, start.t) }, ...inside, { t: end.t, value: currentAt(log.current, end.t) }];
-  const gap = largestGap(samples);
+  const gap = largestGap(samples, undefined, log.recoveries);
   if (gap.seconds > MAX_GAP_S) return { status: "not-estimated", method, reason: `current gap of ${String(gap.seconds)} s at t=${String(gap.at)}` };
   const deltaSoc = end.value - start.value;
   if (deltaSoc <= 0) return { status: "not-estimated", method, reason: `SOC did not rise (${String(start.value)} % to ${String(end.value)} %)` };
   let ampSeconds = 0;
   let spread = 0;
+  const recoveries: { name: string; value: number; unit: string }[] = [];
   for (let i = 1; i < samples.length; i++) {
     const dt = samples[i].t - samples[i - 1].t;
     ampSeconds += ((samples[i].value + samples[i - 1].value) / 2) * dt;
     spread += Math.abs(samples[i].value - samples[i - 1].value) * dt;
+    // Decision 19: the current during a recovery gap was not observed; bound it by the larger |I| on either side.
+    if (isRecoveryGap(samples[i - 1].t, samples[i].t, log.recoveries)) {
+      const value = (Math.max(Math.abs(samples[i - 1].value), Math.abs(samples[i].value)) * span(samples[i - 1].t, samples[i].t)) / 3600;
+      recoveries.push({ name: `recovery gap at t=${String(samples[i - 1].t)}`, value, unit: "Ah" });
+    }
   }
   const q = -ampSeconds / 3600;
   const resolution = (CURRENT_HALF_COUNT_A * (end.t - start.t)) / 3600;
   const integration = spread / 2 / 3600;
   const socTerm = 2 * SOC_HALF_COUNT_PCT;
   const value = q / (deltaSoc / 100);
-  const relative = (resolution + integration) / Math.abs(q) + socTerm / deltaSoc;
+  const relative = (resolution + integration + recoveries.reduce((sum, r) => sum + r.value, 0)) / Math.abs(q) + socTerm / deltaSoc;
   return {
     status: "estimated", method, label: INTEGRATED_LABEL, value, band: Math.abs(value) * relative, unit: "Ah",
     terms: [
       { name: "current resolution", value: resolution, unit: "Ah" },
       { name: "integration", value: integration, unit: "Ah" },
       { name: "SOC resolution on ΔSOC", value: socTerm, unit: "%" },
+      ...recoveries,
     ],
     inputs: [
       { name: "SOC0", value: start.value, unit: "%" }, { name: "t0", value: start.t, unit: "s" },
