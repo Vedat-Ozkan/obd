@@ -4,55 +4,7 @@ Run card for `tools/spike/discover.py`. Spec: `docs/specs/T2.3a-equinox-discover
 
 The recording stays **local only**. `.gitignore` excludes `fixtures/recordings/**/*-discovery*.jsonl` (spec Decision 3; ADR-017). It holds ECU names, calibration IDs, and `F18x` part and serial numbers. `0902` and `22 F190` are refused by the tool's allowlist, but the 2026-09 discovery recordings still hold the VIN: Mode 22 DID `4193` on module `17` returned it (found 2026-09-23). The tools now block DID `4193` (ADR-017 work), and the local discovery recordings stay gitignored.
 
-## Desk prep (once, with internet)
-
-1. Get the current `tools/spike/` (`discover.py`, `go.py`, `spike.py`) onto the laptop: `git pull` once it is pushed, or copy the three files.
-2. `uv run tools/spike/discover.py --help`. This downloads Python and `bleak` now, so the car session needs no downloads.
-3. If the Veepeak is paired in the OS Bluetooth settings, remove it.
-4. Charge the laptop fully. The session takes about 25 minutes with the laptop left in the car.
-
-## At the car (about 25 min)
-
-Safety: the tool only reads (services `01`, `09`, `22`, plus a fixed list of AT setup commands). It never clears codes, changes sessions, or writes anything. Stay in Park with the parking brake on the whole time.
-
-1. Park within reach of the home charger. The charging step needs the laptop left inside the car while you plug in.
-2. Plug in the dongle. Car powered on and **Ready**, in **Park**, **parking brake** on. **HVAC off** at the start.
-3. Note the battery % on the dash and the outside temperature.
-4. In the `obd` folder, run `uv run tools/spike/discover.py`. Type the battery % and the temperature. It finds the dongle (choose it by number if asked) and prints the plan and the file name.
-5. Phases A and B run on their own, about 15 minutes. Phase B prints a progress line every 5 s with an ETA. A `WARNING: the budget will cut ranges` line means the modules answer slowly. That is fine: the scan stops at 15 minutes and the recording says what was covered. **Do not press Enter during A or B.**
-6. Phase C prints one instruction per state. Hold each state for at least 60 s and 3 cycles (the console counts both), then press Enter:
-   1. idle baseline: HVAC off. Then heater to max (hot, fan high); press Enter once hot air flows.
-   2. heater max on: after about 60 s, heater off; press Enter.
-   3. heater off: after about 60 s, plug in the home charger; press Enter once the car or charger shows charging. **If charging does not start within about a minute in Ready, switch the car off and continue** (spec Decision 6); the tool keeps polling and records whatever the modules do. Leave the laptop in the car.
-   4. plugged in and charging: after about 90 s, unplug the charger; press Enter.
-   5. unplugged: after about 60 s, press Enter to finish.
-7. The tool prints `Done` and disconnects. **Unplug the dongle** (12 V drain on the EV).
-8. If the run stops early (BLE drop, the car powering off, Ctrl+C), keep the partial file and rerun; it goes to `-discovery-2.jsonl`. There is no resume. The tool can also stop itself with `aborted: UNABLE TO CONNECT` or `aborted: LV RESET`, for example after you switch the car off during the charging step. That is not a failure: everything recorded up to that point is kept and still counts.
-
-## Time plan
-
-Basis: 75 ms per physical Mode 22 request, about 100 ms per functional Mode 01 request, 30 ms per AT command, 243 ms per NO DATA (T0.2 EV recording).
-
-| Step | Requests | Estimate |
-|---|---|---|
-| Prompts, BLE scan (10 s), connect | — | ~1 min |
-| A: init + `0100` with SEARCHING | 9 | ~3 s |
-| A: bitmaps `0120`–`0160` (+`0180` if flagged) | 3–4 | <1 s |
-| A: flagged Mode 01 PIDs | 47 + ≤31 | ~5–8 s |
-| A: `ATSP7`/`ATCP` + 5 × (3 AT + `0900` + ≤6 infotypes) | ~55 | ~5 s |
-| B: `CB` 2000–2FFF | 4096 | 5.1 min |
-| B: `CB` 4000–43FF | 1024 | 1.3 min |
-| B: `CB` 8300–83FF | 256 | 0.3 min |
-| B: `17` 2000–2FFF | 4096 | 5.1 min |
-| B: `17` 4000–43FF | 1024 | 1.3 min |
-| B: `F180`–`F1FF` × 5, minus `F190` | 635 | 0.8 min |
-| B total | 11,131 | 13.9 min at 75 ms; hard stop 15 min |
-| C: watch, 5 states × 60–90 s + walking to the charger | cycles ≤ 15 s | 6–8 min |
-| Total | | about 21–25 min |
-
-## What to bring back
-
-The `.jsonl` file, copied to the desktop as a file (USB, cloud drive, or similar) into `fixtures/recordings/chevrolet-equinox-ev-2024/`. Never open and re-save it in an editor. Say where it landed. It stays out of git (see above).
+Session run 2026-09-23; procedure and outcome in `docs/task-runs/T2.3a.md` and `docs/specs/T2.3a-equinox-discovery.md`.
 
 ## 1. Session setup
 
@@ -154,47 +106,7 @@ Run card for `tools/spike/targeted.py`. Spec: `docs/specs/T2.3b-targeted-watch.m
 
 Every entry cites its phase-B tx line in the 2026-09-23 recording (§1). The recorder now writes each tx line before the BLE write, so the §1 replay defect cannot recur.
 
-### Desk prep (once, with internet)
-
-1. Get the current `tools/spike/` onto the laptop: `discover.py`, `go.py`, `spike.py`, **`targeted.py`, and `targeted_watch.json`**. Use `git pull` once it is pushed, or copy the files.
-2. `uv run tools/spike/targeted.py --help`. This downloads Python and `bleak` now, so the car session needs no downloads.
-3. If the Veepeak is paired in the OS Bluetooth settings, remove it. Charge the laptop.
-
-### At the car (about 15 min)
-
-Safety: as in T2.3a. The tool only reads (`01`, `09`, `22`, and the same fixed AT list). Park, parking brake on, the whole time.
-
-1. Park within reach of the home charger. Plug in the dongle. Car in **Ready**, **Park**, **HVAC off**.
-2. Note the battery % on the dash and the outside temperature.
-3. Run `uv run tools/spike/targeted.py`. Type the battery % and the temperature. It prints the plan, finds the dongle, and prints the file name.
-4. Phase A runs on its own (~20 s). **Do not press Enter during it.**
-5. The watch prints one instruction per state and a status line after every cycle: time in state, cycles, rotation progress, and `full rotation done` once every rotating DID was read in that state. **The tool refuses an early Enter**: before `full rotation done` in any state, and before 5:00 of charging. It then prints what is still missing (DIDs or time left) and keeps polling; press Enter again when done. **Press Enter only once per attempt, and only after the status line says you may.** Extra presses stay queued and would end the next stage early (reviewer finding, T2.3b round 1).
-   1. idle baseline: HVAC off. After `full rotation done`, heater to max (hot, fan high); press Enter once hot air flows.
-   2. heater max on: after `full rotation done`, heater off; press Enter.
-   3. heater off: after `full rotation done`, plug in the home charger; press Enter once the car or charger shows charging. **If charging does not start within about 1 minute in Ready, switch the car off, wait for charging, then press Enter.** Leave the laptop in the car.
-   4. plugged in and charging: the console shows `charging m:ss of 5:00, do not unplug yet`. Once it says 5:00 reached and `full rotation done`, unplug and press Enter.
-   5. unplugged: after `full rotation done`, press Enter to finish.
-6. The tool prints `Done` and disconnects. **Unplug the dongle.**
-7. If the run stops early (BLE drop, the car powering off, Ctrl+C, or `aborted: UNABLE TO CONNECT` / `aborted: LV RESET`), keep the partial file; it is still valid. A rerun goes to `-discovery-targeted-2.jsonl`.
-
-### Time plan
-
-Basis: spec Time budget (phase-B times from the 2026-09-23 recording). Cycle ≈ 7.8 s; full rotation ≈ 101 s (13 cycles); ≈ 131 s+ if `17` goes silent with the car off.
-
-| Step | Estimate |
-|---|---|
-| Prompts, BLE scan, connect | ~1 min |
-| Phase A (reused sweep) | 0.3 min |
-| idle baseline (1 rotation) | 1.7 min |
-| heater max on (1 rotation) | 1.7 min |
-| heater off (1 rotation, plus walking and plugging in) | ~2 min |
-| plugged in and charging (≥ 5 min, ≥ 2 rotations) | 5–5.5 min |
-| unplugged (1 rotation; slower if the car is off) | 1.7–2.7 min |
-| Total | ≈ 13.5–15 min |
-
-### What to bring back
-
-The `-discovery-targeted.jsonl` file, copied as a file (never re-saved in an editor) into `fixtures/recordings/chevrolet-equinox-ev-2024/`. Say where it landed and whether the car was switched off to charge. It stays out of git.
+Session run 2026-09-23; procedure and outcome in `docs/task-runs/T2.3b.md` and `docs/specs/T2.3b-targeted-watch.md`.
 
 ### 7.1 Session setup
 
@@ -242,11 +154,11 @@ A candidate changes with heater load and flips sign when charging. The recording
 Scalings used (from the public captures in `reports/Ultium battery app trajectory review.md`; not yet in a checked-in signalset): `2414` s16 ÷ 20 A (negative = into the pack), `2885` u16 ÷ 100 V, `27AF` u16 ÷ 100 kWh, `276D` u16 × 100/65535 %.
 
 Cross-checks inside this recording:
-- **Power, two ways.** Charging: I × V = −26.0 A × 328.7 V ≈ **8.5 kW** into the pack; `27AF` rose 0.74 kWh from t 488 to t 802 (314 s) ≈ **8.5 kW**. Heater: 12.9 A × 326.1 V ≈ **4.2 kW**; `27AF` fell 0.12 kWh from t 250 to t 350 ≈ **4.3 kW**. They agree.
-- **First idle disagrees; likely explained.** `2414` read about 0.3–0.4 kW at two instants (t 92, t 190), while `27AF` (0.07 kWh over 230 s ≈ 1.1 kW) and the `276D` SOC drop (≈ 0.95 kW) both say about 1 kW on average. `ATRV` climbed 12.7 → 13.6 V during that idle: the DC-DC converter recharging the 12 V battery after wake-up, plus wake-up loads (owner: it was a true idle). The likely explanation is a varying load between two sparse current samples, not a sensor fault; not verified. The last idle (fan on, per owner) agrees: I × V ≈ 0.39 kW against ≈ 0.44 kW from SOC. Consequence for T2.4: poll `2414` every cycle, not in rotation.
-- **12 V observation.** The owner confirms the car stayed in Ready for the whole recording. `ATRV` held 13.6 V from t 119 (line 9703) through the first ~220 s of charging, then stepped down at t 710 (13.6 → 12.6 → 11.7 V, lines 64960–65440) and ran a slow sawtooth (11.7 → 12.2 V, then back to 11.7 V) until the end, including after unplug. Module `17` kept answering, and pack current stayed +1.2 A after unplug, so the car was awake. Cause unverified: a DC-DC low-voltage regulation mode after the 12 V battery was topped up fits the shape; an internal power-state change or a dongle measurement quirk are the alternatives. Consequence for T2.5: a single `ATRV` value is not a health verdict; record the context and judge only under a defined condition.
-- **Capacity proxy.** `27AF` ÷ SOC(`276D`) = **88.4 kWh** at the start, 88.36 at charge start, 88.45 at charge end, and 88.45 at the end (four points, 15 minutes). The same ratio from `2B43` SOC gives 88.5–88.7. The T2.3a single sample gave ~88. This is the BMS's own energy figure scaled to 100 %, not a measured capacity; compare with GM's published figure once it is sourced.
-- **Charge in amp-hours.** −26 A for 314 s ≈ 2.27 Ah for 0.754 % SOC (`276D`), so ≈ 301 Ah per 100 %. 301 Ah × 327 V ≈ 98 kWh, which matches the incremental ΔE/ΔSOC (0.74 kWh / 0.754 % ≈ 98 kWh). The average E/SOC (88.4) is lower because the pack sits well above its average voltage at 85 %. Four current samples only; provisional.
+- **Power, two ways.** Charging: I × V = −26.0 A × 328.7 V ≈ **8.5 kW**; `27AF` 0.74 kWh over t 488–802 (314 s) ≈ **8.5 kW**. Heater: 12.9 A × 326.1 V ≈ **4.2 kW**; `27AF` 0.12 kWh over t 250–350 ≈ **4.3 kW**. Agree.
+- **First idle disagrees; likely explained.** `2414` ≈0.3–0.4 kW (t 92, t 190) vs. `27AF` (0.07 kWh / 230 s ≈ 1.1 kW) and `276D` SOC drop (≈0.95 kW). `ATRV` 12.7 → 13.6 V: DC-DC recharge plus wake-up loads (owner: true idle), not a sensor fault; not verified. Last idle (fan on) agrees: 0.39 kW vs. 0.44 kW. Consequence for T2.4: poll `2414` every cycle, not in rotation.
+- **12 V observation.** Owner confirms Ready throughout. `ATRV` held 13.6 V from t 119 (line 9703) through ~220 s of charging, then stepped 13.6 → 12.6 → 11.7 V at t 710 (lines 64960–65440) and sawtoothed 11.7–12.2 V through the end, including after unplug. Module `17` kept answering and pack current stayed +1.2 A after unplug: car awake. Cause unverified (DC-DC regulation mode vs. internal power-state change vs. dongle quirk). Consequence for T2.5: a single `ATRV` value is not a health verdict; record context and judge only under a defined condition.
+- **Capacity proxy.** `27AF` ÷ SOC(`276D`) = **88.4 kWh** at start, 88.36 at charge start, 88.45 at charge end, 88.45 at end (four points, 15 minutes); `2B43` SOC gives 88.5–88.7; T2.3a single sample ~88. BMS energy figure scaled to 100 %, not measured capacity; compare with GM's published figure once sourced.
+- **Charge in amp-hours.** −26 A for 314 s ≈ 2.27 Ah for 0.754 % SOC (`276D`) → ≈301 Ah per 100 %. 301 Ah × 327 V ≈ 98 kWh, matching incremental ΔE/ΔSOC (0.74 kWh / 0.754 % ≈ 98 kWh). Average E/SOC (88.4) lower than incremental because the pack sits above its average voltage at 85 %. Four current samples only; provisional.
 
 ### 7.5 Gate B
 
