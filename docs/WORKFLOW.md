@@ -6,7 +6,7 @@ Three roles, three subagents in `.claude/agents/`, one orchestrating skill (`/fe
 
 **Architect** reads the plan, the architecture doc, and the actual code, then writes a spec to `docs/specs/`. The spec's most important section is *Sources*: every OBD constant the task will introduce, and where it comes from. If a constant has no source, the spec says "capture on hardware first" and that becomes a prerequisite. The architect never writes code. A bad spec wastes two more agents' time, so this is the stage to spend care on.
 
-**Implementer** builds exactly the spec, writes tests first (E2E replays of recordings by default, never unit tests after the code), runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. The spec has already done the thinking, and the reviewer catches what it misses.
+**Implementer** builds exactly the spec and never expands its scope, writes tests first (E2E replays of recordings by default, never unit tests after the code), runs `pnpm check`, and reports PASS / FAIL / NOT RUN per verification item. It does not get to mark the task done and it does not decide the spec was wrong on its own; it reports and stops. The spec has already done the thinking, and the reviewer catches what it misses.
 
 **Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, any test that mocks the thing under test, and any unit test that restates the code or covers no failure the spec lists. It returns APPROVE or REQUEST_CHANGES with ranked findings. Review is where guessing gets caught. Model and effort per role are set in the agent definitions (`.claude/agents/*.md` frontmatter, `.codex/agents/*.toml`), not here.
 
@@ -38,15 +38,7 @@ A task is done when all of these hold:
 
 ## ML task verification
 
-For BM1–BM9 and the LLM features (T2.10, T2.11), read [ML.md](ML.md) and [EVAL.md](EVAL.md). Milestones may need multiple bounded specs. The architect records model/data provenance, consent, licensing, split policy, exact dependencies, compute and spending decisions, evaluation controls, and required experiment artifacts. The implementer preserves held-out data and records all attempted configurations. The reviewer checks split leakage, target quality, matched baselines, and the link from measurements to claims.
-
-Normal `pnpm check` stays fixture-based, including the LLM regression suite over saved responses. Model training and paid model evaluations run separately when a spec requires them. The reviewer reruns required checks or marks them NOT RUN; absent compute does not qualify for the vehicle hardware-only exception and leaves the experiment incomplete. A reproducible negative result can pass; an unrun experiment cannot. No model is promoted to the app merely because training completed.
-
-## What each role must not do
-
-- Architect: write code; leave a constant unsourced; spec more than one implementer-day of work.
-- Implementer: expand scope; edit recordings; add dependencies; claim hardware verification without a recording path; edit the spec.
-- Reviewer: edit anything; approve with blocking findings; soften a verdict because the work was mostly good.
+For BM1–BM9 and the LLM features (T2.10, T2.11), see AGENTS.md hard rule 11, [ML.md](ML.md), and [EVAL.md](EVAL.md) for provenance, split isolation, real/synthetic separation, and the limits of the hardware-only exception. Beyond that: the implementer records every attempted configuration, not just the winner, and preserves held-out data untouched; the reviewer checks for split leakage, target quality, and matched baselines, and that the measurements actually support the claims made; no model is promoted to the app merely because training completed.
 
 ## Hardware in the loop
 
@@ -60,20 +52,23 @@ Two tools run this loop: Claude Code (`/feature`, agents in `.claude/`) and Code
 
 **One home per kind of fact.** Duplicated state is how records and specs balloon, and divergent copies are how agents act on stale decisions:
 
-- **Decisions** live in the task record (and in an ADR when they change the roadmap) — not as running amendments inside the spec.
+- **Decisions** live in the task record (and in an ADR when they change the roadmap) — not as running amendments inside the spec. A decision made after the spec's kickoff goes in the record; if it changes a rule the spec already states, edit the spec's governing section in place to the final rule instead of appending an amendment entry.
 - **Scope, sources, and verification items** live in the spec — not restated in the record.
 - **Verification evidence** lives in the record as PASS/FAIL/NOT RUN lines plus the named artifact — not as full command transcripts.
-- The **current state** of a record is the short block at the top; history below is one line per stage.
+- The **current state** of a record is the `## Current state (<date>)` block at the top; history below is one line per stage.
 
 When a document would restate another, cite it instead.
 
 Rules, the same for both tools:
 
 1. **One tool, one role at a time.** Never run Claude and Codex, or two roles, on the same task concurrently. A transfer stops the current role first.
-2. **The orchestrator owns the record.** It creates the record at preflight and updates it at every role change, on every blocker, and before yielding. Minimum contents: last tool and role; current and completed stages; spec paths; approved decisions; baseline (`git status --short` at start) and touched files; exact verification commands with PASS / FAIL / NOT RUN; open review findings; repair count (max 2); escalation count and reason; blocker; next action. No secrets.
+2. **The orchestrator owns the record.** It creates the record at preflight — noting the spec path(s), baseline (`git status --short` at start), and last tool/role — and updates the `## Current state (<date>)` block at every role change, on every blocker, and before yielding. That block is the single home for: current and completed stages; per-stage verdicts; repair count (max 2); escalation count and reason; commit SHAs and touched files; exact verification commands with PASS / FAIL / NOT RUN; the canonical artifact hash; open findings; decisions in effect; owner authorizations; NOT RUN items with reasons; blocker; next action. Log entries below it never restate these facts. No secrets anywhere in the record.
 3. **Resume by reconciling, not by trusting.** The receiving tool reads the record, the spec, the working tree, and the evidence, then resumes at the first incomplete or invalidated stage. Completed architecture and implementation are reused while their evidence still holds. A recorded approval is never inherited: the receiving reviewer reruns every check the current changes affect and every check the spec requires.
 4. **Missing record.** Reconstruct one from the spec, tree, and evidence only. Counters start at zero only for a genuinely new task; imported history with unknown counts stays unknown. Never invent approvals, completed stages, or findings.
 5. **Counters do not reset** across tools or resumptions.
+6. **Collapse an approved, committed stage to one line:** `<stage> <role>: <VERDICT> (repairs N/2) — commit <sha>`. Fixed findings and their detail drop from the record; git history keeps them.
+7. **Log entries cite spec sections instead of restating spec text**, and record each round's check results once, as PASS/FAIL, not as full transcripts.
+8. **Soft-cap the record at ~8KB.** Past that, collapse closed stages first.
 
 Takeover prompt for a Claude session: `/feature <task-id>` reads the record first and does the reconciliation itself. For Codex, `CODEX.md` has the equivalent.
 
