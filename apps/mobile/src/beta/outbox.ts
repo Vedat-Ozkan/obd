@@ -7,7 +7,7 @@ import { CONSENT_VERSION } from "./consent.js";
 // Decisions 3 and 5. Consent state, scrub -> parts -> queue, drain with retry, stop, and Delete my data. Pure TS: files and
 // backend are injected (Stage D: expo-file-system; Stage C1: the HTTPS client). Stage C1 adds the orchestrator's C1-a (401
 // and register failures retry), C1-b (server copies of dropped files are deleted), C1-c, and repair round 2's D1-D3
-// (docs/task-runs/T2.9.md).
+// and C1b (docs/task-runs/T2.9.md).
 
 export const PART_BYTES = 16 * 1024 * 1024;
 export const BACKOFF_BASE_S = 60;
@@ -65,7 +65,8 @@ interface State {
   registered: boolean;
   /** D3: a register was sent for this auth, even if its answer was lost. */
   registerAttempted: boolean;
-  /** D1: the server answered 401 and nothing was accepted since; a re-register answered 409 then pauses uploads. */
+  /** D1: the server answered 401 and nothing was accepted since; a re-register answered 409 then pauses uploads. C1b: any
+   *  later success of this install's credentials clears it, and so does a 409 with nothing queued. */
   recheck: boolean;
   testerKey: string | null;
   vehicleKeys: Record<string, string>;
@@ -244,6 +245,8 @@ export function createBetaOutbox(deps: {
           state.registerAttempted = true;
           await save(state);
         }
+        // C1b: a stop or Delete my data during that save sends no register.
+        if (!unchanged()) return "stop";
         const answer = await backend.register(auth, CONSENT_VERSION).then(() => 201, (error: unknown) => (error instanceof BackendError ? error.status : undefined));
         // C1-c, D3: Delete my data ran while this register was in flight and has queued the install delete itself.
         if (state.auth !== auth) return "stop";
@@ -258,6 +261,11 @@ export function createBetaOutbox(deps: {
           if (answer === 201) state.recheck = false;
           if (state.recheck) {
             if (state.outbox.includes(item)) await retryLater(state, item);
+            else {
+              // C1b: with nothing queued there is nothing to pause, so the paused line does not linger.
+              if (state.outbox.length === 0) state.recheck = false;
+              await save(state);
+            }
             return "stop";
           }
           await save(state);
@@ -315,12 +323,15 @@ export function createBetaOutbox(deps: {
       let done = true;
       try {
         await (pending.fileId === undefined ? backend.deleteAll(pending) : backend.deleteFile(pending, pending.fileId));
-      } catch (error) {
-        // C1-a: 401 = the server does not know this install, so it holds nothing more to delete.
-        done = error instanceof BackendError && error.status === 401;
+      } catch {
+        // C1b: only a 2xx is done. The Worker answers 204 for an install it holds nothing of, so a 401 means a live record
+        // holds another secret, or it came from something in front of the Worker: retry like an upload.
+        done = false;
       }
       if (done) {
         state.deleting = state.deleting.filter((d) => d !== pending);
+        // C1b: the install's credentials were accepted, so a pause from an earlier 401 is over.
+        if (state.auth?.installId === pending.installId) state.recheck = false;
         // The consent is wiped once the server confirms, unless the tester has opted in again meanwhile.
         if (state.deleting.length === 0 && state.auth === null) state.consent = null;
       } else {

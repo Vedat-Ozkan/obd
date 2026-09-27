@@ -1,6 +1,7 @@
 // Beta upload Worker's request handler (ADR-019): docs/specs/T2.9-beta-data-upload.md §Stage C1 HTTP contract, plus the
-// orchestrator's C1-b route DELETE /v1/files/<fileId> and D1's 410 (docs/task-runs/T2.9.md). The R2 binding is typed
-// locally (no @cloudflare/workers-types). It logs nothing: no IP, secret, token or body ever reaches a log or a response.
+// orchestrator's C1-b route DELETE /v1/files/<fileId>, D1's 410 and C1b's 204 deletes (docs/task-runs/T2.9.md). The R2
+// binding is typed locally (no @cloudflare/workers-types). It logs nothing: no IP, secret, token or body ever reaches a log
+// or a response.
 // D5: worker.ts is the entry module and exports only the fetch handler, since workerd treats every named export of the
 // main module as an entrypoint.
 import { z } from "zod";
@@ -72,7 +73,7 @@ function bearer(request: Request): string | undefined {
 
 interface Install { installId: string; known: boolean }
 
-/** `Bearer <installId>:<secret>`. undefined = 401. `known: false` = no install record (DELETE /v1/installs/me only). */
+/** `Bearer <installId>:<secret>`. undefined = 401. `known: false` = no install record (the delete routes only). */
 async function tester(request: Request, bucket: BucketLike): Promise<Install | undefined> {
   const match = new RegExp(`^(${UUID_V4}):(.+)$`).exec(bearer(request) ?? "");
   if (!match) return undefined;
@@ -139,7 +140,9 @@ async function putManifest(request: Request, bucket: BucketLike, installId: stri
 }
 
 async function deleteInstall(bucket: BucketLike, install: Install, now: Date): Promise<Response> {
-  if (!install.known) return (await bucket.head(`tombstones/${install.installId}.json`)) ? new Response(null, { status: 204 }) : fail(401, "unauthorized");
+  // C1b: no record = deleted (tombstoned) or never registered, so nothing is held; 204 and nothing is written. A 401 then
+  // only means a live record holds another secret.
+  if (!install.known) return new Response(null, { status: 204 });
   // Files first and the install record last, so an interrupted delete can be repeated with the same credentials.
   await deleteAll(bucket, `files/${install.installId}/`);
   await bucket.put(`tombstones/${install.installId}.json`, JSON.stringify({ month: month(now) }));
@@ -186,7 +189,9 @@ async function route(request: Request, env: Env, now: Date): Promise<Response> {
   if (!match) return fail(404, "not found");
   if (!isId(match[1]) || (part && !PART_INDEX.test(part[2]))) return fail(400, "bad id");
   const install = await tester(request, bucket);
-  if (!install?.known) return fail(401, "unauthorized");
+  if (!install) return fail(401, "unauthorized");
+  // C1b: a file delete for an install with no record is done, as for DELETE /v1/installs/me; nothing is written.
+  if (!install.known) return method === "DELETE" ? new Response(null, { status: 204 }) : fail(401, "unauthorized");
   if (part) return putPart(request, bucket, install.installId, match[1], Number(part[2]), now);
   if (manifest) return putManifest(request, bucket, install.installId, match[1]);
   await deleteAll(bucket, `files/${install.installId}/${match[1]}/`);

@@ -758,17 +758,21 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
     expect(files.parts.size).toBe(1);
   });
 
-  it("A4 (C1-a): a pending Delete my data answered 401 is complete (the server does not know the install)", async () => {
-    const { outbox, backend } = setup();
+  it("A4 (C1b): a pending Delete my data answered 401 is not complete; it backs off and retries until a 204", async () => {
+    const { outbox, backend, files, clock } = setup();
     await outbox.decide(true);
     await outbox.queue("capture", MINE, PHONE);
     await outbox.drain();
-    backend.fail = (call) => (call === "deleteAll" ? new BackendError(401, "unknown install") : undefined);
-    expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");
-    expect(await outbox.status()).toMatchObject({ deletePending: false, needsConsent: true, sharing: false });
-    const calls = backend.log.length;
+    backend.fail = (call) => (call === "deleteAll" ? new BackendError(401, "unauthorized") : undefined);
+    expect(await outbox.deleteMyData()).toBe("Delete requested; it retries until the server confirms.");
+    expect(await outbox.status()).toMatchObject({ deletePending: true, needsConsent: false, sharing: false });
+    const [pending] = stored(files).deleting;
+    expect(pending.nextTry - clock.s).toBe(60);
+    backend.fail = undefined;
+    clock.s = pending.nextTry;
     await outbox.drain();
-    expect(backend.log).toHaveLength(calls);
+    expect(await outbox.status()).toMatchObject({ deletePending: false, needsConsent: true, sharing: false });
+    expect(backend.manifests.size).toBe(0);
   });
 
   it("B1 (C1-b): a file stopped after an accepted part, or with its first part in flight, is deleted on the server by the next drain", async () => {
@@ -1314,7 +1318,7 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     expect(await restarted.status()).toMatchObject({ deletePending: false, needsConsent: true, sharing: false, queued: 0 });
   });
 
-  it("D3: Delete my data after a register that never reached the Worker sends the delete; its 401 counts as done", async () => {
+  it("D3, C1b: Delete my data after a register that never reached the Worker sends the delete; the Worker's 204 writes nothing", async () => {
     const { outbox, backend, auth } = await workerSetup();
     backend.fail = (call) => (call === "register" ? new BackendError("network", "offline") : undefined);
     await outbox.drain();
@@ -1327,6 +1331,136 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     await outbox.decide(true);
     expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");
     expect(backend.log).toHaveLength(2);
+  });
+});
+
+const DELETE_PENDING = "Deleting your uploaded beta data; it retries until the server confirms.";
+const NOTHING_WAITING = "Beta data sharing is on; nothing waiting to upload.";
+const recheck = (files: MemoryBetaFiles) => (JSON.parse(files.state ?? "{}") as { recheck: boolean }).recheck;
+
+describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
+  it("C1b-1 (PA): a 401 from in front of the Worker on Delete my data is not done; it stays pending with backoff until the Worker's 204", async () => {
+    const { outbox, backend, files, clock, auth } = await workerSetup(512);
+    await outbox.drain();
+    const onServer = backend.bucket.keys();
+    backend.fail = (call) => (call === "deleteAll" ? new BackendError(401, "not from the Worker") : undefined);
+    expect(await outbox.deleteMyData()).toBe("Delete requested; it retries until the server confirms.");
+    expect(await outbox.status()).toMatchObject({ deletePending: true, needsConsent: false, sharing: false, line: DELETE_PENDING });
+    const [pending] = stored(files).deleting;
+    expect(pending.nextTry - clock.s).toBe(60);
+    expect(stored(files).consent).toEqual({ version: "beta-1", share: false });
+    expect(backend.bucket.keys()).toEqual(onServer);
+    backend.fail = undefined;
+    clock.s = pending.nextTry;
+    await outbox.drain();
+    expect(backend.log.filter((entry) => entry === `delete:${auth.installId}`)).toHaveLength(2);
+    expect(backend.bucket.keys()).toEqual([`tombstones/${auth.installId}.json`]);
+    expect(await outbox.status()).toMatchObject({ deletePending: false, needsConsent: true, sharing: false });
+    expect(stored(files).deleting).toEqual([]);
+  });
+
+  it("C1b-1: Delete my data with a stale secret while the install is live (the Worker's 401) stays pending and keeps retrying; the server data stays", async () => {
+    const { outbox, backend, files, clock, auth } = await workerSetup(512);
+    await outbox.drain();
+    const onServer = backend.bucket.keys();
+    files.state = (files.state ?? "").replace(auth.secret, `${uuid(0x201)}${uuid(0x202)}`);
+    const restored = outboxOver(files, backend, clock, 512);
+    expect(await restored.deleteMyData()).toBe("Delete requested; it retries until the server confirms.");
+    for (let i = 0; i < 3; i++) {
+      clock.s = stored(files).deleting[0].nextTry;
+      await restored.drain();
+    }
+    expect(backend.log.filter((entry) => entry === `delete:${auth.installId}`)).toHaveLength(4);
+    expect(stored(files).deleting[0].nextTry - clock.s).toBe(480);
+    expect(await restored.status()).toMatchObject({ deletePending: true, needsConsent: false, line: DELETE_PENDING });
+    expect(backend.bucket.keys()).toEqual(onServer);
+  });
+
+  it("C1b-1 (PH): a 401 from in front of the Worker on a pending file delete is retried; the Worker's 204 then removes the parts", async () => {
+    const { outbox, backend, files, clock, auth, fileId } = await workerSetup(512);
+    const calls: (() => void)[] = [];
+    backend.held = calls;
+    const drained = outbox.drain();
+    while (calls.length === 0) await tick();
+    calls.shift()?.();                          // register
+    while (backend.log.length < 2 || calls.length === 0) await tick();
+    await outbox.decide(false);                 // part 0 in flight: queues the file delete
+    backend.held = undefined;
+    calls.shift()?.();
+    await drained;
+    backend.fail = (call) => (call === "deleteFile" ? new BackendError(401, "not from the Worker") : undefined);
+    await outbox.drain();
+    const [pending] = stored(files).deleting;
+    expect(pending).toMatchObject({ fileId });
+    expect(pending.nextTry - clock.s).toBe(60);
+    expect(backend.bucket.keys(`files/${auth.installId}/${fileId}/`)).toHaveLength(1);
+    backend.fail = undefined;
+    clock.s = pending.nextTry;
+    await outbox.drain();
+    expect(backend.log.slice(-2)).toEqual([`deleteFile:${fileId}`, `deleteFile:${fileId}`]);
+    expect(backend.bucket.keys("files/")).toEqual([]);
+    expect(stored(files).deleting).toEqual([]);
+  });
+
+  it("C1b-3 (PB): paused, then off and on with nothing queued: the stopped file's delete succeeds and the paused line is gone", async () => {
+    const { outbox, backend, files, clock } = await workerSetup(512);
+    await outbox.drain();
+    await outbox.queue("codes-scan", MINE, PHONE);
+    backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
+    await outbox.drain();                       // part 0: 401
+    backend.fail = undefined;
+    clock.s = stored(files).outbox[0].nextTry;
+    await outbox.drain();                       // register: 409, paused
+    const { betaId } = await outbox.status();
+    expect((await outbox.status()).line).toBe(`Uploads paused. Beta ID ${betaId ?? ""}.`);
+    await outbox.decide(false);
+    await outbox.decide(true);
+    await outbox.drain();                       // the file delete: 204
+    expect(backend.log.at(-1)).toMatch(/^deleteFile:/);
+    expect(stored(files).deleting).toEqual([]);
+    expect(await outbox.status()).toMatchObject({ sharing: true, queued: 0, line: NOTHING_WAITING });
+    expect(recheck(files)).toBe(false);
+  });
+
+  it("C1b-3: a re-register answering 409 after a stop, with nothing queued, clears the paused state", async () => {
+    const { outbox, backend, files, clock } = await workerSetup(512);
+    await outbox.drain();
+    await outbox.queue("codes-scan", MINE, PHONE);
+    backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
+    await outbox.drain();                       // part 0: 401
+    backend.fail = (call) => (call === "deleteFile" ? new BackendError("network", "offline") : undefined);
+    clock.s = stored(files).outbox[0].nextTry;
+    const calls: (() => void)[] = [];
+    backend.held = calls;
+    const drained = outbox.drain();
+    while (calls.length === 0) await tick();    // the re-register, which will answer 409
+    await outbox.decide(false);
+    backend.held = undefined;
+    calls.shift()?.();
+    await drained;
+    expect(recheck(files)).toBe(false);
+    await outbox.decide(true);
+    expect(await outbox.status()).toMatchObject({ sharing: true, queued: 0, line: NOTHING_WAITING });
+  });
+
+  it("C1b-4 (PG): a stop or Delete my data during the save before the first register sends no register and leaves the bucket empty", async () => {
+    for (const act of ["stop", "delete"] as const) {
+      const { outbox, backend, files, auth, fileId } = await workerSetup(512);
+      const writes = holdWrites(files);
+      writes.hold();
+      const drained = outbox.drain();
+      while (writes.waiting === 0) await tick();   // the registerAttempted save
+      const acted = act === "stop" ? outbox.decide(false) : outbox.deleteMyData();
+      writes.open();
+      await drained;
+      const message = await acted;
+      await outbox.drain();
+      expect(backend.log).toEqual([act === "stop" ? `deleteFile:${fileId}` : `delete:${auth.installId}`]);
+      expect(backend.bucket.keys()).toEqual([]);
+      expect(stored(files).deleting).toEqual([]);
+      if (act === "delete") expect(message).toBe("Your beta data was deleted.");
+      expect(await outbox.status()).toMatchObject({ sharing: false, queued: 0, deletePending: false });
+    }
   });
 });
 

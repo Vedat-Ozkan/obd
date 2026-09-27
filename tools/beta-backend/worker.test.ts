@@ -62,7 +62,8 @@ describe("Worker failure modes", () => {
     const s = server();
     expect((await s.register(A, SECRET_A)).status).toBe(201);
     const before = s.bucket.keys();
-    const wrong = [undefined, "", "Bearer", `Bearer ${A}`, `Bearer ${A}:`, bearer(A, SECRET_B), bearer(B, SECRET_A), `Basic ${A}:${SECRET_A}`, `Bearer ${ADMIN}`];
+    // C1b: an installId with no record (B here) is not in this list; its deletes answer 204 (W12).
+    const wrong = [undefined, "", "Bearer", `Bearer ${A}`, `Bearer ${A}:`, bearer(A, SECRET_B), `Basic ${A}:${SECRET_A}`, `Bearer ${ADMIN}`];
     for (const auth of wrong) {
       const headers = auth === undefined ? {} : { auth };
       expect((await s.part(auth, F1, 0, LINE)).status).toBe(401);
@@ -190,6 +191,28 @@ describe("Worker failure modes", () => {
     expect(s.bucket.keys("files/")).toEqual([`files/${A}/${F2}/part-000.jsonl`, `files/${B}/${F1}/part-000.jsonl`]);
     expect((await s.send("DELETE", `/v1/files/${F1}`, { auth: bearer(A, SECRET_A) })).status).toBe(204);
     expect(s.bucket.keys(`installs/${A}`)).toHaveLength(1);
+  });
+
+  it("W12 (C1b): the deletes of an installId with no record, unknown or tombstoned, answer 204 and write nothing; a live record with another secret still gets 401", async () => {
+    const s = server();
+    await s.register(A, SECRET_A);
+    await s.part(bearer(A, SECRET_A), F1, 0, LINE);
+    await s.register(B, SECRET_B);
+    await s.send("DELETE", "/v1/installs/me", { auth: bearer(B, SECRET_B) });
+    // Objects under an installId with no record cannot arise from the routes; seeded, they show nothing is removed.
+    const C = id(3);
+    s.bucket.seed(`files/${C}/${F1}/part-000.jsonl`, LINE.length, NOW);
+    const before = [...s.bucket.objects.entries()];
+    for (const auth of [bearer(C, SECRET_A), bearer(B, SECRET_B), bearer(B, SECRET_A)]) {
+      expect((await s.send("DELETE", "/v1/installs/me", { auth })).status).toBe(204);
+      expect((await s.send("DELETE", `/v1/files/${F1}`, { auth })).status).toBe(204);
+      expect((await s.part(auth, F2, 0, LINE)).status).toBe(401);
+      expect((await s.manifest(auth, F2, manifestFor(F2, [{ bytes: LINE.length, lines: 1 }]))).status).toBe(401);
+    }
+    expect((await s.send("DELETE", "/v1/installs/me", { auth: bearer(A, SECRET_B) })).status).toBe(401);
+    expect((await s.send("DELETE", `/v1/files/${F1}`, { auth: bearer(A, SECRET_B) })).status).toBe(401);
+    expect([...s.bucket.objects.entries()]).toEqual(before);
+    expect(s.bucket.keys(`tombstones/${C}`)).toEqual([]);
   });
 
   it("W8: admin routes need the admin token; no token, a wrong one, a tester credential or an unset token get 401", async () => {
