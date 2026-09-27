@@ -10,13 +10,13 @@ Open Codex from this repository and send:
 $obd-feature T0.1
 ```
 
-Or launch the economical coordinator tier from a shell:
+Or launch from a shell, using the model the architect/coordinator agent is configured with:
 
 ```sh
-codex --model gpt-5.6-sol --config model_reasoning_effort="medium" '$obd-feature T0.1'
+codex --model gpt-6-sol --config model_reasoning_effort="medium" '$obd-feature T0.1'
 ```
 
-The single quotes keep the shell from expanding `$obd`. That shell launch selects the `gpt-5.6-sol` coordinator with medium reasoning; an existing session keeps its selected coordinator model. In either case, roles use fixed, economical tiers: architect `gpt-5.6-sol`/medium, implementer `gpt-5.6-terra`/medium, and reviewer `gpt-5.6-sol`/high. T0.1 above illustrates invocation syntax; the scaffold now exists. Select the next incomplete task from `docs/PLAN.md` and reconcile its task record before starting.
+The single quotes keep the shell from expanding `$obd`. That shell launch selects the coordinator model and reasoning effort explicitly; an existing session keeps its selected coordinator model. Each role's model and reasoning effort are set in its `.codex/agents/*.toml` (`model`/`model_reasoning_effort`), not here; consult those files for the current tier per role. T0.1 above illustrates invocation syntax; the scaffold now exists. Select the next incomplete task from `docs/PLAN.md` and reconcile its task record before starting.
 
 The skill delegates to `obd_architect`, `obd_implementer`, and `obd_reviewer` in sequence, with `obd_recording_analyst` for questions about what a recording contains and `obd_test_runner` for check and test runs, so large recordings and check output never reach the main conversation. It asks about material missing decisions before implementation, then implements, checks, reviews, and repairs within the requested task. Selecting this automatic workflow supplies the routine scope authorization; you do not need to approve the same task again. It does not start the next task or commit changes.
 
@@ -38,9 +38,7 @@ Codex discovers repository skills under `.agents/skills` and custom agents under
 
 ## Handoff, completion, resuming
 
-The handoff contract between Claude and Codex — the task record, reconciliation rules, counters, and one-tool-one-role — is defined once in `docs/WORKFLOW.md`, Handoff section, and applies to Codex unchanged. To take over a task from Claude, run `$obd-feature <task-id>`; it performs the reconciliation itself.
-
-Approval requires the reviewer's own successful `pnpm check` and the existing verification gates. There are at most two repair rounds after the initial review. Escalate a single affected stage at most once only after recording concrete insufficiency evidence, target tier, and reason; otherwise stop with a blocker. Remaining defects, missing tooling, and external checks are reported as FAIL or NOT RUN, with a concrete next step. Software approval with explicitly deferred hardware checks is not hardware verification or a completed phase milestone.
+The handoff contract (task record, reconciliation rules, counters, one-tool-one-role) is defined once in `docs/WORKFLOW.md`, "Handoff between Claude and Codex" section; completion gates are in that document's "Definition of done" section. Both apply to Codex unchanged. To take over a task from Claude, run `$obd-feature <task-id>`; it performs the reconciliation itself.
 
 ## ML and battery tasks
 
