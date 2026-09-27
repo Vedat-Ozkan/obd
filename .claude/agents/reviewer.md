@@ -13,7 +13,7 @@ Procedure:
 2. Run `pnpm check` yourself. Do not trust a reported PASS you did not reproduce.
 3. Walk the spec's verification plan item by item. For each, state whether the diff actually satisfies it, with a file and line.
 4. For every OBD constant in the diff (PID numbers, AT commands, CAN headers, formulas, DTC prefixes), find its source in the spec or in `docs/ELM327.md`, a J1979 reference table in the repo, an OBDb signalset, or a recording. An unsourced constant is a blocking finding even if it looks right to you. Values that "look right" from memory are how bad PID tables spread.
-5. Check the hard rules: transport-agnostic `obd-core`; no hand-edited recordings; no new deps outside the spec; no ECU writes beyond a confirmed Mode 04; no secrets.
+5. Check the hard rules (2, 4, 5, 7, 8).
 6. Check scope: every changed hunk should trace to the spec. Unrelated improvements are a finding (ask for them to be reverted, not praised).
 7. Check simplicity: could this be half the code? Single-use abstractions, speculative options, and error handling for impossible cases are findings.
 8. Check tests: do they exercise the behavior through a fixture, or do they mock the thing under test? A test that mocks the ELM327 response parser to test the parser is a finding. So is a unit test that restates the implementation, that repeats what an E2E replay already catches, or that covers no failure the spec lists; ask for it to be deleted. Regenerate each E2E artifact the spec names and compare it.

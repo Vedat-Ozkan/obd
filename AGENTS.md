@@ -27,11 +27,15 @@ It is a portfolio and personal-use project first, showcasing applied AI engineer
 ```
 packages/obd-core/      pure TS: transports, ELM327 session, PID/DTC decoding, vehicle profiles
 packages/obd-battery/   pure TS: charge sessions, capacity, imbalance, 12 V, reports, templates, on-device models
-packages/obd-assist/    pure TS: opt-in LLM summary and assistant, faithfulness check (replaces obd-diagnose)
+packages/obd-assist/    pure TS: opt-in LLM summary and assistant, faithfulness check
+packages/obd-diagnose/  withdrawn gas-car diagnosis (ADR-012), superseded by obd-assist
 packages/obd-eval/      Node: eval harness over labeled fixtures, scoring, reports
 apps/mobile/            Expo (Android): BLE transport, console, relay mode, charge logger, report + assistant screens
 tools/relay/            Node in WSL2: phone relay and car MCP server with a read-only allowlist
-tools/hil-bridge/       Python (laptop near the car): spike and fallback bridge
+tools/hil-bridge/       Python (laptop near the car): fallback bridge
+tools/spike/            Python: laptop capture scripts (spike, discovery, targeted watch, VIN redaction)
+tools/beta-backend/     Cloudflare Worker for beta uploads (ADR-019)
+tools/beta-intake/      Node: owner-side beta intake, re-scrub and deletion
 tools/ml/               planned isolated Python battery modeling (not implemented)
 fixtures/recordings/    recorded ELM327 transcripts (never hand-edited)
 fixtures/synthetic/     hand-written fixtures, labeled synthetic
@@ -74,14 +78,9 @@ A test written to fit code that already exists restates that code. It always pas
 10. **Simplicity.** Minimum code for the task. No single-use abstractions. If a senior engineer would call it overbuilt, rewrite it smaller.
 11. **ML evidence.** Track data/model provenance, consent, and intended-use licensing; separate synthetic and real results; split by vehicle and session before augmentation. No test-set tuning or invented benchmark results. Required model training and evaluation runs cannot be waived as vehicle hardware-only checks. Exact compute, spending, dependencies, and model choices belong in the experiment spec before execution. LLM output shown to users passes the deterministic number check.
 
-## ELM327 quick facts (full detail in `docs/ELM327.md`)
+## ELM327
 
-- Commands end with `\r`. Responses end with `>` (the prompt). Nothing is complete until `>` arrives.
-- Init: `ATZ` (wait ~1 s), `ATE0`, `ATL0`, `ATS0`, `ATH1`, then protocol select. Keep headers on and reassemble ISO-TP multi-frame yourself.
-- `SEARCHING...`, `NO DATA`, `UNABLE TO CONNECT`, `CAN ERROR`, `BUFFER FULL`, `STOPPED`, `?`, `LV RESET` are all documented responses; each has a defined handling in `docs/ELM327.md`.
-- One command in flight at a time. Over BLE, writes are chunked to the MTU (20 bytes by default) and notifications are reassembled until `>`.
-- Veepeak BLE: service `FFF0`, characteristics `FFF1`/`FFF2` (which is write vs notify varies by firmware; discover, do not assume).
-- The Equinox EV needs 29-bit CAN (`ATSP7`) and Mode 22 with per-module headers. Standard Mode 01 coverage on an EV is minimal.
+Protocol facts (init, responses, BLE, EV setup) live only in `docs/ELM327.md`; read it before any protocol work (hard rule 1).
 
 ## Workflow
 
