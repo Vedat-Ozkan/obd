@@ -21,7 +21,11 @@ import { runIntake, uvRedact, type IntakeDeps } from "./intake.js";
 
 // Repair 2 crash snapshots: while `hook.on`, every fs mutation calls hook.after, so a test can copy the temp repo at
 // each point a run could be killed. Off, the wrappers are plain pass-throughs.
-const hook = vi.hoisted(() => ({ on: false, after: () => {} }));
+// C2b: a write for which `hook.fails` holds writes its first 40 bytes, then throws EIO (a disk error mid-write).
+const hook = vi.hoisted(() => {
+  const fails: (path: string, options: unknown) => boolean = () => false;
+  return { on: false, after: () => {}, fails };
+});
 vi.mock("node:fs", async (original) => {
   const fs = await original<typeof import("node:fs")>();
   const wrap = <F extends (...args: never[]) => unknown>(f: F) => ((...args: Parameters<F>) => {
@@ -29,10 +33,18 @@ vi.mock("node:fs", async (original) => {
     if (hook.on) hook.after();
     return out;
   }) as F;
-  return { ...fs, default: fs, writeFileSync: wrap(fs.writeFileSync), renameSync: wrap(fs.renameSync),
+  const write = ((path: string, data: string | Uint8Array, options?: unknown) => {
+    if (!hook.fails(path, options)) {
+      fs.writeFileSync(path, data, options as never);
+      return;
+    }
+    fs.writeFileSync(path, data.slice(0, 40), options as never);
+    throw Object.assign(new Error("EIO: i/o error, write"), { code: "EIO" });
+  }) as typeof fs.writeFileSync;
+  return { ...fs, default: fs, writeFileSync: wrap(write), renameSync: wrap(fs.renameSync),
     rmSync: wrap(fs.rmSync), rmdirSync: wrap(fs.rmdirSync), mkdirSync: wrap(fs.mkdirSync) };
 });
-afterEach(() => { hook.on = false; });
+afterEach(() => { hook.on = false; hook.fails = () => false; });
 
 const REPO = new URL("../../", import.meta.url);
 const PHONE = readFileSync(new URL("fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl", REPO), "latin1");
@@ -421,6 +433,23 @@ describe("Stage C2 intake failure modes", () => {
     const first = await runIntake(deps(w, root, [], { redact: dies }));
     expect(first.refused).toHaveLength(1);
     expect(recordingFiles(root)).toEqual([]);
+    const second = await runIntake(deps(w, root, []));
+    expect([second.added.length, second.refused.length]).toEqual([1, 0]);
+    expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");
+    expect((await runIntake(deps(w, root, []))).deleted).toHaveLength(2);
+    expect(recordingFiles(root)).toEqual([]);
+    expect(index(root).files).toEqual([]);
+  });
+
+  it("I10 (C2b): the original's wx write leaves a partial file, then fails with EIO; next run, Delete my data, run: nothing is left", async () => {
+    const w = world();
+    const { outbox } = await uploaded(w);
+    const root = tempRepo();
+    hook.fails = (path, options) => path.includes("/fixtures/recordings/") && (options as { flag?: string } | undefined)?.flag === "wx";
+    await expect(runIntake(deps(w, root, []))).rejects.toThrow("EIO");
+    hook.fails = () => false;
+    expect(recordingFiles(root)).toHaveLength(1);
+    // The pending entry saved before the write stays, so the next run removes the partial original and pulls again.
     const second = await runIntake(deps(w, root, []));
     expect([second.added.length, second.refused.length]).toEqual([1, 0]);
     expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");

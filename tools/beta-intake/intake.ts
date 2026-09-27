@@ -125,7 +125,9 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
       mkdirSync(dirname(at(path)), { recursive: true });
       try {
         writeFileSync(at(path), bytes, { flag: "wx" });
-      } catch {
+      } catch (error) {
+        // Any other error (EIO, ENOSPC) may leave a partial original: keep the pending entry so the next run removes it.
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
         drop(entry);
         throw new Refused("the local file exists; not overwritten");
       }
