@@ -135,6 +135,20 @@ def test_refusals(text: str, reason: str, tmp_path, capsys) -> None:
     assert os.listdir(tmp_path) == ["syn.jsonl"]
 
 
+def test_already_masked_input_passes() -> None:
+    """T2.9 C2 ruling (1): a phone-scrubbed file (serial already 000000) is redacted, not refused; a real serial that
+    survives elsewhere is still refused."""
+    two = recording("0902", interleave(frames("18DAF117", vin_0902(MASKED)), frames("18DAF128", vin_0902(MASKED))))
+    did = recording("22 4193", frames("18DAF117", bytes.fromhex("624193") + MASKED.encode() * 4))
+    for text, masked in ((two, 2), (did, 1)):
+        out, entries = redact_vin.redact(text, "syn.jsonl", SHA)
+        assert out.split("\n")[:-2] == text.split("\n")[:-1] and len(entries) == masked
+    mixed = with_rows(recording("0902", interleave(frames("18DAF117", vin_0902(MASKED)), frames("18DAF128", vin_0902(VIN)))),
+                      [{"t": 2.0, "dir": "meta", "note": "serial " + VIN[11:]}])
+    with pytest.raises(ValueError, match="a VIN serial survives masking"):
+        redact_vin.redact(mixed, "syn.jsonl", SHA)
+
+
 def test_refuses_redacted_input_and_existing_output(tmp_path, capsys) -> None:
     text = recording("0902", frames("18DAF117", vin_0902(VIN)))
     done = tmp_path / "a.redacted.jsonl"
