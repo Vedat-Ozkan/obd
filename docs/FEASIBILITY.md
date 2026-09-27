@@ -18,7 +18,7 @@ Hardware findings reviewed 2026-09-16; product and ML scope revised 2026-09-22 (
 | Battery ML data | None yet; needs many charge sessions from several vehicles | High | Beta export with consent (T2.9) before fleet claims; own-car work framed as n=1 case study |
 | Beta data consent and privacy | Planned; no backend | Medium | Explicit consent, VIN redaction, provenance in the meta line; user-initiated file export only |
 | On-device model runtime in Expo | Pure-TS tree models need nothing; ONNX/TFLite would be a new native module | Low–Medium | Choose in the BM4 spec (rule 7) |
-| LLM cost | Opt-in feature; BYOK in beta, per-use cost at store time | Medium | Measure cost per report and per question in BM5; usage cap via the proxy (ADR-007, ADR-009) |
+| LLM cost | Opt-in feature; server-funded DeepSeek candidate under ADR-020 | Medium | Measure cost per report and ad revenue before production; enforce a global usage/spend cap; reassess future paid access in Phase 3 |
 | LLM stating wrong numbers | Real risk for any generated summary | Medium | Deterministic number check before display, template fallback (T2.10) |
 | Phone as bridge + MCP relay | Feasible: BLE already on the phone, WebSocket built into React Native, WSL2 mirrored networking | Low–Medium | T0.8 then T0.6; app must stay open during relay sessions (ADR-013) |
 | Market claims | Mostly reported, few verified (see Market check) | Medium | Verify before any claim reaches the app or store listing |
@@ -59,7 +59,7 @@ Veepeak OBDCheck BLE (the non-plus model) is an ELM327-compatible clone over BLE
 
 ### Model and compute costs
 
-The in-app LLM (summary and assistant) is opt-in (ADR-012). In beta it runs on the user's own key; a paid release needs the proxy and a usage cap priced from BM5's measured cost per report and per question. Specs verify model availability and dated rates. Battery models are small and train on CPU; the BM7 distillation stretch states any GPU or rental cost in its spec.
+The in-app LLM (summary and assistant) is opt-in (ADR-012). T2.10 uses a separate server-held key, a verified rewarded-ad entitlement, and a usage cap under ADR-020; production access waits for measured model cost and ad revenue. Specs verify model availability and dated rates. Battery models are small and train on CPU; the BM7 distillation stretch states any GPU or rental cost in its spec.
 
 ### Battery ML (ADR-012)
 

@@ -145,14 +145,14 @@ Every number in a report carries its source (logged value, derived value, or mod
 
 ```
 src/
-  client.ts      LlmClient interface; AnthropicClient implementation (@anthropic-ai/sdk); proxy client later
+  client.ts      LlmClient interface; T2.10 summary uses a hosted proxy, with provider implementation on the server
   summary.ts     summarize(report, {model, effort}) → structured summary (zod)
   assistant.ts   tool-calling loop: list_sessions, get_session, get_capacity_estimate, get_codes
   check.ts       deterministic faithfulness check: every number in output must match the report or tool results
   prompts/       versioned prompts; stable reference material as a cacheable system block
 ```
 
-Opt-in only (ADR-012). The user's key lives in the app's secure store (BYOK) until a paid release adds the proxy. VIN and identifying free text never leave the device. If `check.ts` rejects an output, the app shows the template text instead. Imported files and beta notes are untrusted input to the assistant. Exact model identifiers, SDK methods, and pricing are verified in the implementing spec.
+Opt-in only (ADR-012, ADR-020). For T2.10, the model key stays on a separate summary backend; a user-chosen rewarded ad grants one use after a verified server callback. A minimized VIN-free projection is sent to DeepSeek only after separate, explicit consent that names the provider and processing location. If `check.ts` rejects an output, the app shows the template text instead. Imported files and beta notes are untrusted input to the assistant. Exact model identifiers, SDK methods, and pricing are verified in the implementing spec.
 
 The package rename from `obd-diagnose` to `obd-assist` and the new `obd-battery` package are small code tasks done with the first Phase 2 spec that needs them, not part of the documentation change.
 
@@ -209,4 +209,4 @@ Battery modeling for BM1–BM4 and BM8 (dataset builds and the OCV curve, the in
 
 ## What is deliberately not here
 
-No production backend or accounts yet. BYOK for the LLM feature until a paid release adds a thin proxy with a usage cap. No automatic model routing. No plugin system for vehicle profiles; a profile is a TypeScript object plus vendored OBDb JSON. No LLM on the device; on-device models are small non-LLM battery models (BM4).
+No accounts or payments yet. T2.10 adds a separate thin summary proxy with a server-held key and usage cap; production deployment remains gated on its spec. No automatic model routing. No plugin system for vehicle profiles; a profile is a TypeScript object plus vendored OBDb JSON. No LLM on the device; on-device models are small non-LLM battery models (BM4).
