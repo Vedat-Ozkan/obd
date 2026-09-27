@@ -67,7 +67,7 @@ Rules, the same for both tools:
 4. **Missing record.** Reconstruct one from the spec, tree, and evidence only. Counters start at zero only for a genuinely new task; imported history with unknown counts stays unknown. Never invent approvals, completed stages, or findings.
 5. **Counters do not reset** across tools or resumptions.
 6. **Collapse an approved, committed stage to one line:** `<stage> <role>: <VERDICT> (repairs N/2) — commit <sha>`. Fixed findings and their detail drop from the record; git history keeps them.
-7. **Log entries cite spec sections instead of restating spec text**, and record each round's check results once, as PASS/FAIL, not as full transcripts.
+7. **Log entries cite spec sections instead of restating spec text**, and record each round's check results once, as PASS/FAIL, not as full transcripts. Other files never cite a record's history sections by heading (they get collapsed); cite the spec, a commit, or `git show <sha>:docs/task-runs/<id>.md`.
 8. **Soft-cap the record at ~8KB.** Past that, collapse closed stages first.
 
 Takeover prompt for a Claude session: `/feature <task-id>` reads the record first and does the reconciliation itself. For Codex, `CODEX.md` has the equivalent.
