@@ -271,7 +271,7 @@ export function bridgedRecoveries(current: readonly Point[], recoveries: readonl
     const same = classOf(current[i - 1].value) === classOf(current[i].value);
     if (!same) count = 0;
     if (span(a, b) <= MAX_GAP_S) continue;
-    if (isRecoveryGap(a, b, recoveries) && (!same || count < MAX_RECOVERIES_PER_RUN)) {
+    if (isRecoveryGap(a, b, recoveries) && count < MAX_RECOVERIES_PER_RUN) {
       if (same) count++;
       continue;
     }

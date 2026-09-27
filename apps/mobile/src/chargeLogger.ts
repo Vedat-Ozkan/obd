@@ -160,8 +160,11 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     // Decision 25: stopFor acts on this only TRANSITION_S after the last charging sample, while the windows can still move.
     const last = log.current.at(-1);
     unpassable = phases.charge === undefined ? undefined
-      : post === undefined ? `no post-charge rest within ${String(TRANSITION_S)} s of the charge`
-      : !logged && last !== undefined && last.t > post.end ? "post-charge rest interrupted" : undefined;
+      : post === undefined
+        ? last !== undefined && lastCharging !== undefined && last.t >= lastCharging + TRANSITION_S
+          ? `no post-charge rest within ${String(TRANSITION_S)} s of the charge`
+          : undefined
+        : !logged && last !== undefined && last.t > post.end ? "post-charge rest interrupted" : undefined;
     if (phases.charge === undefined && preRestDoneAt === undefined && restRun !== undefined && span(restRun.start, restRun.end) >= PRE_REST_S) preRestDoneAt = restRun.end;
     if (post !== undefined) return `Charge done. Resting ${clock(span(post.start, post.end))} of ${clock(POST_REST_S)}.`;
     if (phases.charge !== undefined) return `Charging. ${clock(span(phases.charge.start, phases.charge.end))} logged.`;

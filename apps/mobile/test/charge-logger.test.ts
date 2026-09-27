@@ -780,6 +780,44 @@ it("Decision 25: a −3 A taper longer than TRANSITION_S after the charge stops 
   expect(await gateLine(r.stream.content)).toMatch(/^Gate \(T2\.4 verify line\): FAIL: .*no post-charge rest window/);
 }, SLOW);
 
+it("Decision 25: a silent current module after charge waits for the 10 min silence stop", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const r = await run("silent-after-charge-module", {
+    amps: happyAmps,
+    inject: (command, s) => (command === "22 2414" && s >= 1020 ? "NO DATA\r\r>" : undefined),
+  });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "no current for 10 min" });
+  expect(r.result.stopReason).not.toContain("no post-charge rest");
+  const { log, phases } = await expectSameLog(r, logs);
+  expect(phases.charge).toBeDefined();
+  expect(phases.postRestRun).toBeUndefined();
+  const last = log.current.at(-1)?.t ?? NaN;
+  expect(r.endS).toBeGreaterThanOrEqual(last + SILENT_STOP_S);
+  expect(r.endS).toBeLessThan(last + SILENT_STOP_S + CYCLE_S);
+}, SLOW);
+
+it("Decision 25: a lost link after charge waits for the 10 min silence stop", async () => {
+  const logs = vi.spyOn(ChargeLogBuilder.prototype, "log");
+  const lost: Plan = {
+    amps: happyAmps,
+    inject: (command, s) => (command === "22 2414" && s >= 1020 ? "lost" : undefined),
+  };
+  const r = await run("silent-after-charge-link", { amps: happyAmps }, {
+    connect: (n, clock) => {
+      if (n === 1) return new FakeElm(lost, clock);
+      throw new Error("dongle not found");
+    },
+  });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "no current for 10 min" });
+  expect(r.result.stopReason).not.toContain("no post-charge rest");
+  const { log, phases } = await expectSameLog(r, logs);
+  expect(phases.charge).toBeDefined();
+  expect(phases.postRestRun).toBeUndefined();
+  const last = log.current.at(-1)?.t ?? NaN;
+  expect(r.endS).toBeGreaterThanOrEqual(last + SILENT_STOP_S);
+  expect(r.endS).toBeLessThan(last + SILENT_STOP_S + RECOVERY_WAIT_S);
+}, SLOW);
+
 // Decision 25, probe P3 (Decision 23 rule 1, M10): three LV RESET recoveries at 22 2AE3 leave current gaps under MAX_GAP_S,
 // which are not counted; the one timeout at 22 2AF1 after them leaves the only counted gap, so the rest run holds.
 it("Decision 25: three short LV RESET recovery gaps and one timeout gap in the post-charge rest stop complete (probe P3)", async () => {
