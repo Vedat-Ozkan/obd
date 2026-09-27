@@ -6,6 +6,8 @@ A spec is the contract between the architect, the implementer, and the reviewer.
 
 For BM milestones and LLM features, also read [../ML.md](../ML.md) and [../EVAL.md](../EVAL.md). Split multi-session milestones into bounded specs. Add an experiment section specifying data/model revisions and licensing, source-grouped splits and leakage audit, target review, baselines and controlled variables, metrics and artifact locations, exact dependencies, compute target and spending cap, and reproducible commands. Record unresolved prerequisites before execution. Keep ordinary fixture checks separate from required training and eval runs; a missing run is NOT RUN, not a vehicle hardware-only exception. Success may be a reproducible negative result rather than improved model quality.
 
+Size target: about 20KB for an M task, 35KB for L; beyond that, split the task or move content out rather than growing the file. State verification checks shared by all stages once, above any per-stage list, instead of repeating them. Cite ADRs and other docs for their reasoning (e.g. "per ADR-014") rather than re-deriving it in the spec.
+
 ## Template
 
 ```markdown
@@ -46,5 +48,5 @@ One paragraph. What outcome is visible to a user or to a test when this is done.
 - ...
 
 ## Decisions
-(owner answers recorded here by the orchestrator; once a task is running, new decisions go in `docs/task-runs/<task-id>.md`, not here)
+(frozen at kickoff: owner answers recorded here by the orchestrator. Once a task is running, new decisions go in `docs/task-runs/<task-id>.md`, not here — but the governing spec section (Interfaces/Design/Verification) is then edited in place to the final rule; never append amendment entries to either file.)
 ```

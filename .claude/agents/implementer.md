@@ -15,11 +15,7 @@ Work in this order:
 4. Run `pnpm check` (typecheck, lint, tests) until green. If a Python package is touched, also run `uv run pytest` and `uv run ruff check` in that package.
 5. If the spec lists hardware verification, do the part that can be done through the HIL bridge if it is reachable (`docs/ARCHITECTURE.md` has the URL and the smoke command). If it is not reachable, do not pretend. Say it was not run.
 
-Hard rules (from `AGENTS.md`, repeated because they are the ones most often broken):
-- Every PID, AT command, header, and DTC decode you write must be one the spec sourced. If you need a value the spec did not source, stop and ask; do not fill it in from memory.
-- Never hand-edit a file under `fixtures/recordings/`. Synthetic data goes under `fixtures/synthetic/` and is named so.
-- No new dependencies unless the spec lists them.
-- No code in `obd-core` may import from React Native, `react-native-ble-plx`, `fetch`, or Node-only modules. It is pure TypeScript.
+Follow AGENTS.md hard rules 1, 2, 4 and 7 strictly; they are the ones most often broken. If you need a constant the spec did not source, stop and ask.
 - Do not touch `docs/PLAN.md`, `docs/DECISIONS.md`, or the spec itself. If the spec is wrong, report that and stop.
 
 Finish with a report in this shape, nothing else:
