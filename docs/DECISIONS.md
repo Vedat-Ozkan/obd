@@ -44,7 +44,7 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 ## ADR-004: Equinox EV replaces the Bolt EUV direction; EV work is Phase 2 behind a spike (2026-09-16)
 
 **Decision.** The EV target is the 2024 Chevrolet Equinox EV. Battery-health work is Phase 2, gated by the Phase 0 hardware spike (T0.2). Verified signals are shown as verified; everything else is labeled as a candidate.
-**Why.** The Bolt was never actually available. The Equinox EV is, and the Ultium platform it shares with several other GM models is a broader target than the Bolt, but community-verified signals for it are thin (six in OBDb, three of them flagged 2025+), so the plan cannot promise what the car will answer. The spike costs a day and prevents a month of building against assumptions.
+**Why.** The Bolt was never actually available, so the Equinox EV replaced it; community-verified signals for it are thin (six in OBDb, three flagged 2025+), so the spike costs a day rather than a month of building against assumptions.
 
 ## ADR-005: pnpm workspaces monorepo; TypeScript strict; `uv` for the one Python tool (2026-09-16)
 
@@ -59,7 +59,7 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 ## ADR-007: BYOK for the API key; no backend until distribution (2026-09-16)
 
 **Decision.** The user enters their own Anthropic key in the app; it lives in the secure store and is used directly from the device. No proxy server.
-**Why.** This is a personal and portfolio project. A proxy adds hosting, auth, and abuse handling for zero users. If the app is ever distributed, a thin proxy is a Phase 3 task and the `LlmClient` interface is the seam.
+**Why.** A proxy adds hosting, auth, and abuse handling for zero users; the `LlmClient` interface keeps a later proxy a drop-in.
 **Amended later on 2026-09-16.** The app is intended to be sold (ADR-009). BYOK stays for development and personal use, but a paid app cannot ask buyers for an Anthropic key, so the proxy moves from "if ever" to a prerequisite for the first paid release of the diagnostic feature.
 
 ## ADR-008: Read-only toward the vehicle; Mode 04 is the only write (2026-09-16)
@@ -78,7 +78,7 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 
 **What does not change.** No accounts, no backend, no store listing, no payment code before Phase 3. Selling a diagnostic tool also raises the "not a substitute for a mechanic" wording from a footnote to a screen the user sees; that is a Phase 3 task too.
 
-**Why modest.** The market analysis in the kickoff stands: general OBD apps are crowded and the AI ones are funded. The realistic ceiling is LeafSpy-scale, not salary-scale. The point of charging is to fund the API bill and validate that anyone will pay, not to build a company.
+**Why modest.** The market is crowded and the AI entrants are funded, so charging is meant to cover the API bill and validate that anyone will pay, not to build a company.
 
 ## ADR-010: OBDb signalsets are vendored under CC-BY-SA-4.0, kept in their own directory, and corrections go upstream (2026-09-16)
 
@@ -90,17 +90,8 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 
 ## ADR-011: Applied-ML experiments follow diagnosis and precede EV delivery (2026-09-20)
 
-**Decision.** Add ML1–ML6: matched model baselines, an audited data pilot, supervised LoRA/QLoRA fine-tuning, held-out evaluation, serving experiments, and a reproducible portfolio report. Delivery order is Phase 0 → Phase 1 → ML1–ML6 → Phase 2 → Phase 3. Preserve existing task IDs and completed evidence. Future dates are provisional; EV delivery is re-estimated after the ML track. See [ML.md](ML.md).
-
-**Why.** The owner wants hands-on fine-tuning and inference-engineering experience for applied-ML interviews. The structured case and evaluation boundary provide a bounded experiment: can a specialized small model retain useful diagnostic quality with lower cost or latency? A measured negative result satisfies the learning goal.
-
-**Amends ADR-002 and ADR-005.** Local or rented GPU experiments are permitted after the diagnostic baseline. Python may also be used in an isolated `tools/ml/` workspace for training and serving experiments; it remains outside the app, pure TypeScript core, and HIL bridge environment. This does not select hardware, a provider, a model, dependencies, or a spending cap; task specs settle those before execution.
-
-**Clarifies ADR-006 and ADR-007.** Hosted inference remains the app baseline. Experimental small-model endpoints plug into the existing client seam for evaluation; there is no automatic router, production GPU backend, or on-device LLM commitment. Promotion to the app requires measured quality and operational evidence. Historical model identifiers and cost estimates are not current availability/pricing guarantees.
-
-**Data and verification.** Review provenance, licenses, and intended use before imports or teacher-data generation. Separate real and synthetic results and split by source case/session before augmentation. Keep labels out of model inputs and test data out of adaptation. Required training and serving runs need actual evidence; missing compute cannot be waived as vehicle hardware-only verification. Ordinary CI stays fixture-based and free of GPU/paid-API requirements.
-
-**Unchanged boundaries.** Vehicle safety, immutable recordings, sourced protocol constants, core purity, and the eventual paid-app intent remain in force. Retrieval is optional. Training completion or good formatting alone does not establish diagnostic accuracy.
+**Decision.** Proposed an LLM fine-tuning track, ML1–ML6 (matched baselines, an audited data pilot, supervised LoRA/QLoRA fine-tuning, held-out evaluation, serving experiments, and a portfolio report), inserted between Phase 1 and Phase 2. See [ML.md](ML.md).
+**Withdrawn.** ADR-012 withdrew this track; BM1–BM9 in `docs/ML.md` replaced it with measurement-first battery ML.
 
 ## ADR-012: Battery health is the product; the gas-car diagnosis engine and LLM fine-tuning are withdrawn (2026-09-22)
 
@@ -152,7 +143,7 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 
 **Why.** ADR-014 limits the garage to supported vehicles, initially Ultium. Neither ICE car can be added to the product, so mandatory ICE sessions would test a path users cannot take. The two tracked Equinox spike recordings already exercise real ELM framing and replay. T0.4 and T0.5 use them for vehicle-backed checks and labeled synthetic fixtures for branches absent from those recordings; 11-bit CAN behavior needs a real recording when a supported vehicle using it is added. T0.7 tests the "recently cleared" branches with synthetic fixtures and does not require clearing codes on a car.
 
-**Amends ADR-012.** Its statement that the Chrysler and Elantra are core test cars is historical, superseded here. **Amends the Phase 0 plan.** T0.2's ICE sessions, T0.3's ICE replay follow-up, T0.4/T0.5's three-car checks, T0.7's Chrysler clear, T0.8's ICE baseline collection, T0.9's two ICE app runs, and T0.10's three-car fixture requirement are replaced by Equinox and synthetic verification as stated in `docs/PLAN.md`. Existing specs, review findings, and recordings remain historical evidence; no hardware verification is retroactively claimed.
+**Amends ADR-012.** Its statement that the Chrysler and Elantra are core test cars is historical, superseded here. **Amends the Phase 0 plan.** The Phase 0 ICE-car tasks were rescoped; `docs/PLAN.md` holds the current task set. Existing specs, review findings, and recordings remain historical evidence; no hardware verification is retroactively claimed.
 
 **Unchanged.** Source every protocol constant, keep recordings immutable, keep `obd-core` pure, and require explicit confirmation before any Mode 04 write. The optional ICE bench does not expand the supported-vehicle garage.
 

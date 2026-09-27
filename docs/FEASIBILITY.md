@@ -42,9 +42,7 @@ Consequence: the EV battery report is a Phase 2 item with a hardware spike as it
 
 ### Generic OBD-II on the ICE cars
 
-Both cars are post-2008 US-market and therefore ISO 15765-4 CAN. Mode 01/02/03/07/09/0A and readiness monitors are mandated. Mode 06 is optional in practice; Chrysler generally supports it over CAN, Hyundai varies. Freeze frame is one record per stored DTC on most ECUs. Nothing exotic is expected. The "recently cleared" heuristic depends on PIDs 30 (warm-ups since clear), 31 (distance since clear), and 4E (time since clear), which are widely supported on this era.
-
-ADR-015 makes these cars optional bench vehicles. These protocol expectations are historical research, not evidence of a completed car session or a requirement for the supported-vehicle app.
+The Chrysler 200 and Hyundai Elantra are optional bench cars, not recording or app acceptance gates (ADR-015); protocol specifics (CAN headers, per-car Mode 06 support) are in `docs/ELM327.md`.
 
 ### The dongle
 
@@ -52,10 +50,7 @@ Veepeak OBDCheck BLE (the non-plus model) is an ELM327-compatible clone over BLE
 
 ### Development environment
 
-- **WSL2 has no Bluetooth, and the desktop is out of BLE range of the driveway.** The bridge therefore runs on the laptop, in or next to the car, on the home Wi-Fi. `bleak` runs on Windows (WinRT backend) and Linux (BlueZ), so the laptop's OS does not matter. It listens on all interfaces; WSL2 on the desktop reaches it at the laptop's LAN address.
-- **WSL2 networking is already mirrored** (`.wslconfig` has `networkingMode=mirrored` and `hostAddressLoopback=true`, Windows build 26200). WSL2 shares the host's LAN address, so the phone reaches Metro and WSL2 reaches the laptop without port forwarding.
-- **Consequence for the workflow.** Hardware verification is a session you schedule (laptop out, car on, bridge up), not a button an agent presses. Every session should end with recordings that cover the next several tasks. Longer term, the phone app can serve as the bridge itself (Phase 3 idea), which removes the laptop from the loop.
-- **Expo on WSL2.** Expo Go cannot load `react-native-ble-plx`, so a development build is required. EAS Build produces the dev-client APK in the cloud; Metro runs in WSL2 and the phone connects at the desktop's LAN address thanks to mirrored networking, with `expo start --tunnel` as the fallback. Native rebuilds are needed only when native dependencies or the config plugin change, which is rare after T0.8. The [config plugin](https://github.com/expo/config-plugins/blob/main/packages/react-native-ble-plx/README.md) sets `isBackgroundEnabled` and `neverForLocation`; a foreground service for long logging sessions is separate (T2.4) and there is a [fork with built-in foreground-service support](https://github.com/sfourdrinier/react-native-ble-plx) to evaluate against doing it with a notification library.
+WSL2 has no Bluetooth and the desktop is out of BLE range, so the T0.2 spike ran the bridge on a laptop (ADR-003); the phone is the long-term bridge (ADR-013). WSL2 mirrored networking (confirmed on) lets both reach it without port forwarding, and the phone reaches Metro the same way. Expo Go cannot load `react-native-ble-plx`, so development uses an EAS-built dev-client APK with Metro over WSL2, `expo start --tunnel` as fallback; the [config plugin](https://github.com/expo/config-plugins/blob/main/packages/react-native-ble-plx/README.md) sets `isBackgroundEnabled`/`neverForLocation`, and a foreground service for long logging sessions (T2.4) is evaluated against a [fork with built-in support](https://github.com/sfourdrinier/react-native-ble-plx) or a notification library.
 
 ### Model and compute costs
 
@@ -71,14 +66,7 @@ No faults are induced; battery faults exist only as synthetic injections into re
 
 ### Market check (2026-09-22)
 
-Researched while re-planning. "Verified" means read at the source; "reported" means secondhand or a search summary. Recheck before any claim reaches the app or a store listing.
-
-- **No dedicated consumer Ultium battery-health app** (reported). Owners on the Equinox EV forum ask for one; suggestions are generic OBD apps (OBD Fusion with a Veepeak BLE), cell-voltage graphs in general apps, and Recurrent, which does not show cell data. Sources: [Any battery health apps for Equinox EV?](https://www.equinoxevforum.com/threads/any-battery-health-apps-for-equinox-ev.4983/) (behind a bot wall; not read directly), [Recharged: Equinox EV battery health check](https://recharged.com/articles/chevrolet-equinox-ev-battery-health-check).
-- **General hybrid/EV battery apps have incumbents** (reported, to verify per app): LeafSpy for the Nissan Leaf, dedicated Toyota hybrid battery apps, and EV profiles in general OBD apps such as Car Scanner. The general app is the wider-reach, less differentiated product; the Ultium experience is the differentiated one.
-- **AI gas-car diagnosis is crowded** (reported in the kickoff review: OBDAI, MECH AI, Skanyx, and others). This is why ADR-012 withdrew it.
-- **Canadian battery warranty** (reported): GM Canada's Equinox EV high-voltage battery coverage is 8 years / 160,000 km, with a capacity-loss threshold reported around 70% ([thinkev.ca](https://thinkev.ca/blog/ev-warranty-guide-canada-2026)). Confirm against GM Canada's own warranty booklet before any report wording mentions it.
-- **Used-EV supply** (unverified): the claim of 300,000+ EVs coming off lease in 2026 came from a chat summary without a primary source; do not repeat it without one.
-- **Dealer-side battery tools** (reported): AVILOO, Moba, ClearWatt, Altelium serve UK/EU dealers; not checked for Canadian availability.
+No dedicated consumer Ultium battery-health app exists, and AI gas-car diagnosis is a crowded space (OBDAI, MECH AI, Skanyx, and others), which is why ADR-012 withdrew that track. Two unverified figures to confirm before any claim reaches the app or a store listing: GM Canada's reported 8-year/160,000 km Equinox EV battery warranty with a ~70% capacity-loss threshold ([thinkev.ca](https://thinkev.ca/blog/ev-warranty-guide-canada-2026)), and a "300,000+ EVs off lease in 2026" figure that has no primary source.
 
 ### Timeline
 
@@ -86,16 +74,11 @@ Dates are provisional. BLE and session work depend on spike recordings. The batt
 
 ## Answered questions (2026-09-16)
 
-1. The desktop is not within Bluetooth range; a laptop is available and hosts the bridge (ADR-003).
-2. The dongle is the Veepeak OBDCheck BLE, non-plus. Forum reports of the BLE+ on the Equinox EV are encouraging but not the same unit; T0.2 settles it.
-3. WSL2 mirrored networking is on (checked in `.wslconfig`).
-4. Verified Equinox EV signals are contributed back to OBDb (ADR-010). The app is intended to be sold at a modest price eventually (ADR-009); that is compatible with contributing the data.
+1. Verified Equinox EV signals are contributed back to OBDb (ADR-010). The app is intended to be sold at a modest price eventually (ADR-009); that is compatible with contributing the data.
 
 ## Sources
 
-- [OBDb Chevrolet-Equinox-EV](https://github.com/OBDb/Chevrolet-Equinox-EV) and the [OBDb organization](https://github.com/obdb)
-- [Equinox EV forum: dongle and app recommendations](https://www.equinoxevforum.com/threads/odb-2-dongle-and-app-that-you-recommend.6454/) and [My OBD2 Adventure](https://www.equinoxevforum.com/threads/my-obd2-adventure.6851/)
-- [Sidecar: Chevrolet Equinox EV OBD-II support](https://sidecar.clutch.engineering/cars/chevrolet/equinox-ev/)
-- [Chevy Bolt OBD2 PIDs (allev.info)](https://allev.info/boltpids/), [Bolt forum PID thread](https://www.chevybolt.org/threads/chevrolet-bolt-obd2-pids.26666/)
-- [Veepeak OBDCheck BLE](https://veepeak.com/products/obdcheck-ble), [ESPHome OBD2 BLE](https://github.com/rubenmuehlhans/esphome-obd2-ble), [Harry's LapTimer Veepeak thread](http://forum.gps-laptimer.de/viewtopic.php?t=5332)
-- [react-native-ble-plx](https://github.com/dotintent/react-native-ble-plx), [Expo config plugin](https://github.com/expo/config-plugins/blob/main/packages/react-native-ble-plx/README.md), [foreground-service fork](https://github.com/sfourdrinier/react-native-ble-plx)
+- [OBDb organization](https://github.com/obdb)
+- [My OBD2 Adventure](https://www.equinoxevforum.com/threads/my-obd2-adventure.6851/)
+- [Veepeak OBDCheck BLE (product page)](https://veepeak.com/products/obdcheck-ble)
+- [react-native-ble-plx](https://github.com/dotintent/react-native-ble-plx)
