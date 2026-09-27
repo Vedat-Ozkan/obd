@@ -7,6 +7,8 @@ import { BackendError, type Auth, type BetaBackend, type BetaFiles } from "../sr
 export class MemoryBetaFiles implements BetaFiles {
   state: string | undefined;
   stateWrites = 0;
+  /** Stage D repair 1 (3): appendPart calls, each one open/append/close on the phone. */
+  appends = 0;
   readonly parts = new Map<string, string[]>();
 
   readState(): Promise<string | undefined> {
@@ -20,6 +22,7 @@ export class MemoryBetaFiles implements BetaFiles {
   }
 
   appendPart(fileId: string, index: number, text: string): void {
+    this.appends++;
     const parts = this.parts.get(fileId) ?? [];
     parts[index] = (parts[index] ?? "") + text;
     this.parts.set(fileId, parts);
@@ -39,6 +42,10 @@ export class MemoryBetaFiles implements BetaFiles {
   removeFile(fileId: string): Promise<void> {
     this.parts.delete(fileId);
     return Promise.resolve();
+  }
+
+  fileIds(): Promise<string[]> {
+    return Promise.resolve([...this.parts.keys()]);
   }
 
   /** The text at a partPath, as the phone's UploadTask would stream it. */

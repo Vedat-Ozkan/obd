@@ -1334,7 +1334,7 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
   });
 });
 
-const DELETE_PENDING = "Deleting your uploaded beta data; it retries until the server confirms.";
+const DELETE_PENDING = expect.stringMatching(/^Deleting your uploaded beta data \(Beta ID [0-9a-f]{8}\); it retries until the server confirms\.$/) as string;
 const NOTHING_WAITING = "Beta data sharing is on; nothing waiting to upload.";
 const recheck = (files: MemoryBetaFiles) => (JSON.parse(files.state ?? "{}") as { recheck: boolean }).recheck;
 
@@ -1460,6 +1460,200 @@ describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
       expect(stored(files).deleting).toEqual([]);
       if (act === "delete") expect(message).toBe("Your beta data was deleted.");
       expect(await outbox.status()).toMatchObject({ sharing: false, queued: 0, deletePending: false });
+    }
+  });
+});
+
+describe("Stage D carried items (docs/task-runs/T2.9.md, 2026-09-27 Stage D scope)", () => {
+  const deleting = (betaId: string) => `Deleting your uploaded beta data (Beta ID ${betaId}); it retries until the server confirms.`;
+  const offline = new BackendError("network", "offline");
+
+  it("D-1 orphan sweep: parts in beta-outbox/ that beta.json does not list are removed by a drain; a file still scrubbing is kept", async () => {
+    const { outbox, backend, files, clock } = setup();
+    await outbox.decide(true);
+    expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
+    // An app killed after writing a file's parts, before beta.json listed it.
+    files.appendPart("orphan", 0, '{"t": 0.0, "dir": "tx", "data": "0100"}\n');
+    // Small parts, so the file being scrubbed has a finished part on disk halfway (parts are written whole, repair 1 (3)).
+    const restarted = outboxOver(files, backend, clock, 512);
+    const all = lines(PHONE);
+    let open = (): void => undefined;
+    const opened = new Promise<void>((resolve) => { open = resolve; });
+    const gate = { reached: false };
+    async function* halfThenWait(): AsyncIterable<string> {
+      yield* all.slice(0, all.length >> 1);
+      gate.reached = true;
+      await opened;
+      yield* all.slice(all.length >> 1);
+    }
+    const queued = restarted.queue("capture", MINE, halfThenWait());
+    while (!gate.reached) await tick();
+    const listed = stored(files).outbox.map((item) => item.fileId);
+    const scrubbing = [...files.parts.keys()].filter((id) => id !== "orphan" && !listed.includes(id));
+    expect(scrubbing).toHaveLength(1);
+    await restarted.drain();
+    expect(files.parts.has("orphan")).toBe(false);
+    expect(files.parts.has(scrubbing[0])).toBe(true);
+    expect(backend.manifests.size).toBe(1);
+    open();
+    expect(await queued).toBe(QUEUED);
+    await restarted.drain();
+    expect(backend.manifests.size).toBe(2);
+    expect(files.parts.size).toBe(0);
+  });
+
+  it("D-2 delete line: a Delete my data waiting for the server keeps showing the Beta ID, across a restart", async () => {
+    const { outbox, backend, files, clock } = await workerSetup(512);
+    await outbox.drain();
+    const betaId = (await outbox.status()).betaId ?? "";
+    expect(betaId).toMatch(/^[0-9a-f]{8}$/);
+    backend.fail = (call) => (call === "deleteAll" ? offline : undefined);
+    expect(await outbox.deleteMyData()).toBe("Delete requested; it retries until the server confirms.");
+    expect(await outbox.status()).toMatchObject({ deletePending: true, sharing: false, betaId, line: deleting(betaId) });
+    const restarted = outboxOver(files, backend, clock, 512);
+    expect(await restarted.status()).toMatchObject({ deletePending: true, betaId, line: deleting(betaId) });
+  });
+
+  it("D-3 new identity: opting in again while the old delete is pending shows the new identity's line and still the old Beta ID", async () => {
+    const { outbox, backend } = await workerSetup(512);
+    await outbox.drain();
+    const old = (await outbox.status()).betaId ?? "";
+    backend.fail = (call) => (call === "deleteAll" ? offline : undefined);
+    await outbox.deleteMyData();
+    await outbox.decide(true);
+    const status = await outbox.status();
+    expect(status.betaId).toMatch(/^[0-9a-f]{8}$/);
+    expect(status.betaId).not.toBe(old);
+    expect(status).toMatchObject({ sharing: true, deletePending: true, line: `Beta data sharing is on; nothing waiting to upload. ${deleting(old)}` });
+  });
+
+  it("D-4 server wipe notice: after a 410 wipe, a restarted app still says the data was deleted on the server until the next choice", async () => {
+    const { outbox, backend, files, clock, auth } = await workerSetup(512);
+    await outbox.drain();
+    await backend.deleteAll(auth);
+    await outbox.queue("codes-scan", MINE, PHONE);
+    await outbox.drain();                       // part 0: 401
+    clock.s = stored(files).outbox[0].nextTry;
+    await outbox.drain();                       // register: 410, wipe
+    expect((await outbox.status()).line).toBe(SERVER_DELETED);
+    const restarted = outboxOver(files, backend, clock, 512);
+    expect(await restarted.status()).toMatchObject({ needsConsent: true, sharing: false, line: SERVER_DELETED });
+    await restarted.decide(false);
+    expect(await restarted.status()).toMatchObject({ needsConsent: false, line: "Beta data sharing is off." });
+    expect(await outboxOver(files, backend, clock, 512).status()).toMatchObject({ line: "Beta data sharing is off." });
+    // The notice belongs to that wipe only: a later local wipe back to "no choice" does not repeat it.
+    expect(await restarted.deleteMyData()).toBe("Your beta data was deleted.");
+    expect(await restarted.status()).toMatchObject({ needsConsent: true, line: "Beta data sharing is off; no choice made yet." });
+  });
+
+  it("D-5 (C1b minor 1): a pending delete of an earlier install, confirmed while the current install is paused, does not end the pause", async () => {
+    const { outbox, backend, files, clock } = await workerSetup(512);
+    await outbox.drain();
+    backend.fail = (call) => (call === "deleteAll" ? offline : undefined);
+    await outbox.deleteMyData();                // the old install's delete, pending
+    await outbox.decide(true);
+    await outbox.queue("codes-scan", MINE, PHONE);
+    backend.fail = (call) => (call === "deleteAll" ? offline : call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
+    await outbox.drain();                       // register 201, then part 0: 401
+    expect(recheck(files)).toBe(true);
+    backend.fail = undefined;
+    clock.s = Math.max(stored(files).outbox[0].nextTry, stored(files).deleting[0].nextTry);
+    await outbox.drain();                       // the old delete: 204; the re-register: 409
+    expect(stored(files).deleting).toEqual([]);
+    expect(recheck(files)).toBe(true);
+    const { betaId } = await outbox.status();
+    expect(await outbox.status()).toMatchObject({ queued: 1, line: `Uploads paused. Beta ID ${betaId ?? ""}.` });
+    expect(backend.manifests.size).toBe(0);
+  });
+
+  it("D-6 (C1b minor 2): a re-register answering 409 for a file stopped meanwhile ends the pause even when a new file is queued", async () => {
+    const { outbox, backend, files, clock } = await workerSetup(512);
+    await outbox.drain();
+    await outbox.queue("codes-scan", MINE, PHONE);
+    backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
+    await outbox.drain();                       // part 0: 401
+    backend.fail = undefined;
+    clock.s = stored(files).outbox[0].nextTry;
+    const calls: (() => void)[] = [];
+    backend.held = calls;
+    const drained = outbox.drain();
+    while (calls.length === 0) await tick();    // the re-register, which will answer 409
+    await outbox.decide(false);
+    await outbox.decide(true);
+    expect(await outbox.queue("capture", MINE, PHONE)).toBe(QUEUED);
+    backend.held = undefined;
+    calls.shift()?.();
+    await drained;
+    expect(recheck(files)).toBe(false);
+    expect(await outbox.status()).toMatchObject({ sharing: true, queued: 1, line: "Beta data sharing is on; 1 file waiting to upload." });
+  });
+});
+
+describe("Stage D repair round 1 (docs/task-runs/T2.9.md, 2026-09-27 repair decisions)", () => {
+  it("R-2 queued mid-drain: a file queued while a part upload is held uploads in the same drain, over the Worker", async () => {
+    const { outbox, backend, fileId } = await workerSetup(512);
+    const calls: (() => void)[] = [];
+    backend.held = calls;
+    const drained = outbox.drain();
+    while (calls.length === 0) await tick();    // register
+    calls.shift()?.();
+    while (calls.length === 0) await tick();    // part 0 of the first file
+    expect(backend.log.at(-1)).toBe(`part:${fileId}:0`);
+    expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
+    backend.held = undefined;
+    calls.shift()?.();
+    await drained;
+    expect(backend.manifests.size).toBe(2);
+    expect(await outbox.status()).toMatchObject({ queued: 0, line: "Beta data sharing is on; nothing waiting to upload." });
+  });
+
+  it("R-2b drain in the gap: a drain() called after the run's last outbox check, before the run ends, is not lost", async () => {
+    // A file that is not due at the run's last check becomes due (as a file queued then would be), and drain() is called
+    // before the run settles: the clock's read inside that check schedules both in the gap.
+    let s = T0;
+    let armed = false;
+    const clock = {
+      get s() {
+        if (armed && backend.manifests.size === 1) {
+          armed = false;
+          queueMicrotask(() => { s += BACKOFF_MAX_S; void outbox.drain(); });
+        }
+        return s;
+      },
+      set s(value: number) { s = value; },
+    };
+    const files = new MemoryBetaFiles();
+    const backend = new FakeBetaBackend(files);
+    const outbox = outboxOver(files, backend, clock, 512);
+    await outbox.decide(true);
+    expect(await outbox.queue("capture", MINE, PHONE)).toBe(QUEUED);
+    backend.fail = (call) => (call === "putPart" ? new BackendError("network", "offline") : undefined);
+    await outbox.drain();                       // the first file backs off
+    backend.fail = undefined;
+    expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
+    armed = true;
+    await outbox.drain();                       // the second file uploads; the first is not due at the last check
+    expect(armed).toBe(false);
+    expect(backend.manifests.size).toBe(2);
+    expect((await outbox.status()).queued).toBe(0);
+  });
+
+  it("R-3 buffered parts: appendPart runs at most once per part plus once per MiB, not once per line", async () => {
+    const MIB = 1024 * 1024;
+    const long = `{"t": 5.0, "dir": "meta", "note": "${"x".repeat(900)}"}`;
+    for (const { partBytes, input } of [
+      { partBytes: 700, input: PHONE },
+      { partBytes: undefined, input: `${PHONE}${`${long}\n`.repeat(2000)}` },
+    ]) {
+      const { outbox, backend, files } = setup(partBytes === undefined ? {} : { partBytes });
+      await outbox.decide(true);
+      expect(await outbox.queue("capture", MINE, input)).toBe(QUEUED);
+      const manifest = stored(files).outbox[0] as unknown as { manifest: BetaManifest };
+      const bytes = manifest.manifest.parts.reduce((sum, part) => sum + part.bytes, 0);
+      expect(lines(input).length).toBeGreaterThan(10 * (manifest.manifest.parts.length + Math.floor(bytes / MIB)));
+      expect(files.appends).toBeLessThanOrEqual(manifest.manifest.parts.length + Math.floor(bytes / MIB));
+      await outbox.drain();
+      expect(split(backend.uploaded(onlyFile(backend))).body).toBe(scrubRecording(input).text);
     }
   });
 });

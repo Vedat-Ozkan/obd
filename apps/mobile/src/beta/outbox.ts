@@ -7,11 +7,14 @@ import { CONSENT_VERSION } from "./consent.js";
 // Decisions 3 and 5. Consent state, scrub -> parts -> queue, drain with retry, stop, and Delete my data. Pure TS: files and
 // backend are injected (Stage D: expo-file-system; Stage C1: the HTTPS client). Stage C1 adds the orchestrator's C1-a (401
 // and register failures retry), C1-b (server copies of dropped files are deleted), C1-c, and repair round 2's D1-D3
-// and C1b (docs/task-runs/T2.9.md).
+// and C1b, and Stage D's carried items (docs/task-runs/T2.9.md).
 
 export const PART_BYTES = 16 * 1024 * 1024;
 export const BACKOFF_BASE_S = 60;
 export const BACKOFF_MAX_S = 6 * 3600;
+/** Stage D repair 1 (3): parts are written in chunks of about this size, not a line at a time, since each append is one
+ *  file open/write/close on the phone. */
+const FLUSH_BYTES = 1024 * 1024;
 
 /** App-private storage. Stage D implements it with expo-file-system; tests use memory. */
 export interface BetaFiles {
@@ -21,6 +24,7 @@ export interface BetaFiles {
   readPartLines(fileId: string, index: number): AsyncIterable<string>;
   partPath(fileId: string, index: number): string;                // what BetaBackend.putPart streams
   removeFile(fileId: string): Promise<void>;                      // deletes every part; no error if absent
+  fileIds(): Promise<string[]>;                                   // Stage D: every fileId with parts in beta-outbox/, for the orphan sweep
 }
 
 export interface Auth { installId: string; secret: string }
@@ -72,8 +76,11 @@ interface State {
   vehicleKeys: Record<string, string>;
   outbox: Item[];
   failed: number;
-  /** Server deletes not yet confirmed: an install's Delete my data, or (with fileId) one dropped file's parts. */
-  deleting: (Auth & Retry & { fileId?: string })[];
+  /** Server deletes not yet confirmed: an install's Delete my data (with the Beta ID it showed), or (with fileId) one
+   *  dropped file's parts. */
+  deleting: (Auth & Retry & { fileId?: string; betaId?: string })[];
+  /** Stage D: the server answered 410 and everything was wiped here; shown until the next choice, across restarts. */
+  serverDeleted: boolean;
 }
 
 const QUEUED = "Queued for beta upload.";
@@ -102,13 +109,13 @@ function parseState(raw: string): State | undefined {
     && (auth === null || isAuth(auth)) && typeof data.registered === "boolean" && typeof data.registerAttempted === "boolean"
     && typeof data.recheck === "boolean" && (testerKey === null || text(testerKey))
     && record(vehicleKeys) && Object.values(vehicleKeys).every(text) && Array.isArray(outbox) && outbox.every(validItem)
-    && count(data.failed) && Array.isArray(deleting)
-    && deleting.every((d) => isAuth(d) && isRetry(d) && (!("fileId" in d) || text(d.fileId)));
+    && count(data.failed) && Array.isArray(deleting) && typeof data.serverDeleted === "boolean"
+    && deleting.every((d) => isAuth(d) && isRetry(d) && (!("fileId" in d) || text(d.fileId)) && (!("betaId" in d) || text(d.betaId)));
   return valid ? data as unknown as State : undefined;
 }
 
 const empty = (): State => ({
-  version: 1, consent: null, auth: null, registered: false, registerAttempted: false, recheck: false, testerKey: null, vehicleKeys: {}, outbox: [], failed: 0, deleting: [],
+  version: 1, consent: null, auth: null, registered: false, registerAttempted: false, recheck: false, testerKey: null, vehicleKeys: {}, outbox: [], failed: 0, deleting: [], serverDeleted: false,
 });
 const sharing = (state: State) => state.consent?.share === true && state.consent.version === CONSENT_VERSION && state.auth !== null;
 const backoffS = (attempts: number) => Math.min(BACKOFF_BASE_S * 2 ** (attempts - 1), BACKOFF_MAX_S);
@@ -116,16 +123,28 @@ const backoffS = (attempts: number) => Math.min(BACKOFF_BASE_S * 2 ** (attempts 
 const permanent = (error: unknown) => error instanceof BackendError && (error.status === 400 || error.status === 409 || error.status === 413);
 /** A Delete my data (not a single file's delete) is waiting for the server. */
 const deletingAll = (state: State) => state.deleting.some((pending) => pending.fileId === undefined);
+/** The Beta IDs those requests showed. */
+const deletingIds = (state: State) => state.deleting.flatMap((pending) => (pending.fileId === undefined && pending.betaId !== undefined ? [pending.betaId] : []));
 const plural = (n: number, word: string) => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
 
 function statusLine(state: State): string {
-  if (deletingAll(state)) return "Deleting your uploaded beta data; it retries until the server confirms.";
-  if (state.consent === null) return "Beta data sharing is off; no choice made yet.";
+  // Stage D: the pending delete keeps its Beta ID (the tester's reference if it never completes) and never hides the
+  // line of an identity opted in since.
+  const ids = deletingIds(state);
+  const deleting = deletingAll(state)
+    ? `Deleting your uploaded beta data${ids.length === 0 ? "" : ` (Beta ID ${ids.join(", ")})`}; it retries until the server confirms.`
+    : undefined;
+  if (sharing(state)) {
+    const failed = state.failed > 0 ? ` ${plural(state.failed, "file")} could not be uploaded.` : "";
+    const line = state.recheck && state.registered
+      ? `Uploads paused. Beta ID ${state.testerKey?.slice(0, 8) ?? ""}.`
+      : `Beta data sharing is on; ${state.outbox.length === 0 ? "nothing" : plural(state.outbox.length, "file")} waiting to upload.${failed}`;
+    return deleting === undefined ? line : `${line} ${deleting}`;
+  }
+  if (deleting !== undefined) return deleting;
+  if (state.consent === null) return state.serverDeleted ? SERVER_DELETED : "Beta data sharing is off; no choice made yet.";
   if (state.consent.version !== CONSENT_VERSION) return "Beta data sharing is paused until you review the updated consent.";
-  if (!sharing(state)) return "Beta data sharing is off.";
-  if (state.recheck && state.registered) return `Uploads paused. Beta ID ${state.testerKey?.slice(0, 8) ?? ""}.`;
-  const failed = state.failed > 0 ? ` ${plural(state.failed, "file")} could not be uploaded.` : "";
-  return `Beta data sharing is on; ${state.outbox.length === 0 ? "nothing" : plural(state.outbox.length, "file")} waiting to upload.${failed}`;
+  return "Beta data sharing is off.";
 }
 
 function linesOf(input: string): string[] {
@@ -191,8 +210,8 @@ export function createBetaOutbox(deps: {
         }
         chunk += `${line}\n`;
         last = line;
+        if (chunk.length >= FLUSH_BYTES) flush();
       }
-      flush();
     };
     for await (const line of typeof input === "string" ? linesOf(input) : input) add(scrubber.push(line));
     const { lines, report } = scrubber.end();
@@ -202,6 +221,7 @@ export function createBetaOutbox(deps: {
     const recordingLines = parts.reduce((sum, part) => sum + part.lines, 0);
     const final = provenance(t, report.masked);
     add([provenanceLine(t, final)]);
+    flush();
     let seen = 0;
     for (let i = 0; i < parts.length; i++) {
       for await (const line of files.readPartLines(fileId, i)) if (seen++ < recordingLines) scrubber.verify(line);
@@ -216,8 +236,6 @@ export function createBetaOutbox(deps: {
     await save(state);
   };
 
-  /** Shown in the status line until the next decision. In memory only: after a restart the consent screen shows. */
-  let serverDeleted = false;
   /** D1: register answered 410, so the server deleted this install and holds nothing more; wipe locally as a confirmed
    *  Delete my data. */
   const deletedOnServer = async (state: State, installId: string) => {
@@ -228,7 +246,7 @@ export function createBetaOutbox(deps: {
     state.registered = false;
     state.vehicleKeys = {};
     state.failed = 0;
-    serverDeleted = true;
+    state.serverDeleted = true;
     await discard(state, state.outbox);
   };
 
@@ -262,8 +280,8 @@ export function createBetaOutbox(deps: {
           if (state.recheck) {
             if (state.outbox.includes(item)) await retryLater(state, item);
             else {
-              // C1b: with nothing queued there is nothing to pause, so the paused line does not linger.
-              if (state.outbox.length === 0) state.recheck = false;
+              // C1b: the paused file is gone, so the pause ends; a file queued meanwhile finds out on its own attempt.
+              state.recheck = false;
               await save(state);
             }
             return "stop";
@@ -318,6 +336,11 @@ export function createBetaOutbox(deps: {
   async function run(): Promise<void> {
     const state = await load();
     if (!state) return;
+    // Stage D: parts beta.json does not list (an app killed between writing a file's parts and saving it, or a failed
+    // removeFile). A file still being scrubbed is not listed yet and is kept.
+    for (const fileId of await files.fileIds().catch(() => [])) {
+      if (!scrubbing.has(fileId) && !state.outbox.some((item) => item.fileId === fileId)) await files.removeFile(fileId).catch(() => undefined);
+    }
     for (const pending of [...state.deleting]) {
       if (pending.nextTry > deps.nowS()) continue;
       let done = true;
@@ -340,31 +363,52 @@ export function createBetaOutbox(deps: {
       }
       await save(state);
     }
-    for (const item of [...state.outbox]) {
+    // Stage D repair 1 (2): the outbox is read again after every file, so a file queued during this drain is sent by it.
+    // Each "next" removed its file, so this ends.
+    for (;;) {
       const auth = state.auth;
-      if (!sharing(state) || auth === null) return;
-      if (!state.outbox.includes(item) || item.nextTry > deps.nowS()) continue;
+      const item = state.outbox.find((queued) => queued.nextTry <= deps.nowS());
+      if (!sharing(state) || auth === null || item === undefined) return;
       if (await upload(state, auth, item) === "stop") return;
     }
   }
 
   let running: Promise<void> | undefined;
+  /** fileIds whose parts queue() is writing; the orphan sweep keeps them. */
+  const scrubbing = new Set<string>();
   /** Counts switch-offs, so a file scrubbed across a stop is dropped even if sharing is back on when the scrub ends. */
   let stops = 0;
-  const drain = (): Promise<void> => (running ??= run().catch(() => undefined).finally(() => { running = undefined; }));
+  /** Stage D repair 1: drain() calls so far. One made while a run is in flight, which may be past its last outbox check,
+   *  runs it once more. */
+  let requests = 0;
+  const drain = (): Promise<void> => {
+    requests++;
+    if (running) return running;
+    running = (async () => {
+      try {
+        let served: number;
+        do {
+          served = requests;
+          await run().catch(() => undefined);
+        } while (requests !== served);
+      } finally { running = undefined; }
+    })();
+    return running;
+  };
 
   return {
     async status(): Promise<BetaStatus> {
       const state = await load();
       if (!state) return { needsConsent: false, sharing: false, queued: 0, failed: 0, deletePending: false, line: `Beta data sharing is off: ${UNREADABLE}; nothing uploads.` };
+      const betaId = state.testerKey?.slice(0, 8) ?? deletingIds(state).at(0);
       return {
         needsConsent: state.consent === null || state.consent.version !== CONSENT_VERSION,
         sharing: sharing(state),
-        ...(state.testerKey === null ? {} : { betaId: state.testerKey.slice(0, 8) }),
+        ...(betaId === undefined ? {} : { betaId }),
         queued: state.outbox.length,
         failed: state.failed,
         deletePending: deletingAll(state),
-        line: serverDeleted && state.consent === null ? SERVER_DELETED : statusLine(state),
+        line: statusLine(state),
       };
     },
 
@@ -373,7 +417,7 @@ export function createBetaOutbox(deps: {
       const state = await load();
       if (!state) throw new Error(`Not changed: ${UNREADABLE}.`);
       state.consent = { version: CONSENT_VERSION, share };
-      serverDeleted = false;
+      state.serverDeleted = false;
       if (share && state.auth === null) {
         state.auth = { installId: deps.newId(), secret: `${deps.newId()}${deps.newId()}` };
         state.testerKey = deps.newId();
@@ -392,6 +436,7 @@ export function createBetaOutbox(deps: {
     /** Never rejects. undefined when not sharing or consent outdated. `checked` entries queue like `mine` (Decision 3); the ownership tag rides in provenance, not in this filter. */
     async queue(kind: UploadKind, entry: GarageVehicle, lines: string | AsyncIterable<string>): Promise<string | undefined> {
       const fileId = deps.newId();
+      scrubbing.add(fileId);
       try {
         const state = await load();
         if (!state) return `Not queued for beta upload: ${UNREADABLE}.`;
@@ -414,6 +459,8 @@ export function createBetaOutbox(deps: {
       } catch (error) {
         await files.removeFile(fileId).catch(() => undefined);
         return `Not queued for beta upload: ${message(error)}.`;
+      } finally {
+        scrubbing.delete(fileId);
       }
     },
 
@@ -429,7 +476,7 @@ export function createBetaOutbox(deps: {
           const { installId } = state.auth;
           // The install's delete covers its pending file deletes. D3: sent once any register was sent.
           state.deleting = state.deleting.filter((pending) => pending.installId !== installId);
-          if (state.registerAttempted) state.deleting.push({ ...state.auth, attempts: 0, nextTry: 0 });
+          if (state.registerAttempted) state.deleting.push({ ...state.auth, ...(state.testerKey === null ? {} : { betaId: state.testerKey.slice(0, 8) }), attempts: 0, nextTry: 0 });
         }
         state.auth = null;
         state.testerKey = null;

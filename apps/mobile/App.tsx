@@ -7,7 +7,13 @@ import type { Transport } from "obd-core/transport";
 import { importObdbMode22 } from "obd-core/vehicles";
 import signalsetJson from "obd-core/vehicles/equinox-signalset";
 import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
-import { AppState, Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { uuid } from "expo-modules-core";
+import { Alert, AppState, Button, FlatList, PermissionsAndroid, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, useColorScheme, View } from "react-native";
+import appJson from "./app.json";
+import { createBetaClient } from "./src/beta/client.js";
+import { CONSENT_SWITCH_LABEL, CONSENT_TEXT, CONSENT_TITLE, PRIVACY_NOTE } from "./src/beta/consent.js";
+import { createBetaOutbox, type BetaStatus } from "./src/beta/outbox.js";
+import { betaPhoneFiles, putFile, readLines } from "./src/beta/phoneStore.js";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
 import { runAndSaveBatteryDiagnosis } from "./src/batteryDiagnosisFlow.js";
@@ -201,7 +207,8 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
       setStatus(summary);
       if (!jsonl) return;
       // Saved before capturing ends, so no new run can replace the buffer while a file is unsaved (the 2026-09-24 loss).
-      const outcome = await finishRun(kind, jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }, phoneTargets);
+      const outcome = await finishRun(kind, jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }, phoneTargets,
+        (text) => queueForBeta(kind === "codes" ? "codes-scan" : "capture", entry, text));
       setReport(outcome.report); setStatus(`${summary} ${outcome.status}`);
     } finally { setCapturing(false); }
   };
@@ -223,12 +230,15 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
     };
     try {
       const outcome = await runAndSaveBatteryDiagnosis({ entry, transport: scanTransport, recording: scanRecording, scannedAt, keepScan: keepPrivateBatteryScan, history: batteryHistory, importedSignals: equinoxSignals, getInterruption: () => diagnosisInterruption.current, onProgress: (message) => { if (message === "Keeping private scan") { diagnosisScanActive.current = false; setCanCancelDiagnosis(false); } setStatus(message); } });
+      // T2.9: every kept private scan is shared, whatever its outcome.
+      const beta = await queueForBeta("battery-scan", entry, readLines(outcome.recording));
+      const betaSentence = beta === undefined ? "" : ` ${beta}`;
       if (outcome.status === "saved") {
         await onSaved(outcome.report);
-        setStatus(`Battery diagnosis saved: ${outcome.report.scanStatus}. Reconnect for another run.`);
+        setStatus(`Battery diagnosis saved: ${outcome.report.scanStatus}.${betaSentence} Reconnect for another run.`);
       } else if (outcome.status === "stopped") {
-        setStatus(`${outcome.reason} Private scan: ${outcome.recording}. Reconnect for another run.`);
-      } else setStatus(`${outcome.reason} Private scan: ${outcome.recording}. Reconnect for another run.`);
+        setStatus(`${outcome.reason} Private scan: ${outcome.recording}.${betaSentence} Reconnect for another run.`);
+      } else setStatus(`${outcome.reason} Private scan: ${outcome.recording}.${betaSentence} Reconnect for another run.`);
     } catch (cause) {
       setStatus(`Battery diagnosis error: ${cause instanceof Error ? cause.message : String(cause)}. Reconnect before another run.`);
     } finally {
@@ -294,7 +304,13 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
       });
       try {
         if (result.file !== "" && result.saved.includes("NOT SAVED")) { deferredShare = result.file; shareDeferred(); }
-        await release(`Charge log stopped: ${result.stopReason} (${result.complete ? "complete" : "partial"}). ${result.saved} Reconnect for another run.`);
+        let beta: string | undefined;
+        if (result.file !== "") {
+          // Shown while the log is scrubbed into parts, so the scrub time on the phone can be read off the screen.
+          if ((await betaOutbox.status()).sharing) chargeRun.status("Charge log stopped; preparing the beta upload…");
+          beta = await queueForBeta("charge-log", entry, readLines(`captures/${result.file}`));
+        }
+        await release(`Charge log stopped: ${result.stopReason} (${result.complete ? "complete" : "partial"}). ${result.saved}${beta === undefined ? "" : ` ${beta}`} Reconnect for another run.`);
       } finally { await BackgroundService.stop(); }
     };
     try {
@@ -414,6 +430,23 @@ AppState.addEventListener("change", shareDeferred);
 // Decision 20: one record per JS runtime, so a console recreated with the activity still sees and stops the run.
 const chargeRun = createChargeRunRecord<BleConnection, BleManager>();
 
+// T2.9 Stage D: exactly one outbox per JS runtime; its loaded state, single drain and stop count rely on that.
+// EXPO_PUBLIC_BETA_URL is inlined by Metro from the gitignored apps/mobile/.env; unset, queued files wait on the phone.
+const betaOutbox = createBetaOutbox({
+  files: betaPhoneFiles,
+  backend: createBetaClient(String(process.env.EXPO_PUBLIC_BETA_URL ?? ""), { fetch, putFile }),
+  newId: () => uuid.v4(),
+  nowS: () => Date.now() / 1000,
+  month: () => localDate().slice(0, 7),
+  appVersion: appJson.expo.version,
+});
+/** Queues a finished run's recording and starts sending it; returns the run's beta sentence. */
+const queueForBeta = async (...args: Parameters<typeof betaOutbox.queue>) => {
+  const sentence = await betaOutbox.queue(...args);
+  void betaOutbox.drain();
+  return sentence;
+};
+
 export function App() {
   const colors = palettes[useColorScheme() === "dark" ? "dark" : "light"];
   const [state, setState] = useState<GarageState>();
@@ -430,6 +463,35 @@ export function App() {
   const [tag, setTag] = useState<Ownership>("mine");
   const [interest, setInterest] = useState({ make: "", model: "", year: "", joinBeta: false });
   const [interestSaved, setInterestSaved] = useState(false);
+  const [beta, setBeta] = useState<BetaStatus>();
+  const [consentShare, setConsentShare] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [betaMessage, setBetaMessage] = useState("");
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const refreshBeta = () => { void betaOutbox.status().then(setBeta); };
+  // T2.9: uploads resume by themselves on start and whenever the app comes to the foreground.
+  useEffect(() => {
+    const drain = () => { refreshBeta(); void betaOutbox.drain().then(refreshBeta); };
+    drain();
+    const subscription = AppState.addEventListener("change", (next) => { if (next === "active") drain(); });
+    return () => { subscription.remove(); };
+  }, []);
+  useEffect(refreshBeta, [view]);
+  const decideBeta = async (share: boolean) => {
+    setBusy(true); setBetaMessage("");
+    try { await betaOutbox.decide(share); if (share) void betaOutbox.drain().then(refreshBeta); }
+    catch (cause) { setBetaMessage(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setConsentOpen(false); setConsentShare(false); setBusy(false); refreshBeta(); }
+  };
+  const deleteBeta = () => {
+    Alert.alert("Delete my data?", "Every beta file already uploaded from this phone is deleted, and sharing turns off.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => {
+        setBusy(true);
+        void betaOutbox.deleteMyData().then(setBetaMessage).finally(() => { setBusy(false); refreshBeta(); });
+      } },
+    ]);
+  };
   const refreshReports = async (garage: GarageState) => {
     await batteryHistory.load();
     const counts = await Promise.all(garage.vehicles.map(async (entry) => [entry.id, (await batteryHistory.list(entry.id)).length] as const));
@@ -467,6 +529,20 @@ export function App() {
     await refreshReports(await garageFlow.load());
     setSelectedEntryId(report.garageVehicleId); setDetail(persisted); setView("detail");
   };
+
+  if (beta && view === "garage" && (beta.needsConsent || consentOpen)) return <ScrollView contentContainerStyle={[styles.garage, { backgroundColor: colors.background }]}>
+    <Text style={title}>{CONSENT_TITLE}</Text>
+    <Text style={muted}>{beta.line}</Text>
+    {betaMessage ? <Text style={normal}>{betaMessage}</Text> : null}
+    <Text style={normal}>{CONSENT_TEXT}</Text>
+    <View style={styles.row}><Switch value={consentShare} onValueChange={setConsentShare} /><Text style={normal}>{CONSENT_SWITCH_LABEL}</Text></View>
+    <Button title="Continue" disabled={busy} onPress={() => void decideBeta(consentShare)} />
+  </ScrollView>;
+
+  // Until the beta status is known, nothing that starts a run is shown: the consent screen may still be due.
+  if (!beta) return <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Text style={title}>Garage</Text><Text style={normal}>Loading beta sharing…</Text>
+  </View>;
 
   if (!state) return <View style={[styles.container, { backgroundColor: colors.background }]}>
     <Text style={title}>Garage</Text><Text style={normal}>{error || "Loading saved garage…"}</Text>
@@ -512,6 +588,17 @@ export function App() {
         <Text style={muted}>{LOCAL_INTEREST_NOTICE}</Text>
         <Button title="Reopen saved interest" onPress={() => { reopenInterest(saved); }} />
       </View>)}
+      <View style={[styles.card, { borderColor: colors.border }]}>
+        <Text style={normal}>Beta data sharing</Text>
+        {/* Switching on shows the consent text again; switching off stops at once. */}
+        <View style={styles.row}><Switch value={beta.sharing} disabled={busy} onValueChange={(on) => { if (on) setConsentOpen(true); else void decideBeta(false); }} /><Text style={normal}>{CONSENT_SWITCH_LABEL}</Text></View>
+        <Text style={muted}>{beta.line}</Text>
+        {beta.betaId ? <Text style={normal}>Beta ID: {beta.betaId}</Text> : null}
+        {betaMessage ? <Text style={normal}>{betaMessage}</Text> : null}
+        <Text style={[normal, { textDecorationLine: "underline" }]} onPress={() => { setPrivacyOpen(!privacyOpen); }}>Privacy note</Text>
+        {privacyOpen ? <Text style={normal}>{PRIVACY_NOTE}</Text> : null}
+        <Button title="Delete my data" disabled={busy} onPress={deleteBeta} />
+      </View>
     </> : null}
     {view === "history" ? <>
       {historyReports.length === 0 ? <Text style={normal}>No battery reports saved for this car.</Text> : null}
@@ -551,5 +638,5 @@ export function App() {
   </ScrollView>;
 }
 
-const styles = StyleSheet.create({ container: { flex: 1, gap: 8, padding: 16 }, garage: { gap: 8, padding: 16, minHeight: "100%" }, card: { borderWidth: 1, padding: 8, gap: 4 }, input: { borderWidth: 1, padding: 8 }, console: { borderWidth: 1, flex: 1, padding: 8 }, consoleText: { fontFamily: "monospace" } });
+const styles = StyleSheet.create({ container: { flex: 1, gap: 8, padding: 16 }, garage: { gap: 8, padding: 16, minHeight: "100%" }, card: { borderWidth: 1, padding: 8, gap: 4 }, input: { borderWidth: 1, padding: 8 }, row: { flexDirection: "row", alignItems: "center", gap: 8 }, console: { borderWidth: 1, flex: 1, padding: 8 }, consoleText: { fontFamily: "monospace" } });
 export default App;
