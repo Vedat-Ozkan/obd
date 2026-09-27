@@ -5,7 +5,9 @@ import { CONSENT_VERSION } from "./consent.js";
 
 // Beta upload outbox (ADR-019): docs/specs/T2.9-beta-data-upload.md §Flow, §Provenance and keys, §Interfaces "Stage B",
 // Decisions 3 and 5. Consent state, scrub -> parts -> queue, drain with retry, stop, and Delete my data. Pure TS: files and
-// backend are injected (Stage D: expo-file-system; Stage C1: the HTTPS client).
+// backend are injected (Stage D: expo-file-system; Stage C1: the HTTPS client). Stage C1 adds the orchestrator's C1-a (401
+// and register failures retry), C1-b (server copies of dropped files are deleted), C1-c, and repair round 2's D1-D3
+// (docs/task-runs/T2.9.md).
 
 export const PART_BYTES = 16 * 1024 * 1024;
 export const BACKOFF_BASE_S = 60;
@@ -28,6 +30,8 @@ export interface BetaBackend {
   putPart(auth: Auth, fileId: string, index: number, path: string, bytes: number): Promise<void>;
   putManifest(auth: Auth, fileId: string, manifest: BetaManifest): Promise<void>;
   deleteAll(auth: Auth): Promise<void>;
+  /** C1-b: deletes one file's server copy; resolves when nothing is there. */
+  deleteFile(auth: Auth, fileId: string): Promise<void>;
 }
 
 export class BackendError extends Error {
@@ -51,22 +55,28 @@ export interface BetaStatus {
 
 type UploadKind = (typeof UPLOAD_KINDS)[number];
 interface Retry { attempts: number; nextTry: number }
-/** `sent` = parts already accepted by the backend, so a restarted app resumes at the next part. */
-interface Item extends Retry { fileId: string; manifest: BetaManifest; sent: number }
+/** `sent` = parts already accepted by the backend, so a restarted app resumes at the next part. `attempted` (D2) = the
+ *  highest part index ever sent, whose answer may have been lost; absent = no part sent yet. */
+interface Item extends Retry { fileId: string; manifest: BetaManifest; sent: number; attempted?: number }
 interface State {
   version: 1;
   consent: { version: string; share: boolean } | null;
   auth: Auth | null;
   registered: boolean;
+  /** D3: a register was sent for this auth, even if its answer was lost. */
+  registerAttempted: boolean;
+  /** D1: the server answered 401 and nothing was accepted since; a re-register answered 409 then pauses uploads. */
+  recheck: boolean;
   testerKey: string | null;
   vehicleKeys: Record<string, string>;
   outbox: Item[];
   failed: number;
-  /** Installs whose Delete my data is not yet confirmed by the backend. */
-  deleting: (Auth & Retry)[];
+  /** Server deletes not yet confirmed: an install's Delete my data, or (with fileId) one dropped file's parts. */
+  deleting: (Auth & Retry & { fileId?: string })[];
 }
 
 const QUEUED = "Queued for beta upload.";
+const SERVER_DELETED = "Your beta data was deleted on the server. Sharing is off.";
 const UNREADABLE = "the beta sharing file (beta.json) is unreadable";
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,7 +86,7 @@ const isAuth = (value: unknown): value is Auth => record(value) && text(value.in
 const isRetry = (value: unknown) => record(value) && count(value.attempts) && typeof value.nextTry === "number" && Number.isFinite(value.nextTry);
 
 function validItem(value: unknown): value is Item {
-  if (!record(value) || !isRetry(value) || !text(value.fileId) || !count(value.sent)) return false;
+  if (!record(value) || !isRetry(value) || !text(value.fileId) || !count(value.sent) || !(value.attempted === undefined || count(value.attempted))) return false;
   const manifest = betaManifestSchema.safeParse(value.manifest);
   return manifest.success && manifest.data.provenance.fileId === value.fileId && value.sent <= manifest.data.parts.length;
 }
@@ -88,24 +98,31 @@ function parseState(raw: string): State | undefined {
   if (!record(data) || data.version !== 1) return undefined;
   const { consent, auth, testerKey, vehicleKeys, outbox, deleting } = data;
   const valid = (consent === null || (record(consent) && text(consent.version) && typeof consent.share === "boolean"))
-    && (auth === null || isAuth(auth)) && typeof data.registered === "boolean" && (testerKey === null || text(testerKey))
+    && (auth === null || isAuth(auth)) && typeof data.registered === "boolean" && typeof data.registerAttempted === "boolean"
+    && typeof data.recheck === "boolean" && (testerKey === null || text(testerKey))
     && record(vehicleKeys) && Object.values(vehicleKeys).every(text) && Array.isArray(outbox) && outbox.every(validItem)
-    && count(data.failed) && Array.isArray(deleting) && deleting.every((d) => isAuth(d) && isRetry(d));
+    && count(data.failed) && Array.isArray(deleting)
+    && deleting.every((d) => isAuth(d) && isRetry(d) && (!("fileId" in d) || text(d.fileId)));
   return valid ? data as unknown as State : undefined;
 }
 
-const empty = (): State => ({ version: 1, consent: null, auth: null, registered: false, testerKey: null, vehicleKeys: {}, outbox: [], failed: 0, deleting: [] });
+const empty = (): State => ({
+  version: 1, consent: null, auth: null, registered: false, registerAttempted: false, recheck: false, testerKey: null, vehicleKeys: {}, outbox: [], failed: 0, deleting: [],
+});
 const sharing = (state: State) => state.consent?.share === true && state.consent.version === CONSENT_VERSION && state.auth !== null;
 const backoffS = (attempts: number) => Math.min(BACKOFF_BASE_S * 2 ** (attempts - 1), BACKOFF_MAX_S);
-/** Network errors, 429 and 5xx retry; anything else the backend rejects (400, 409, 413, …) will not change on retry. */
-const retryable = (error: unknown) => !(error instanceof BackendError) || error.status === "network" || error.status === 429 || error.status >= 500;
+/** C1-a: only 400, 409 and 413 on a part or manifest will not change on retry; everything else backs off. */
+const permanent = (error: unknown) => error instanceof BackendError && (error.status === 400 || error.status === 409 || error.status === 413);
+/** A Delete my data (not a single file's delete) is waiting for the server. */
+const deletingAll = (state: State) => state.deleting.some((pending) => pending.fileId === undefined);
 const plural = (n: number, word: string) => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
 
 function statusLine(state: State): string {
-  if (state.deleting.length > 0) return "Deleting your uploaded beta data; it retries until the server confirms.";
+  if (deletingAll(state)) return "Deleting your uploaded beta data; it retries until the server confirms.";
   if (state.consent === null) return "Beta data sharing is off; no choice made yet.";
   if (state.consent.version !== CONSENT_VERSION) return "Beta data sharing is paused until you review the updated consent.";
   if (!sharing(state)) return "Beta data sharing is off.";
+  if (state.recheck && state.registered) return `Uploads paused. Beta ID ${state.testerKey?.slice(0, 8) ?? ""}.`;
   const failed = state.failed > 0 ? ` ${plural(state.failed, "file")} could not be uploaded.` : "";
   return `Beta data sharing is on; ${state.outbox.length === 0 ? "nothing" : plural(state.outbox.length, "file")} waiting to upload.${failed}`;
 }
@@ -138,8 +155,13 @@ export function createBetaOutbox(deps: {
     saving = next.catch(() => undefined);
     return next;
   };
-  const discard = async (state: State, items: readonly Item[]) => {
+  /** The item whose parts are being sent, so a stop knows a part may still land on the server. */
+  let current: Item | undefined;
+  /** `onServer` items get a server delete queued (C1-b), with the install's current credentials. */
+  const discard = async (state: State, items: readonly Item[], onServer: (item: Item) => boolean = () => false) => {
     state.outbox = state.outbox.filter((item) => !items.includes(item));
+    const auth = state.auth;
+    if (auth !== null) for (const item of items.filter(onServer)) state.deleting.push({ ...auth, fileId: item.fileId, attempts: 0, nextTry: 0 });
     await save(state);
     for (const item of items) await files.removeFile(item.fileId);
   };
@@ -187,37 +209,101 @@ export function createBetaOutbox(deps: {
     return betaManifestSchema.parse({ provenance: final, parts });
   }
 
+  const retryLater = async (state: State, item: Item) => {
+    item.attempts++;
+    item.nextTry = deps.nowS() + backoffS(item.attempts);
+    await save(state);
+  };
+
+  /** Shown in the status line until the next decision. In memory only: after a restart the consent screen shows. */
+  let serverDeleted = false;
+  /** D1: register answered 410, so the server deleted this install and holds nothing more; wipe locally as a confirmed
+   *  Delete my data. */
+  const deletedOnServer = async (state: State, installId: string) => {
+    state.deleting = state.deleting.filter((pending) => pending.installId !== installId);
+    state.consent = null;
+    state.auth = null;
+    state.testerKey = null;
+    state.registered = false;
+    state.vehicleKeys = {};
+    state.failed = 0;
+    serverDeleted = true;
+    await discard(state, state.outbox);
+  };
+
   /** "stop" ends this drain (retry later, or the item was discarded meanwhile). */
   async function upload(state: State, auth: Auth, item: Item): Promise<"next" | "stop"> {
+    // R1: checked before every part and the manifest, since a stop or delete may run during any await.
+    const unchanged = () => state.outbox.includes(item) && sharing(state) && state.auth === auth;
+    // Set before register, so a stop from here on queues the file's server delete (C1-b).
+    current = item;
     try {
       if (!state.registered) {
-        // 409 = this installId already exists: an earlier register succeeded but its state write was lost.
-        try { await backend.register(auth, CONSENT_VERSION); }
-        catch (error) { if (!(error instanceof BackendError && error.status === 409)) throw error; }
+        if (!state.registerAttempted) {
+          // D3: saved before the request, so Delete my data sends the install delete even if the answer is lost.
+          state.registerAttempted = true;
+          await save(state);
+        }
+        const answer = await backend.register(auth, CONSENT_VERSION).then(() => 201, (error: unknown) => (error instanceof BackendError ? error.status : undefined));
+        // C1-c, D3: Delete my data ran while this register was in flight and has queued the install delete itself.
         if (state.auth !== auth) return "stop";
-        state.registered = true;
-        await save(state);
+        if (answer === 410) {
+          await deletedOnServer(state, auth.installId);
+          return "stop";
+        }
+        // 409 = the installId exists. On a first register, an earlier one succeeded but its state write was lost. After a
+        // 401 (D1), a live record holds another secret, or the 401 did not come from the Worker: pause and back off.
+        if (answer === 201 || answer === 409) {
+          state.registered = true;
+          if (answer === 201) state.recheck = false;
+          if (state.recheck) {
+            if (state.outbox.includes(item)) await retryLater(state, item);
+            return "stop";
+          }
+          await save(state);
+        } else {
+          // C1-a: a failed register (400 included) never discards files.
+          if (state.outbox.includes(item)) await retryLater(state, item);
+          return "stop";
+        }
       }
       for (let i = item.sent; i < item.manifest.parts.length; i++) {
+        if (i > (item.attempted ?? -1)) {
+          // D2: saved before the request, so a stop or a permanent failure deletes a part whose answer was lost.
+          item.attempted = i;
+          await save(state);
+        }
+        if (!unchanged()) return "stop";
         await backend.putPart(auth, item.fileId, i, files.partPath(item.fileId, i), item.manifest.parts[i].bytes);
         if (!state.outbox.includes(item)) return "stop";
         item.sent = i + 1;
+        state.recheck = false;
         await save(state);
       }
+      if (!unchanged()) return "stop";
       await backend.putManifest(auth, item.fileId, item.manifest);
       if (state.outbox.includes(item)) await discard(state, [item]);
       return "next";
     } catch (error) {
       if (!state.outbox.includes(item)) return "stop";
-      if (retryable(error)) {
-        item.attempts++;
-        item.nextTry = deps.nowS() + backoffS(item.attempts);
-        await save(state);
+      if (error instanceof BackendError && error.status === 401 && state.auth === auth) {
+        // C1-a, D1: the server does not accept these credentials. Register the same installId and secret again on the
+        // next drain (201, 409 or 410 tells why) and send every file from part 0, since none of its earlier parts can be
+        // assumed to be there.
+        state.registered = false;
+        state.recheck = true;
+        for (const queued of state.outbox) queued.sent = 0;
+      }
+      if (!permanent(error)) {
+        await retryLater(state, item);
         return "stop";
       }
       state.failed++;
-      await discard(state, [item]);
+      // D2: any part sent may be on the server, even one whose answer was lost.
+      await discard(state, [item], (dropped) => dropped.attempted !== undefined);
       return "next";
+    } finally {
+      current = undefined;
     }
   }
 
@@ -226,12 +312,18 @@ export function createBetaOutbox(deps: {
     if (!state) return;
     for (const pending of [...state.deleting]) {
       if (pending.nextTry > deps.nowS()) continue;
+      let done = true;
       try {
-        await backend.deleteAll(pending);
+        await (pending.fileId === undefined ? backend.deleteAll(pending) : backend.deleteFile(pending, pending.fileId));
+      } catch (error) {
+        // C1-a: 401 = the server does not know this install, so it holds nothing more to delete.
+        done = error instanceof BackendError && error.status === 401;
+      }
+      if (done) {
         state.deleting = state.deleting.filter((d) => d !== pending);
         // The consent is wiped once the server confirms, unless the tester has opted in again meanwhile.
         if (state.deleting.length === 0 && state.auth === null) state.consent = null;
-      } catch {
+      } else {
         pending.attempts++;
         pending.nextTry = deps.nowS() + backoffS(pending.attempts);
       }
@@ -260,8 +352,8 @@ export function createBetaOutbox(deps: {
         ...(state.testerKey === null ? {} : { betaId: state.testerKey.slice(0, 8) }),
         queued: state.outbox.length,
         failed: state.failed,
-        deletePending: state.deleting.length > 0,
-        line: statusLine(state),
+        deletePending: deletingAll(state),
+        line: serverDeleted && state.consent === null ? SERVER_DELETED : statusLine(state),
       };
     },
 
@@ -270,15 +362,19 @@ export function createBetaOutbox(deps: {
       const state = await load();
       if (!state) throw new Error(`Not changed: ${UNREADABLE}.`);
       state.consent = { version: CONSENT_VERSION, share };
+      serverDeleted = false;
       if (share && state.auth === null) {
         state.auth = { installId: deps.newId(), secret: `${deps.newId()}${deps.newId()}` };
         state.testerKey = deps.newId();
         state.registered = false;
+        state.registerAttempted = false;
+        state.recheck = false;
       }
       if (share) await save(state);
       else {
         stops++;
-        await discard(state, state.outbox);
+        // C1-b, D2: any part sent (its answer may be lost), or a file whose upload is running, is deleted on the server too.
+        await discard(state, state.outbox, (item) => item.attempted !== undefined || item === current);
       }
     },
 
@@ -318,18 +414,23 @@ export function createBetaOutbox(deps: {
       try {
         const state = await load();
         if (!state) return `Not deleted: ${UNREADABLE}.`;
-        if (state.auth !== null && state.registered) state.deleting.push({ ...state.auth, attempts: 0, nextTry: 0 });
+        if (state.auth !== null) {
+          const { installId } = state.auth;
+          // The install's delete covers its pending file deletes. D3: sent once any register was sent.
+          state.deleting = state.deleting.filter((pending) => pending.installId !== installId);
+          if (state.registerAttempted) state.deleting.push({ ...state.auth, attempts: 0, nextTry: 0 });
+        }
         state.auth = null;
         state.testerKey = null;
         state.registered = false;
         state.vehicleKeys = {};
         state.failed = 0;
-        state.consent = state.deleting.length > 0 ? { version: CONSENT_VERSION, share: false } : null;
+        state.consent = deletingAll(state) ? { version: CONSENT_VERSION, share: false } : null;
         await discard(state, state.outbox);
         await drain();
         // A drain already running may have passed its delete step before this request.
         if (state.deleting.some((pending) => pending.attempts === 0)) await drain();
-        return state.deleting.length > 0 ? "Delete requested; it retries until the server confirms." : "Your beta data was deleted.";
+        return deletingAll(state) ? "Delete requested; it retries until the server confirms." : "Your beta data was deleted.";
       } catch (error) {
         return `Delete my data failed: ${message(error)}.`;
       }

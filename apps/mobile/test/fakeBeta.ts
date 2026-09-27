@@ -1,6 +1,7 @@
 // In-memory BetaFiles and BetaBackend for docs/specs/T2.9-beta-data-upload.md Verification "Stage B": an ordered call
-// log, what the backend received, and switchable failures.
+// log, what the backend received, and switchable failures. MemoryBucket is the in-memory R2 bucket of Stage C1.
 import type { BetaManifest } from "obd-core/recording/provenance";
+import type { BucketLike, BucketObject } from "../../../tools/beta-backend/handler.js";
 import { BackendError, type Auth, type BetaBackend, type BetaFiles } from "../src/beta/outbox.js";
 
 export class MemoryBetaFiles implements BetaFiles {
@@ -49,7 +50,7 @@ export class MemoryBetaFiles implements BetaFiles {
   }
 }
 
-type Call = "register" | "putPart" | "putManifest" | "deleteAll";
+type Call = "register" | "putPart" | "putManifest" | "deleteAll" | "deleteFile";
 
 export class FakeBetaBackend implements BetaBackend {
   readonly log: string[] = [];
@@ -93,6 +94,13 @@ export class FakeBetaBackend implements BetaBackend {
     }, auth);
   }
 
+  deleteFile(auth: Auth, fileId: string): Promise<void> {
+    return this.call("deleteFile", `deleteFile:${fileId}`, undefined, () => {
+      this.received.delete(fileId);
+      this.manifests.delete(fileId);
+    }, auth);
+  }
+
   /** The uploaded file: its parts joined in order. */
   uploaded(fileId: string): string {
     return (this.received.get(fileId) ?? []).join("");
@@ -105,5 +113,66 @@ export class FakeBetaBackend implements BetaBackend {
     if (error) throw error;
     if (auth && call !== "deleteAll" && !this.installs.has(auth.installId)) throw new BackendError(401, "unknown install");
     effect();
+  }
+}
+
+interface Stored { bytes?: Uint8Array; size: number; uploaded: Date }
+
+/** The R2 subset the Worker uses, in memory. `uploaded` comes from the injected clock; `seed` stores a size without
+ *  bytes, so quota tests need no gigabytes. `limit` is the page size of list(). */
+export class MemoryBucket implements BucketLike {
+  readonly objects = new Map<string, Stored>();
+  limit = 1000;
+
+  constructor(private readonly now: () => Date) {}
+
+  put(key: string, value: string | ArrayBuffer): Promise<void> {
+    const bytes = typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(value.slice(0));
+    this.objects.set(key, { bytes, size: bytes.length, uploaded: this.now() });
+    return Promise.resolve();
+  }
+
+  seed(key: string, size: number, uploaded: Date): void {
+    this.objects.set(key, { size, uploaded });
+  }
+
+  head(key: string): Promise<BucketObject | null> {
+    const stored = this.objects.get(key);
+    return Promise.resolve(stored ? { key, size: stored.size, uploaded: stored.uploaded } : null);
+  }
+
+  get(key: string): Promise<(BucketObject & { body: ReadableStream }) | null> {
+    const stored = this.objects.get(key);
+    if (!stored) return Promise.resolve(null);
+    const bytes = stored.bytes ?? new Uint8Array(0);
+    const body = new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } });
+    return Promise.resolve({ key, size: stored.size, uploaded: stored.uploaded, body });
+  }
+
+  list(options: { prefix: string; startAfter?: string; cursor?: string }): Promise<{ objects: BucketObject[]; truncated: boolean; cursor?: string }> {
+    const after = options.cursor ?? options.startAfter ?? "";
+    const keys = [...this.objects.keys()].filter((key) => key.startsWith(options.prefix) && key > after).sort();
+    const page = keys.slice(0, this.limit);
+    const objects = page.map((key) => {
+      const stored = this.objects.get(key);
+      return { key, size: stored?.size ?? 0, uploaded: stored?.uploaded ?? new Date(0) };
+    });
+    const truncated = keys.length > page.length;
+    return Promise.resolve(truncated ? { objects, truncated, cursor: page[page.length - 1] } : { objects, truncated });
+  }
+
+  delete(keys: string | string[]): Promise<void> {
+    for (const key of typeof keys === "string" ? [keys] : keys) this.objects.delete(key);
+    return Promise.resolve();
+  }
+
+  /** Test helpers: an object's text, and the keys under a prefix. */
+  text(key: string): string | undefined {
+    const bytes = this.objects.get(key)?.bytes;
+    return bytes === undefined ? undefined : new TextDecoder().decode(bytes);
+  }
+
+  keys(prefix = ""): string[] {
+    return [...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort();
   }
 }
