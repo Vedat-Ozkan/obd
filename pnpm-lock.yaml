@@ -89,6 +89,15 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/obd-assist:
+    dependencies:
+      obd-battery:
+        specifier: workspace:*
+        version: link:../obd-battery
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   packages/obd-core:
     dependencies:
       zod:

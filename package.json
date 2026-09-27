@@ -12,12 +12,13 @@
     "check:bridge": "cd tools/hil-bridge && uv run ruff check . && uv run pytest",
     "typecheck": "tsc --noEmit && pnpm --filter './apps/*' -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test && vitest run tools/relay/server.test.ts",
+    "test": "pnpm --filter './packages/*' --filter './apps/*' -r test && vitest run tools/relay/server.test.ts && vitest run tools/beta-backend tools/beta-intake",
     "replay": "tsx packages/obd-core/scripts/replay.ts",
     "codes-report": "tsx packages/obd-core/scripts/codes-report.ts",
     "charge-log": "tsx packages/obd-battery/scripts/charge-log.ts",
     "relay": "tsx tools/relay/server.ts",
-    "hil:smoke": "tsx tools/relay/hil-smoke.ts"
+    "hil:smoke": "tsx tools/relay/hil-smoke.ts",
+    "beta:intake": "tsx --env-file=.env tools/beta-intake/intake.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

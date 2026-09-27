@@ -438,6 +438,43 @@ describe("isolated scrubber failure modes", () => {
     expect(out).toBe(`{"t": 5.0, "dir": "tx", "data": "01A6\\r"}\n{"t": 5.0, "dir": "rx", "data": "18DAF1170641A630303030\\r\\r>"}\n`);
   });
 
+  it("13d safety-net-lowercase-hex: a learned serial surviving as lowercase full-line hex is refused", () => {
+    const upper = toHex(bytes(SERIAL));
+    const lower = upper.toLowerCase();
+    expect(lower).not.toBe(upper);
+    const text = file([
+      START,
+      ...exchange("0902", frames("18DAF117", vin0902(VIN)), 11, 1),
+      { t: 2, dir: "meta", note: `serial ${lower}` },
+    ]);
+    const e = refusal(text);
+    expect(e.message).toContain("a VIN serial survives masking");
+    assertQuiet(e);
+  });
+
+  it("13e safety-net-rx-concat-hex: a learned serial surviving only across normalized rx chunks is refused", () => {
+    const hex = toHex(bytes(SERIAL));
+    const at = 5;
+    const first = `${hex.slice(0, at)} \r`;
+    const second = ` ${hex.slice(at)}\r\r>`;
+    expect(first).not.toContain(hex);
+    expect(second).not.toContain(hex);
+    expect(pyLine({ t: 2.1, dir: "rx", data: first })).not.toContain(hex);
+    expect(pyLine({ t: 2.2, dir: "rx", data: second })).not.toContain(hex);
+    expect((first + second).replace(/[\r ]/g, "")).toContain(hex);
+    const text = file([
+      START,
+      ...exchange("0902", frames("18DAF117", vin0902(VIN)), 11, 1),
+      { t: 2, dir: "tx", data: "22 1234\r" },
+      { t: 2.1, dir: "rx", data: first },
+      { t: 2.2, dir: "rx", data: second },
+    ]);
+    expect(messagesOf(text).filter((m) => m.cmd === "221234").some((m) => String.fromCharCode(...m.data).includes(SERIAL))).toBe(false);
+    const e = refusal(text);
+    expect(e.message).toContain("a VIN serial survives masking");
+    assertQuiet(e);
+  });
+
   it("14 streaming: push/end/verify line by line equals scrubRecording, for every rx chunk split", () => {
     const reply = interleave(frames("18DAF117", vin0902(VIN)), frames("18DAF128", vin0902(VIN))).join("\r") + "\r\r>";
     for (let chunk = 1; chunk <= reply.length; chunk++) {

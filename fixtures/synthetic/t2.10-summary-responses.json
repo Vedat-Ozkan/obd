@@ -1,0 +1,59 @@
+{
+  "label": "Synthetic saved structured responses for T2.10a; no provider call.",
+  "cases": [
+    {
+      "name": "accepted",
+      "response": {
+        "version": 1,
+        "claims": [
+          { "text": "The adapter supply measured 12.7 V.", "factIds": ["twelve-volt-0"] },
+          { "text": "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.", "factIds": ["capacity-status", "capacity-reason"] },
+          { "text": "The community cell spread measured 0.003 volts.", "factIds": ["cell-spread"] }
+        ]
+      }
+    },
+    {
+      "name": "wrong-number",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.8 V.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "wrong-unit",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.7 volts.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "wrong-sign",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured -12.7 V.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "wrong-unicode-minus",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured −12.7 V.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "wrong-en-dash-minus",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured –12.7 V.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "wrong-spaced-minus",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured - 12.7 V.", "factIds": ["twelve-volt-0"] }] }
+    },
+    {
+      "name": "missing-citation",
+      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.7 V.", "factIds": [] }] }
+    },
+    {
+      "name": "malformed",
+      "response": { "version": 2, "claims": [] }
+    },
+    {
+      "name": "synthetic-multi-dtc-no-recording",
+      "report": "synthetic-multi-dtc-no-recording",
+      "response": { "version": 1, "claims": [{ "text": "Stored diagnostic code P0133 was reported.", "factIds": ["codes-0-stored-P0133"] }] }
+    },
+    {
+      "name": "synthetic-multi-dtc-with-number-no-recording",
+      "report": "synthetic-multi-dtc-no-recording",
+      "response": { "version": 1, "claims": [{ "text": "P0133 was stored, and adapter supply was 12.7 V.", "factIds": ["codes-0-stored-P0133", "twelve-volt-0"] }] }
+    },
+    { "name": "provider-failure", "providerFailure": true }
+  ]
+}

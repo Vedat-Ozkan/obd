@@ -1,0 +1,52 @@
+{"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "Equinox Ready, Park; one-button capture", "writeChar": "0000fff2-0000-1000-8000-00805f9b34fb", "notifyChar": "0000fff1-0000-1000-8000-00805f9b34fb", "mtu": 247}
+{"t": 0.001, "dir": "meta", "note": "capture start: ATZ ATE0 ATL0 ATS0 ATH1 ATSP0 0100 020000 020200 03"}
+{"t": 0.002, "dir": "tx", "data": "ATZ\r"}
+{"t": 0.1, "dir": "rx", "data": "\u00fc"}
+{"t": 0.888, "dir": "rx", "data": "\r\rELM327 v1.5\r\r>"}
+{"t": 0.889, "dir": "tx", "data": "ATE0\r"}
+{"t": 0.945, "dir": "rx", "data": "ATE0\r"}
+{"t": 0.946, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.946, "dir": "tx", "data": "ATL0\r"}
+{"t": 0.989, "dir": "rx", "data": "OK\r\r>"}
+{"t": 0.989, "dir": "tx", "data": "ATS0\r"}
+{"t": 1.032, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.033, "dir": "tx", "data": "ATH1\r"}
+{"t": 1.082, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.082, "dir": "tx", "data": "ATSP0\r"}
+{"t": 1.139, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.139, "dir": "tx", "data": "0100\r"}
+{"t": 1.182, "dir": "rx", "data": "SE"}
+{"t": 1.182, "dir": "rx", "data": "A"}
+{"t": 1.183, "dir": "rx", "data": "R"}
+{"t": 1.185, "dir": "rx", "data": "CH"}
+{"t": 1.198, "dir": "rx", "data": "I"}
+{"t": 1.199, "dir": "rx", "data": "NG"}
+{"t": 1.202, "dir": "rx", "data": "."}
+{"t": 1.203, "dir": "rx", "data": ".."}
+{"t": 1.204, "dir": "rx", "data": "\r"}
+{"t": 3.266, "dir": "rx", "data": "18DAF14506410080"}
+{"t": 3.267, "dir": "rx", "data": "000001\r18DAF1400"}
+{"t": 3.269, "dir": "rx", "data": "6410080000001\r18"}
+{"t": 3.271, "dir": "rx", "data": "DAF128064100BFFF"}
+{"t": 3.273, "dir": "rx", "data": "F997\r18DAF1CB064"}
+{"t": 3.28, "dir": "rx", "data": "10080000001\r18DA"}
+{"t": 3.281, "dir": "rx", "data": "F117064100800800"}
+{"t": 3.283, "dir": "rx", "data": "13\r"}
+{"t": 3.489, "dir": "rx", "data": "\r>"}
+{"t": 3.492, "dir": "tx", "data": "020000\r"}
+{"t": 3.553, "dir": "rx", "data": "18DAF11707420000"}
+{"t": 3.555, "dir": "rx", "data": "40080003\r"}
+{"t": 3.756, "dir": "rx", "data": "\r>"}
+{"t": 3.757, "dir": "tx", "data": "020200\r"}
+{"t": 3.827, "dir": "rx", "data": "18DAF11705420200"}
+{"t": 3.829, "dir": "rx", "data": "0000\r"}
+{"t": 4.024, "dir": "rx", "data": "\r>"}
+{"t": 4.026, "dir": "tx", "data": "03\r"}
+{"t": 4.075, "dir": "rx", "data": "18DAF145024300\r1"}
+{"t": 4.079, "dir": "rx", "data": "8DAF1CB024300\r18"}
+{"t": 4.079, "dir": "rx", "data": "DAF140024300\r18D"}
+{"t": 4.079, "dir": "rx", "data": "AF128024300\r18DA"}
+{"t": 4.08, "dir": "rx", "data": "F117024300\r"}
+{"t": 4.142, "dir": "rx", "data": "\r>"}
+{"t": 4.143, "dir": "meta", "note": "capture complete: 10 of 10 sent"}
+{"t": 4.143, "dir": "meta", "redacted": "vin-serial", "source": "2026-09-24-phone-console-2.jsonl", "source_sha256": "0c3d141a4916a97caf56a9b110e55d20fdc2348c4ddce3a4658ca878f18e9598", "script": "tools/spike/redact_vin.py", "script_version": 1, "masked_messages": 0}

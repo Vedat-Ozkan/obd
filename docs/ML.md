@@ -69,7 +69,7 @@ The summary (T2.10) and assistant (T2.11) ship as an opt-in feature (ADR-012); t
 - **Regression in CI.** Prompts are versioned. CI replays saved model responses through the checkers, so a prompt or parser change that breaks faithfulness fails `pnpm check` without paid API calls. Live model runs happen in `pnpm eval` only.
 - **Cost and latency.** Tokens, cached tokens, cost, and latency per report and per question, per model, with dated rates; these numbers set the usage cap at store time (ADR-009).
 
-Model IDs and prices are verified and dated in the spec. BYOK keys in `.env` only.
+Model IDs and prices are verified and dated in the spec. T2.10 uses a server-held key under ADR-020; local evaluation secrets belong in gitignored `.env` files only.
 
 ## BM7 (stretch): distillation
 

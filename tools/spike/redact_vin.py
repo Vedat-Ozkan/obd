@@ -128,7 +128,8 @@ def redact(text: str, source: str, source_sha256: str) -> tuple[str, list[str]]:
         for o in RULES[m.cmd][1]:  # VIN characters 12-17 are payload indices o+11..o+16
             if not _VIN_CHARS.fullmatch(m.payload[o:o + 17]):
                 raise ValueError(f"L{m.tx_line} {m.cmd} {m.header}: VIN byte outside 0-9A-Z")
-            if len(m.payload) >= o + 17:
+            # An already-masked serial (a phone-scrubbed upload, T2.9) is the mask, not a secret: never a safety-net hit.
+            if len(m.payload) >= o + 17 and m.payload[o + 11:o + 17] != MASK.encode() * 6:
                 serials.add(m.payload[o + 11:o + 17])
             for a, b in m.spots[o + 11:o + 17]:
                 for (k, n), digit in zip((a, b), f"{ord(MASK):02X}", strict=True):

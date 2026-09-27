@@ -1,0 +1,18 @@
+# T2.9 beta upload Worker (ADR-019; docs/specs/T2.9-beta-data-upload.md §Stage C1). No account id and no secrets here.
+# Pinned: wrangler@4.142.0 (the version the Stage C1 local run used; D5 in docs/task-runs/T2.9.md).
+# Owner steps 4-6, run from tools/beta-backend:
+#   pnpm dlx wrangler@4.142.0 login
+#   pnpm dlx wrangler@4.142.0 r2 bucket create obd-beta        (North America location hint)
+#   lifecycle rules: delete files/ and tombstones/ objects 730 days after upload (dashboard or wrangler r2 bucket lifecycle);
+#   check them with: pnpm dlx wrangler@4.142.0 r2 bucket lifecycle list obd-beta
+#   pnpm dlx wrangler@4.142.0 deploy
+#   pnpm dlx wrangler@4.142.0 secret put ADMIN_TOKEN           (a long random value; also BETA_ADMIN_TOKEN in the gitignored .env)
+#   Keep Workers logs, Logpush and observability off (owner step 6).
+# Local run (Stage C1/D): pnpm dlx wrangler@4.142.0 dev --local --port 8787
+name = "obd-beta"
+main = "worker.ts"
+compatibility_date = "2026-09-26"
+
+[[r2_buckets]]
+binding = "BETA_BUCKET"
+bucket_name = "obd-beta"

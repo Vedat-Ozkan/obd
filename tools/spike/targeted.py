@@ -77,7 +77,7 @@ async def watch_targeted(elm: Elm, rec: Recorder, core: list[tuple[str, str]],
     for state, text in zip(STATES, _INSTRUCTIONS, strict=True):
         rec.meta(phase="C", state=state)
         print(f"\nC state: {state}\n  {text}")
-        entered, cycles, rotated = time.monotonic(), 0, 0
+        entered, cycles, rotated, armed = time.monotonic(), 0, 0, False
         while True:
             await elm.send("ATRV")
             selected = None  # forgotten each cycle: every cycle re-selects its first module
@@ -101,13 +101,29 @@ async def watch_targeted(elm: Elm, rec: Recorder, core: list[tuple[str, str]],
                 else:
                     line += f", {_mmss(CHARGE_MIN_S)} reached"
             print(line)
-            if marks.empty():  # marks are taken between cycles only
+            drained = False
+            if missing or not armed:
+                while True:
+                    try:
+                        marks.get_nowait()
+                        drained = True
+                    except asyncio.QueueEmpty:
+                        break
+                if missing:
+                    if drained:
+                        rec.meta(phase="C", note="early mark ignored", state=state, elapsed_s=int(elapsed))
+                        print(f"  Too early, still missing: {', '.join(missing)}. Press Enter again when done.")
+                    continue
+                armed = True
+                if drained:
+                    rec.meta(phase="C", note="early mark ignored", state=state, elapsed_s=int(elapsed))
+                    print("  State is ready, but Enter was pressed too early. Press Enter again to continue.")
                 continue
-            marks.get_nowait()
-            if not missing:
-                break
-            rec.meta(phase="C", note="early mark ignored", state=state, elapsed_s=int(elapsed))
-            print(f"  Too early, still missing: {', '.join(missing)}. Press Enter again when done.")
+            try:
+                marks.get_nowait()
+            except asyncio.QueueEmpty:
+                continue
+            break
     rec.meta(phase="end")
 
 

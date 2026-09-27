@@ -1,0 +1,8 @@
+{
+  "name": "obd-assist",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "obd-battery": "workspace:*", "zod": "^4.6.5" },
+  "scripts": { "test": "vitest run" }
+}
