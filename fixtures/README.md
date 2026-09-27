@@ -41,6 +41,11 @@ disagree; `docs/specs/T0.7-codes-report.md`).
 Each of these ten recordings has a companion `.replay-label.json` for observed
 protocol outcomes. None has a `.label.json` health-session companion.
 
+T2.4 also generates `synthetic/charge-log-rested.jsonl` with its
+`charge-log-rested.label.json` session label. That task-specific label is
+consumed by the T2.4 E2E test; the common `obd-eval` zod schema remains planned
+and not implemented.
+
 ## Protocol replay observation labels
 
 The ten companion files are the three real recording stems above and the seven
@@ -142,16 +147,22 @@ One label is planned per labeled session, with:
 - `car`
 - `session`: `charge` or `snapshot`
 - `condition`: `healthy` or `fault`
-- optional `reference`: `method` (`integrated-energy` or `charger-kwh`),
-  `capacity_kwh`, `soc_start`, and `soc_end`
+- optional `reference`: `method` (`integrated-energy`, `charger-kwh`, or,
+  only when `synthetic: true`, `synthetic-generator`), optional unit-explicit
+  `capacity_ah` and `capacity_kwh`, `soc_start`, and `soc_end`
 - optional `fault`: `id`, `detail`, and `injected_at_s`
 - `notes`
 - boolean `synthetic`
 
-`reference` is present only for a charge session with enough SOC change to
-compute one. `fault` is only for injected synthetic faults. Values in
-`docs/EVAL.md` are placeholders for the shape, not measurements or labels for
-any current fixture.
+`reference` is present for a real charge session with enough SOC change and
+evidence to compute one, or for a synthetic generator-oracle label.
+`synthetic-generator` names deterministic generator truth: it is not an
+independent measurement, real-vehicle reference, or health evidence. `fault`
+is only for injected synthetic faults. The current charge-log label's
+`windows`, `weak_group`, and `planted` fields are T2.4 extensions outside this
+planned common shape, consumed through a test-local TypeScript type rather than
+common zod validation. Values in `docs/EVAL.md` are placeholders for the shape,
+not measurements or labels for a real vehicle.
 
 Synthetic identification has two layers. Current hand-written JSONL fixtures
 live under `fixtures/synthetic/` and carry `synthetic: true` in recording

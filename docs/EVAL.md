@@ -16,21 +16,46 @@ fixtures/
 
 `<car>` for a vehicle the owner does not own (beta tester, inspection customer, borrowed car) is make-model-year plus a short anonymous id; the meta line records consent and provenance, never the VIN.
 
-Label schema (zod in `obd-eval`), one per labeled session:
+Planned common session-label shape, one per labeled session. Its zod schema in
+`obd-eval` is not implemented yet:
 
-```json
-{
-  "car": "chevrolet-equinox-ev-2024",
-  "session": "charge" | "snapshot",
-  "condition": "healthy" | "fault",
-  "reference": { "method": "integrated-energy" | "charger-kwh", "capacity_kwh": 0, "soc_start": 0, "soc_end": 0 },
-  "fault": { "id": "cell-imbalance", "detail": "injected +40 mV on one cell group", "injected_at_s": 1200 },
-  "notes": "ambient 6 °C, Level 2 charger",
-  "synthetic": false
+```ts
+interface PlannedSessionLabel {
+  car: string;
+  session: "charge" | "snapshot";
+  condition: "healthy" | "fault";
+  reference?: {
+    method: "integrated-energy" | "charger-kwh" | "synthetic-generator";
+    capacity_ah?: number;
+    capacity_kwh?: number;
+    soc_start: number;
+    soc_end: number;
+  };
+  fault?: { id: string; detail: string; injected_at_s: number };
+  notes: string;
+  synthetic: boolean;
+  // A fixture may carry task-owned extension fields outside the common shape.
 }
 ```
 
-`reference` is present for charge sessions with enough ΔSOC to compute one; `fault` only for injected (synthetic) faults. The numbers above are placeholders for the shape, not data.
+`capacity_ah` and `capacity_kwh` are optional, unit-explicit quantities. A
+label includes the quantity or quantities its method and fixture supply; it
+does not manufacture a value absent from its evidence. `integrated-energy` and
+`charger-kwh` are planned methods for evidence-backed charge sessions. Their
+presence does not make a measurement independent or establish health: method,
+SOC basis, uncertainty, and provenance control the claim.
+
+`reference` is present for a real charge session with enough ΔSOC and evidence
+to compute one, or for a synthetic generator-oracle label. `synthetic-generator`
+is allowed only when `synthetic: true`; it identifies deterministic inputs known
+to that fixture's generator. It is a test oracle, not an independent
+measurement, real-car reference, or battery-health evidence. The checked-in
+`synthetic/charge-log-rested.label.json` uses both capacity quantities and has
+`condition: "fault"` only because it describes an injected synthetic scenario.
+Its `windows`, `weak_group`, and `planted` fields are T2.4 fixture-specific
+extensions consumed through a test-local TypeScript type, not common zod
+validation. `fault` remains only for injected synthetic faults. Synthetic
+results stay separate from real results.
 
 ## Scoring
 
