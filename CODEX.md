@@ -18,7 +18,7 @@ codex --model gpt-5.6-sol --config model_reasoning_effort="medium" '$obd-feature
 
 The single quotes keep the shell from expanding `$obd`. That shell launch selects the `gpt-5.6-sol` coordinator with medium reasoning; an existing session keeps its selected coordinator model. In either case, roles use fixed, economical tiers: architect `gpt-5.6-sol`/medium, implementer `gpt-5.6-terra`/medium, and reviewer `gpt-5.6-sol`/high. T0.1 above illustrates invocation syntax; the scaffold now exists. Select the next incomplete task from `docs/PLAN.md` and reconcile its task record before starting.
 
-The skill delegates to `obd_architect`, `obd_implementer`, and `obd_reviewer` in sequence. It asks about material missing decisions before implementation, then implements, checks, reviews, and repairs within the requested task. Selecting this automatic workflow supplies the routine scope authorization; you do not need to approve the same task again. It does not start the next task or commit changes.
+The skill delegates to `obd_architect`, `obd_implementer`, and `obd_reviewer` in sequence, with `obd_recording_analyst` for questions about what a recording contains and `obd_test_runner` for check and test runs, so large recordings and check output never reach the main conversation. It asks about material missing decisions before implementation, then implements, checks, reviews, and repairs within the requested task. Selecting this automatic workflow supplies the routine scope authorization; you do not need to approve the same task again. It does not start the next task or commit changes.
 
 ## Files and discovery
 
@@ -28,6 +28,8 @@ The skill delegates to `obd_architect`, `obd_implementer`, and `obd_reviewer` in
 | `.codex/agents/obd_architect.toml` | Spec author; no application edits |
 | `.codex/agents/obd_implementer.toml` | Builds and tests the spec |
 | `.codex/agents/obd_reviewer.toml` | Independent review; no source edits |
+| `.codex/agents/obd_recording_analyst.toml` | Answers questions about `fixtures/recordings/` with line citations; never edits recordings |
+| `.codex/agents/obd_test_runner.toml` | Runs checks and test suites, reports only failures; never edits files |
 | `docs/task-runs/<task-id>.md` | Tool-neutral task state, handoff, and verification evidence shared with Claude |
 
 Codex discovers repository skills under `.agents/skills` and custom agents under `.codex/agents`. Project configuration requires project trust. Restart Codex if new files are not discovered; use `/skills` to check for `obd-feature`. If the skill is absent, explicitly ask Codex to read `.agents/skills/obd-feature/SKILL.md` and follow it for the task. If named agents are unavailable but delegation works, the skill supplies their instructions to ordinary subagents. If delegation itself is unavailable, it reports the missing independent review instead of claiming approval.
