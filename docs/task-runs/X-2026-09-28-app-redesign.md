@@ -146,6 +146,7 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
 - 2026-09-28, owner: "do as many stages as possible, all the stages, for things that need my attention defer them, I'll handle them later". The orchestrator runs B, C1–C4 and the desk part of D back to back. Owner-only items collect in **Deferred to owner** below.
 
 ## Deferred to owner
+- Follow-up spec (not owner hardware; an owner go-ahead to unfreeze obd-battery): `buildBatteryDiagnosis` should record the chosen 2AF5 reply (min/avg/max) in `cellSpread`. The report drops undecoded rows, so the app cannot recover which reply was used (C3 repair round 1, fix 3). Until then the Cells range strip shows only when the triple is unambiguous and matches the spread. The same follow-up should test the same-ECU conditions (C3 re-review finding 2).
 
 - Stage A phone checks (a)–(f) (see the Stage A reviewer entry).
 - Optional, before the EAS build: `cd apps/mobile && pnpm exec expo install expo expo-modules-core expo-sharing` (patch bumps flagged by `expo install --check`), so one build covers them. The orchestrator can do this on request.
@@ -153,6 +154,7 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
 - Stage B phone checks 2–6 in the Stage B report (light and dark screenshots, safe areas with gesture and 3-button nav, fonts, portrait lock). They can run once, after all C stages, together with the Stage D matrix.
 - Stage C1 phone steps 1–9 in the Stage C1 implementer report (Garage → Car navigation and system back, SoC hero in JetBrains Mono, ownership dialog, remove refusal, Add a vehicle, Settings › Beta with consent on switch-on, Privacy note, T2.9 Stage D steps 1–4 and 6 with the switch under Settings). No new build: C1's fingerprint equals B's.
 - Stage C2 phone steps 1–8 in the Stage C2 implementer report (report summary rows and chips, the four section details with charts 4 and 2, Codes with the recently-cleared card and module detail, the AI summary route in `__DEV__`, route resolution across history back-and-forth, light/dark and font scale 2.0). No new build: C2's fingerprint equals B's.
+- Stage C3 phone steps 1–8 in the Stage C3 implementer report (History, the check screen fitting or scrolling at 360 dp, system back locked only during a run, a real charge log from start to Saved, Disconnect during a charge log, light/dark and font scale 2.0). No new build: C3's fingerprint equals B's.
 
 ## Stage B implementer (Claude, 2026-09-28)
 
@@ -427,3 +429,214 @@ Changed (8 files, all on the spec's C2 list): `apps/mobile/App.tsx`, `src/app/re
     - cellReply selects min/max/avg from one reply by identity, not float equality;
     - copy: "Not measured; needs a completed charge log" and "5 modules answered; none answered a code read".
 - C2 closed and committed by path.
+
+## Stage C3 implementer (Claude, 2026-09-28)
+
+Base: HEAD `5975608`, tree clean (`git status` at start). Repair count 0 of 2.
+
+Changed (8 files): `apps/mobile/App.tsx`, `src/screens/ConsoleScreen.tsx`, `src/screens/ReportScreens.tsx`, `src/app/reportView.ts`, `src/screens/SectionScreens.tsx` (one line of copy), `test/charge-logger.test.ts`, `test/report-view.test.ts`; created `src/app/chargeSteps.ts`. The spec's C3 list is five files. `reportView.ts`, `SectionScreens.tsx` and `report-view.test.ts` come from the brief's carried C2 review items. Plus this record.
+
+- **History** (`ReportHistory`): chart 2 (`ScanHistory` over `historyPoints`, empty state below two checks); "Battery checks" rows (date and time, "Complete scan"/"Partial scan", chevron to the Report summary), newest first as `batteryHistory.list` returns them; "Charge logs" with the empty state "Charge logs are saved to your capture folder; showing them per car comes later." (§Decisions 4). Title "Report history".
+- **Check screen** (`ConsoleScreen.tsx`, JSX and styles): a scrolling `Screen scroll blocks` page. Top bar: an arrow `IconButton` labelled "Back" (carried item 3), with the old disable condition `diagnosing || chargeLogging`, and the title "Battery check", "Log a charge" or "Charge log". Next, a status hero (container, radius 28) with the car line, the status line (live region) and the connection line. Then **Dongle**: Scan (tonal), and device rows (`ListRow`, name, then id and RSSI; tap to connect). Then a "Vehicle Ready and in Park" `Switch` (caption "Recorded with the battery check: yes/unknown"). Then one primary action per intent: "Run battery check" → `diagnose`, or "Start charge log" → `chargeLog`. Then "Cancel check" while a diagnosis runs, then Disconnect (tonal). Then the 12 V unplug note as a card. Last, a collapsed **Developer tools** card: note field, Run capture, Run codes report, the capture progress lines, the command field, Send (not saved), and the report and transcript panes (fixed 220 dp, `nestedScrollEnabled`). Every `disabled`/`editable` condition and every `onPress` body is the old expression, character for character. `FlatList` became a mapped list, because a FlatList inside the page ScrollView is a nested VirtualizedList.
+- **Charge log** (the check screen while `chargeLogging`): the status hero shows the existing status line from `chargeRun.mount`. Below it: the 5-step timeline (`CHARGE_STEP_LABELS`: Rest 10 min, Plug in, Charge, Rest 30 min, Saved); the note "The charge log stops and saves by itself. Disconnect stops it early; what was logged so far is kept."; and the existing Disconnect. There is no other start or stop control. The start stays the single "Start charge log" tap (T2.4 B2, owner one-and-done rule). Step marks while running: earlier steps "Done", current "Now" (icon + word), later ones blank. Once the status maps to Saved, the timeline stays on the check screen: step 5 "Done", steps the run reached "Logged", the rest "Not reached", so a run stopped early never shows the charge as done.
+- **`chargeSteps.ts`** (pure): `chargeStep(line)` and `CHARGE_STEP_LABELS`. Minutes come from `PRE_REST_S / 60` and `POST_REST_S / 60` (`obd-battery/session`). Mapping: `update()`'s lines (`chargeLogger.ts:169–173`) → 1–4, "Charge log stopped…" → 5, everything else → `undefined` (keep the previous step).
+- **Lock** (carried item 2, the sanctioned hook): new console prop `onLockChange(locked)`. It is fed by an effect on `diagnosing || chargeLogging`, and an unmount cleanup sends `false`, because a saved diagnosis replaces the check route while `diagnosing` is still true. `App` keeps `locked` in state, passes the stable `setLocked`, and calls `back(stack, locked)` instead of `back(stack, true)`. The console also gets `intent={route.intent}`.
+- **C2 review items** (carried item 4):
+  - (a) Stored-only-code test: derived in the test from `codes-stored.jsonl`, with its pending and permanent reads cleared, which leaves only stored P0133. Result: Poor, 1 code.
+  - (b) New `findReport` negative case: spike's `scannedAt` with spike-2's `recording` → undefined.
+  - (c) `cellReply` rewritten. It takes the first MIN directly followed by its reply's MAX from one ECU (the pair `buildBatteryDiagnosis` takes), found by position. It takes the AVG only when that AVG sits immediately before the pair from the same ECU. There is no float comparison. With no same-reply AVG, the readings are Lowest, Highest and Spread, and there is no range strip.
+  - (d) Copy changes. The Capacity source is now "Not measured; needs a completed charge log". The Codes caption is now "5 modules answered; none answered a code read" when the rating is Not rated.
+
+**Logic-file changes, named:** `src/app/chargeSteps.ts` (new, pure); `src/app/reportView.ts` (`cellReply`, the Capacity `source` string); `App.tsx` (`locked` state, `back(stack, locked)`, the console's `intent`/`onLockChange` props); `ConsoleScreen.tsx` (the `onLockChange` prop and its two effects, plus presentation state `devOpen`/`reached` with two effects that only read `status`/`chargeLogging`). No handler, ref or status string in the console changed. The spec's logic-freeze path list is empty.
+
+### Verification (Stage C3)
+
+- **Tests first**, recorded failing before any implementation:
+  - `charge-logger.test.ts` failed to load (`Cannot find module '../src/app/chargeSteps.js'`).
+  - `report-view.test.ts` had 6 failures: the 5 recordings on the new Capacity source copy, and the derived partial-decode case (old `cellReply` returned `{ minMv: 4076.3, avgMv: 4077.2, maxMv: 4079 }`, reply 1's AVG beside reply 2's pair, which is the reviewer's finding 3).
+  - The stored-only and `findReport`-recording cases passed on the correct C2 code. They exist to kill C2's surviving mutants (see Mutations).
+  - After implementation: PASS.
+- **E2E (C3), `test/charge-logger.test.ts`:** cases 1 (happy), 5 (disconnect-recover and disconnect-give-up) and 9 (stop-requested) map every `statuses` line through `chargeStep`. The step never decreases. Happy gives 1→2→3→4→5; the other three give 1→5.
+  - The console's own lines are mapped too: "Starting the charge log…" → none; "Stopping the charge log after the current command…" → none; "Charge log stopped; preparing the beta upload…" → 5; two "Charge log stopped: …" lines → 5; the "log file could not be created … NOT SAVED: …" line → none.
+  - Isolated failure 3 (recovery, retry and "Starting the ELM327." lines → undefined) and failure 4 (the three "Charge log not started: …" lines → undefined) have one test each.
+  - Artifact `/tmp/x-redesign-charge-steps.json`, SHA-256 `26f39b22e5892703a9a1ceefaf82b0a4da3d23f62fce25704a4e55b5a506fb19`, `cmp`-identical on a rerun: PASS.
+- **Report view:** `/tmp/x-redesign-report-view.json` changed from `8de1172f…` to `cdae2bf639c66d86b0aaa995b32b4b3d5e6991a49d23d5e42792ef28b3e95c62`, `cmp`-identical on a rerun: PASS. Old and new differ in 63 lines, for three reasons:
+  - the five `sections.capacity.source` strings changed to the new copy;
+  - a new key `synthetic/derived-partial-2af5` (derived from discovery-targeted, labelled synthetic);
+  - a new key `synthetic/derived-stored-only` (derived from `codes-stored.jsonl`, labelled synthetic).
+
+  Every other value, including the five recordings' cell ranges, is unchanged, so the new `cellReply` picks the same reply as before on every committed recording.
+- **Mutations**, each reverted (`cmp` against a backup):
+
+  | Mutation | Result |
+  |---|---|
+  | "Resting" matched before "Charge done" | 1 failed |
+  | Recovery or ELM-start lines → 1 | 1 failed |
+  | "Charge log not started" → 5 | 1 failed |
+  | The "NOT SAVED:" guard removed | 1 failed |
+  | A hardcoded 5-minute rest label | 1 failed |
+  | The Plug in step removed | 1 failed |
+  | `codeList` without `module.stored` | 1 failed (C2's surviving mutant, now killed) |
+  | `findReport` ignores `recording` | 1 failed (C2's surviving mutant, now killed) |
+  | AVG taken without the same-reply check | 1 failed |
+  | Old Capacity copy | 5 failed |
+
+  PASS.
+- `pnpm check`: PASS, exit 0 (core 239, battery 21, assist 142, mobile 329 = 324 + 5, relay 58, backend/intake/summary 42, Ruff, pytest 1). `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile`: PASS.
+- `expo export --platform android` into a scratch dir, deleted afterwards: PASS (`AppEntry-bf657e75….hbc`, 3.3 MB).
+- Expo fingerprint `d66ba328b7116976e29d34d6aac3378c2be9ecaf`, equal to Stage B: PASS.
+- **Existing artifacts:** PASS. Deleting them first was refused by this session's permission classifier, so each was overwritten by `pnpm check` instead, and its mtime confirms it was regenerated in that run. All match their recorded hashes on the first run:
+  - codes `01d894f4…` (b and c1)
+  - charge-log `fbb90c17…` (b and c1)
+  - C2 intake `bfacfd43…`
+  - `/tmp/t2.10d-mobile-flow.json` `4eb12fbc…` (no flake this time)
+  - navigation `817aaefd…`: unchanged, because `navigation.ts` is untouched and C1 already tests the unlocked case (`back(checkStack, false)` pops)
+  - the 41 `/tmp/t2.4-b1-*.jsonl` charge-logger artifacts, regenerated and identical to the pre-change copies. The four `probe-*` files are older and no current test writes them.
+
+  The live==replay tests (13, Decision 17, 18, 22) pass unchanged.
+- Logic freeze (spec path list against `5975608`): empty. PASS.
+- Only the files listed above changed (`git status --short`): PASS.
+- **Console fits or scrolls** (carried item 1): the page is a ScrollView, so every control, the command field, Send and both panes are reachable at any height. The panes are fixed-height, nested-scroll areas, because a flex pane has no height inside a scroll page. This is by construction; checking it on screen is owner step 2 below, NOT RUN.
+- Phone and car: NOT RUN (no phone or car in this WSL2 session). Owner steps, on the Stage B dev client through Metro (`cd apps/mobile && pnpm start`):
+  1. Car › Report history: the scan-history chart (or "Appears after your second check"), battery-check rows with date, time and scan status opening that report's summary, and the Charge logs empty-state sentence.
+  2. The check screen on a 360 dp width (developer options, smallest width) at font scale 1.0 and 2.0, with Developer tools expanded: every button, both text fields, Send, and the report and transcript panes can be scrolled to; the panes scroll inside the page. Nothing is clipped under the status or nav bar.
+  3. Run check → "Run battery check" is the only primary action. Log a charge → "Start charge log" is the only one. Developer tools start collapsed.
+  4. System back on the check screen when idle returns to the Car. During a battery check, system back does nothing and the Back arrow is disabled. After the check saves, the report opens and back returns to the Car.
+  5. A real charge log on the Equinox: one "Start charge log" tap, then the Charge log view shows the status hero, the timeline (Rest 10 min "Now", then Plug in, Charge, Rest 30 min), the note and Disconnect, and nothing else. Leave it to finish by itself: the timeline reaches Saved ("Done"), the final "Charge log stopped: …" line shows, and the file is in the capture folder.
+  6. A second charge log, with Disconnect pressed during the rest: "Stopping the charge log after the current command…", then "Charge log stopped: disconnect pressed …". The timeline shows Rest 10 min "Logged", the other steps "Not reached", Saved "Done", and the foreground notification goes away. System back is blocked while it runs.
+  7. The Codes screen for the discovery-style case (if available) reads "N modules answered; none answered a code read". Capacity's Source reads "Not measured; needs a completed charge log".
+  8. Light and dark screenshots of History, the check screen (collapsed and expanded) and the Charge log view.
+
+### Deviations
+
+1. The console's back control is the top-bar arrow (`IconButton`, accessibility label "Back"), as on every other page, not a text button. The disable condition is unchanged.
+2. `chargeStep` maps the one "Charge log stopped" line that saved nothing (log file not created, "NOT SAVED: …") to `undefined`, not Saved. A failed folder copy ("NOT SAVED to the capture folder …") still maps to Saved, because the log is kept in app storage, and the status hero says so.
+3. `CHARGE_STEP_LABELS` is exported from `chargeSteps.ts` beyond §Interfaces, so the minutes derived from `PRE_REST_S`/`POST_REST_S` are pinned in the test and the artifact.
+4. While a charge log runs, the check screen shows only the hero, timeline, note and Disconnect. The hidden controls are all disabled during a run, except the Ready switch and the command field, whose Send is disabled. After the run the timeline stays visible while the status line is the Saved line.
+5. Each intent shows only its own primary action. The other one is reached through the Car's other button.
+6. History rows show date and time (two checks can share a day) and no longer go through `batteryReportRows`, which rendered each full report as text.
+7. The console reads `useTokens()` instead of `usePalette()`; the colours are the same values the palette map returned.
+8. The Codes caption copy is in `SectionScreens.tsx`, which is outside the C3 file list. The brief's item 4 requires it.
+
+### Questions for the orchestrator
+
+1. Deviation 2: is a failed folder copy acceptable as "Saved" in the timeline (the log is in app storage, and the hero line says NOT SAVED to the folder), or should any "NOT SAVED" line stop short of Saved?
+2. Deviation 5: should the check intent also offer the charge log (or the reverse) behind Developer tools, or is one action per intent final?
+- 2026-09-28, orchestrator, on the C3 report:
+  - Deviations 1–8 accepted. The /tmp delete was refused by permissions, and overwrite plus the mtime check was used instead; this is fine, and nothing should work around the block.
+  - Q1: a failed folder copy still maps to **Saved**. The log is kept in private app storage and the folder copy is a convenience; the status line already names the failure.
+  - Q2: one primary action per intent is final. The other action is one Back away on the Car screen.
+  - Deviation 4 (controls hidden during a run) is safer: one command in flight.
+  - Next: C3 reviewer.
+- 2026-09-28, C3 reviewer: **REQUEST_CHANGES**.
+  - Blocking (1): a console mounted after a run ended gets the replayed final line (Decision 21), so saved=true while reached is undefined. The timeline then shows steps 1–4 "Not reached" and Saved "Done", misrepresenting a completed log.
+  - Minor:
+    - (2) The Q1 folder-copy-failure → Saved rule is untested (the mutant `includes("NOT SAVED")` survives).
+    - (3) cellReply pairs by adjacency, but buildBatteryDiagnosis resets at each AVG row including undecoded ones, so the two can diverge when all rows between replies fail to decode.
+    - (4) setReached does not clamp, so the step could go backwards.
+  - Verified clean: console handlers byte-identical, lock cannot stick, Disconnect visible, 41 t2.4 artifacts identical, C2 mutants killed, all artifacts identical, fingerprint unchanged.
+- 2026-09-28, orchestrator: C3 repair round 1 of 2 (fresh implementer).
+  - (1) Show per-step marks only when this console observed the run (`reached` known). Otherwise show the steps without claims ("Not observed on this screen" or none), with the saved hero line as is.
+  - (2) Map case 11's statuses through stepTransitions and assert Saved.
+  - (3) cellReply mirrors buildBatteryDiagnosis's pairing exactly: reset at each AVG row including undecoded ones. obd-battery stays frozen. Add a synthetic case with all-undecoded rows between replies.
+  - (4) Clamp: the step is the max seen.
+  - Every fix is tested first, with its mutant killed.
+
+## Stage C3 repair round 1 implementer (Claude, 2026-09-28)
+
+Base: the uncommitted C3 tree on HEAD `5975608`. Changed in this round: `apps/mobile/src/app/chargeSteps.ts`, `apps/mobile/src/screens/ConsoleScreen.tsx`, `apps/mobile/test/charge-logger.test.ts`, plus this record. `reportView.ts` and `report-view.test.ts` were not changed in this round (fix 3, below).
+
+- **Fix 1 (blocking):** new pure `stepMarks(reached, saved)` in `chargeSteps.ts`. With `reached` undefined it returns no mark for any step, whether or not the log is saved. Otherwise it gives the C3 marks unchanged (saved: step 5 "done", reached steps "logged", the rest "not-reached"; running: "done", "now", or blank). The saved hero line is unchanged.
+- **Fix 4:** new pure `reachedStep(previous, line)`. It keeps the furthest step 1–4 seen. Unmapped, Saved and lower lines keep the previous value.
+- **Console lines changed** (`ConsoleScreen.tsx`, against the C3 tree):
+  - l.20: the import adds `reachedStep`, `stepMarks`.
+  - l.72–73: the comment, and the status effect is now `setReached((previous) => reachedStep(previous, status))`.
+  - l.312–317: `stepView` now maps `stepMarks(reached, saved)` through a `MARK` table. Icons, colours and words are the same as C3's.
+
+  No handler, ref or status string changed.
+- **Fix 2:** case 11 now maps its statuses through `stepTransitions("copy-fails", …)` and asserts `[1, 5]`.
+
+### Verification (C3 repair 1)
+
+- **Tests first.** New assertions in `test/charge-logger.test.ts` (no new test cases, and no production change before they ran):
+  - case 1: observed marks `logged×4, done`; the replayed final line alone gives no marks (fix 1); `reachedStep(reachedStep(undefined, <Charging line>), <rest line>) === 3` (fix 4), lines taken from the run's own statuses.
+  - case 9: observed marks `logged, not-reached×3, done`; the replayed final line gives no marks.
+  - case 11: `stepTransitions` gives `[1, 5]`.
+
+  They failed before implementation (4 failed: `reachedStep`/`stepMarks` not exported). They pass after it (40/40).
+- **Mutants** (each on `chargeSteps.ts`, restored from a backup, `cmp` clean):
+
+  | Mutant | Result |
+  |---|---|
+  | fix 1: today's behaviour (`reached` undefined + saved → steps 1–4 "not-reached", 5 "done") | 2 failed |
+  | fix 2: `line.includes("NOT SAVED")` | 1 failed (`[1]` vs `[1, 5]`) |
+  | fix 4: no clamp (`step === 5 ? reached : step`) | 1 failed (1 vs 3) |
+
+  PASS.
+- **Charge-steps artifact:** `/tmp/x-redesign-charge-steps.json` changed from `26f39b22…` to `f475f03eb81e33a2bc7a2795668accb3817db18d57d3f7713e7b4f964590f7d1`. It is `cmp`-identical on a rerun. The change, checked against a saved copy of the `26f39b22…` file:
+  - a new key `copy-fails` (fix 2);
+  - two new fields on each run entry, `marks` and `replayedFinalMarks` (fixes 1 and 4).
+
+  Every C3 field of `labels`, `happy`, `disconnect-recover`, `disconnect-give-up`, `stop-requested` and `console` is equal to before. PASS.
+- `pnpm check`: PASS, exit 0 (core 239, battery 21, assist 142, mobile 329, relay 58, backend/intake/summary 42, Ruff, pytest 1). `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile`: PASS.
+- `expo export --platform android` into a scratchpad dir, removed afterwards: PASS (`AppEntry-4af8868d….hbc`, 3.3 MB).
+- Fingerprint `d66ba328b7116976e29d34d6aac3378c2be9ecaf`: PASS.
+- **Artifacts**, all overwritten by `pnpm check` (mtimes 05:15–05:17, after the 05:14:34 start), nothing deleted:
+  - The 45 `/tmp/t2.4-b1-*` files (41 plus 4 probes) are sha256-identical to the snapshot taken before the run, and again after a second charge-logger run.
+  - `fbb90c17…` (b, c1), `01d894f4…` (b, c1), `bfacfd43…`, `4eb12fbc…` (no flake), `817aaefd…`, and report-view `cdae2bf6…` (unchanged; fix 3 not applied): PASS.
+- **Fix 3: NOT DONE. The plan cannot be carried out as written.**
+  - `cellReply` only sees `BatteryDiagnosisReport`, and `buildBatteryDiagnosis` drops every undecoded reading from `report.signals` (`packages/obd-battery/src/report.ts:71`). An undecoded AVG row therefore leaves no trace in the report, and no function of the report can reset on it.
+  - Shown with the real `buildBatteryDiagnosis` (scratch script, not committed):
+    - Input X: reply 1 = AVG 3.90, MIN 3.89, MAX undecoded; reply 2 = AVG and MIN undecoded, MAX 3.91; reply 3 = 3.91 / 3.90 / 3.92.
+    - Input Y: reply 1 = 3.90 / 3.89 / 3.91; reply 2 = 3.91 / 3.90 / 3.92.
+    - Both give **byte-identical reports** (`JSON.stringify` equal, spread `0.020000000000000018`). But the builder's pair is reply 3 (3.90 / 3.91 / 3.92) for X and reply 1 (3.89 / 3.90 / 3.91) for Y.
+    - So any `cellReply(report)` is wrong for one of them, and the requested synthetic case has no single right answer to assert.
+  - Options for the orchestrator:
+    - (a) Unfreeze obd-battery so the report records the chosen reply (for example, the AVG and the MIN/MAX values or indices in `cellSpread`). This is a schema change.
+    - (b) Show only the spread, with no Lowest/Average/Highest readings and no range strip.
+    - (c) Accept a best effort. For example, C3's adjacency, or C2's exact `max − min === volts` check. Either one stays ambiguous in the case above and needs an owner/orchestrator waiver of "exactly".
+- Phone and car: NOT RUN (no phone or car in this session). C3 owner steps 5 and 6 still apply. Add: open the check screen after a charge log has finished while the console was unmounted. The timeline shows the five steps with no Done/Logged/Not reached marks, and the hero shows the saved line.
+- 2026-09-28, orchestrator, on C3 repair round 1: fixes 1, 2 and 4 PASS. Fix 3's "mirror exactly" is impossible while obd-battery is frozen: undecoded rows are dropped, so two different input sets give byte-identical reports. Decision: option (c) plus an honesty guard. Draw the range strip only for a same-reply, fully decoded triple whose max − min equals the report's spread; otherwise show the spread only. The obd-battery follow-up is added to the deferred list. Same implementer continues, within round 1.
+
+### C3 repair 1 addendum: fix 3 per the orchestrator's ruling, option (c) plus a guard (Claude, 2026-09-28)
+
+Changed in addition: `apps/mobile/src/app/reportView.ts`, `apps/mobile/test/report-view.test.ts`. obd-battery is untouched (`git diff -- packages` is empty).
+
+- **`cellReply`** keeps C3's adjacency pick: the first MIN directly followed by a MAX from the same ECU. It now returns the triple only when both of these hold:
+  - the AVG directly before that MIN is decoded and from the same ECU;
+  - `max − min === cellSpread.volts`.
+
+  Otherwise it returns undefined, and the Cells detail shows the spread alone: readings `[Spread]`, no range strip, no Lowest/Average/Highest rows. The source line now comes from `cellSpread`'s own min/max sources, so a spread-only detail does not say "Not read in this check".
+- **"Unambiguous by that rule"** is read as "the first adjacent pick", which is unique by construction. A stricter rule, one exactly-matching triple in the whole report, would drop discovery-targeted's strip, which the ruling requires to stay. Its reply at signals 73–75 (MIN 4.0760, MAX 4.0787) gives exactly the same float spread (`0.002700000000000813`) as the builder's pick (4.0764 / 4.0791).
+- **Tests first:**
+  - C3's partial-decode case (reply 2's AVG undecoded) now expects spread-only.
+  - New synthetic case `derived-undecoded-between-replies`, derived from discovery-targeted: reply 1's MAX, the 22 2B43 read after it, and reply 2's AVG and MIN are dropped, so every row between MIN 1 and MAX 2 is undecoded. The report's spread is reply 3's, as the builder resets. The adjacency pick (MIN 1, MAX 2) does not give that spread, so the detail must show spread-only.
+  - The first draft of this case dropped only the three 2AF5 rows. It passed on C3's code because the 2B43 SoC reading sat between the replies, so the adjacency pick was already reply 3. The case was corrected to drop every row between MIN 1 and MAX 2 before the implementation was accepted.
+  - Against C3's `cellReply`, both cases fail (2 failed). C3 showed MIN 1 with MAX 2 (`minMv 4076.3 … maxMv 4079`).
+- **Mutants** (each restored, `cmp` clean): PASS.
+
+  | Mutant | Result |
+  |---|---|
+  | No spread check | 1 failed |
+  | No AVG check | 1 failed |
+  | Whole guard dropped | 2 failed |
+- **Report-view artifact:** `/tmp/x-redesign-report-view.json` changed from `cdae2bf6…` to `f533bbe63875c952ac278db31bacb53fe7fdb2898962063b29d29a31df07d376`, `cmp`-identical on a rerun. A key-by-key diff against the `cdae2bf6…` copy shows two changes:
+  - the new key `synthetic/derived-undecoded-between-replies`;
+  - `synthetic/derived-partial-2af5.cells.readings` went from Lowest/Highest/Spread to Spread only.
+
+  Every other value is unchanged. That includes the three recordings' cell ranges and readings (spike, spike-2 and discovery keep their strips) and the two phone-console recordings (not read). PASS.
+- `pnpm check`: PASS, exit 0 (mobile 330). The first run failed lint on two non-null assertions in the new test lines; they were replaced by local values. `pnpm -F mobile typecheck`: PASS.
+- `expo export --platform android` into the scratchpad, removed afterwards: PASS (`AppEntry-81d23e22….hbc`).
+- Fingerprint `d66ba328b7116976e29d34d6aac3378c2be9ecaf`: PASS.
+- **Artifacts:** PASS. All 45 `/tmp/t2.4-b1-*` files were rewritten in this run (none older than the 05:24:45 start) and are sha256-identical to the snapshot. `fbb90c17…`, `01d894f4…`, `bfacfd43…`, `4eb12fbc…` and `817aaefd…` match. Charge steps are `f475f03e…`, as explained above.
+- **Not done / follow-up:**
+  - The report cannot identify the reply `buildBatteryDiagnosis` chose once undecoded rows are dropped. Two different sets of 2AF5 readings give byte-identical reports with different chosen replies (shown above).
+  - So the guard still shows a triple when the first adjacent pick crosses a hidden reset and happens to give the same spread. In that case the numbers are internally consistent, but they may belong to a different reply than the builder's.
+  - Follow-up spec idea (orchestrator's deferred list): obd-battery records the chosen reply in `cellSpread` (its AVG, and MIN/MAX values), and `cellReply` reads it instead of searching.
+- 2026-09-28, orchestrator: C3 repair round 1 complete. Both readings accepted: the spread-only detail shows Spread as a reading row sourced from `cellSpread`; "unambiguous" means the first adjacent pick (strict uniqueness would drop discovery-targeted's real strip on a float-equal spread). Next: C3 re-review.
+- 2026-09-28, C3 re-reviewer (round 1): **APPROVE**.
+  - Reproduced: pnpm check PASS (mobile 330). Fixes 1–4 pass, and the reviewer's mutants are killed. Console lines 75–307 are untouched against HEAD. Hash changes are explained byte for byte (`f475f03e…`, `f533bbe6…`). All 45 t2.4 files are identical. Other artifacts are identical. Fingerprint `d66ba328…`. `packages/` diff empty.
+  - Findings:
+    - (1) The cellReply comment overstated the guarantee. The orchestrator added the residual clause (comment-only; typecheck and lint re-run).
+    - (2) The same-ECU conditions on MAX and AVG are untested. Harmless today, because 2AF5 is read only from ECU CB and the spread check bounds it. This is noted for the obd-battery follow-up.
+- C3 closed and committed by path.

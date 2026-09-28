@@ -29,22 +29,24 @@ const withUnit = (signal: ObservedBatterySignal) => `${num(signal.value)} ${UNIT
 const mv = (volts: number) => Math.round(volts * 10000) / 10;
 
 /**
- * The MIN/AVG/MAX reply behind the report's cell spread. buildBatteryDiagnosis pairs MIN and MAX from one 22 2AF5 reply,
- * and the decoder emits AVG, MIN, MAX per reply, so each AVG starts a reply. The pair must reproduce cellSpread exactly.
+ * The 22 2AF5 reply behind the report's cell spread. The decoder emits AVG, MIN, MAX together for each reply, so the report's
+ * signals hold each reply's readings next to each other. buildBatteryDiagnosis takes the first reply whose MIN and MAX both
+ * decoded from one ECU, but the report drops undecoded rows, so it cannot show where one reply ended. This takes the first
+ * MIN directly followed by a MAX, and returns it only with the AVG directly before it and when max − min is the report's own
+ * spread (the same decoded numbers, so exact). Anything else shows the spread alone. Residual: if hidden undecoded rows
+ * join two replies whose pair happens to give the same spread, the cells shown can belong to another reply than the one
+ * buildBatteryDiagnosis used; only recording the chosen reply in obd-battery removes that (redesign task record follow-up).
  */
 function cellReply(report: BatteryDiagnosisReport): { min: ObservedBatterySignal; avg: ObservedBatterySignal; max: ObservedBatterySignal } | undefined {
   const spread = report.cellSpread;
   if (!spread) return undefined;
-  let reply: Partial<Record<"min" | "avg" | "max", ObservedBatterySignal>> = {};
-  for (const signal of report.signals) {
-    if (signal.source.command !== "22 2AF5") continue;
-    if (signal.id === "EQUINOXEV_HVBAT_C_V_AVG") reply = { avg: signal };
-    if (signal.id === "EQUINOXEV_HVBAT_C_V_MIN") reply.min = signal;
-    if (signal.id === "EQUINOXEV_HVBAT_C_V_MAX") reply.max = signal;
-    const { min, avg, max } = reply;
-    if (min && avg && max && min.source.ecu === max.source.ecu && max.value - min.value === spread.volts) return { min, avg, max };
-  }
-  return undefined;
+  const s = report.signals;
+  const cell = (signal: ObservedBatterySignal | undefined, id: string, ecu: string) =>
+    signal?.source.command === "22 2AF5" && signal.id === `EQUINOXEV_HVBAT_C_V_${id}` && signal.source.ecu === ecu;
+  const at = s.findIndex((signal, i) => cell(signal, "MIN", signal.source.ecu) && cell(s[i + 1], "MAX", signal.source.ecu));
+  if (at < 0) return undefined;
+  const [avg, min, max] = [s[at - 1], s[at], s[at + 1]];
+  return cell(avg, "AVG", min.source.ecu) && max.value - min.value === spread.volts ? { min, avg, max } : undefined;
 }
 
 const lastTwelveVolt = (report: BatteryDiagnosisReport) => report.twelveVolt.observations.at(-1);
@@ -115,9 +117,9 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
     return {
       hero: spread ? { value: (spread.volts * 1000).toFixed(1), unit: "mV", tag: "community", tagLabel: TAG_LABEL.community } : { value: "Not read", tag: "neutral", tagLabel: "Not read" },
       rating: NOT_RATED,
-      readings: cells && spread ? [reading("Lowest cell", cells.min), reading("Average cell", cells.avg), reading("Highest cell", cells.max), { label: "Spread", value: `${(spread.volts * 1000).toFixed(1)} mV`, tier: spread.tier }] : [],
+      readings: spread ? [...(cells ? [reading("Lowest cell", cells.min), reading("Average cell", cells.avg), reading("Highest cell", cells.max)] : []), { label: "Spread", value: `${(spread.volts * 1000).toFixed(1)} mV`, tier: spread.tier }] : [],
       meaning: `${report.health.reason} These cell voltages come from a community signal definition, not one verified on this car.`,
-      source: cells ? sourceOf([cells.min, cells.avg, cells.max]) : "Not read in this check",
+      source: spread ? [...new Set([spread.min, spread.max].map((source) => `${source.command} from ECU ${source.ecu}`))].join("; ") : "Not read in this check",
       ...(cells ? { cellRange: { minMv: mv(cells.min.value), avgMv: mv(cells.avg.value), maxMv: mv(cells.max.value) } } : {}),
     };
   }
@@ -127,7 +129,7 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
       rating: NOT_RATED,
       readings: [],
       meaning: `${report.capacity.reason} Capacity stays not measured until a completed charge log and a reviewed estimator exist.`,
-      source: "A completed charge log (Log a charge)",
+      source: "Not measured; needs a completed charge log",
     };
   }
   const twelve = lastTwelveVolt(report);

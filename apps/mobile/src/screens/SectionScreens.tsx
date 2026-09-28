@@ -66,7 +66,7 @@ function CodesScreen({ codes, busy, openModule }: { codes: CodesReport; busy: bo
   const view = codesView(codes);
   // Not rated means no module answered a code read (codesView), so there is no count to show.
   const read = view.rating.rating !== "not-rated";
-  const answered = `${String(view.modules.length)} module${view.modules.length === 1 ? "" : "s"} answered`;
+  const answered = `${String(view.modules.length)} module${view.modules.length === 1 ? "" : "s"} answered${read ? "" : "; none answered a code read"}`;
   return <>
     <Hero label="Diagnostic codes" value={read ? String(view.codeCount) : undefined} unit={read ? (view.codeCount === 1 ? "code" : "codes") : undefined} empty="Not read" caption={answered}
       accessibilityLabel={`Diagnostic codes: ${read ? `${String(view.codeCount)} reported` : "not read"}, ${answered}`} />

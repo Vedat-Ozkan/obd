@@ -13,6 +13,7 @@ import { integratedCurrentCapacity } from "../../../packages/obd-battery/src/cap
 import { allowedCommand } from "../../../packages/obd-core/src/elm/guard.js";
 import { MAX_RUN_S, RECOVERY_WAIT_S, runChargeLog, SILENT_STOP_S, WAIT_FOR_CHARGE_S, type ChargeLogResult, type StreamTargets } from "../src/chargeLogger.js";
 import { RecordingBuffer } from "../src/recording.js";
+import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../src/app/chargeSteps.js";
 
 const write = writeFileSync as (path: string, text: string) => void;
 const signals = importObdbMode22(signalsetJson);
@@ -218,6 +219,36 @@ async function replay(text: string) {
   return { log, phases: chargePhases(log) };
 }
 
+// ---- X-2026-09-28-app-redesign C3: the Charge log screen's 5-step timeline -------------------------------------
+// Every status line a run emits goes through chargeStep; undefined keeps the previous step. The artifact
+// (/tmp/x-redesign-charge-steps.json) records each case's step transitions and the line that made each one.
+const STEPS_ARTIFACT = "/tmp/x-redesign-charge-steps.json";
+const stepsArtifact: Record<string, unknown> = { labels: CHARGE_STEP_LABELS };
+const saveSteps = () => { write(STEPS_ARTIFACT, `${JSON.stringify(stepsArtifact, null, 2)}\n`); };
+function stepTransitions(name: string, statuses: readonly string[]): number[] {
+  let current: number | undefined;
+  const transitions: { step: number; line: string }[] = [];
+  for (const line of statuses) {
+    const step = chargeStep(line);
+    if (step === undefined) continue;
+    // The timeline never moves backwards.
+    expect(step, line).toBeGreaterThanOrEqual(current ?? 1);
+    if (step !== current) transitions.push({ step, line });
+    current = step;
+  }
+  stepsArtifact[name] = { lines: statuses.length, unmapped: [...new Set(statuses.filter((line) => chargeStep(line) === undefined))], transitions, marks: consoleMarks(statuses), replayedFinalMarks: consoleMarks(statuses.slice(-1)) };
+  saveSteps();
+  return transitions.map((t) => t.step);
+}
+// The marks a console shows after seeing these lines, as ConsoleScreen folds its status: the furthest step reached, and
+// saved when the line on screen (the last) is Saved. A console mounted after the run sees only the replayed final line.
+function consoleMarks(lines: readonly string[]) {
+  const reached = lines.reduce<ChargeStep | undefined>(reachedStep, undefined);
+  const last = lines.at(-1);
+  return stepMarks(reached, last !== undefined && chargeStep(last) === 5);
+}
+const NO_MARKS = [undefined, undefined, undefined, undefined, undefined];
+
 // ---- Failure modes ------------------------------------------------------------------------------------------------
 
 it("1 + 10: happy path stops by itself after the post-charge rest; every flush is crash safe", async () => {
@@ -228,6 +259,15 @@ it("1 + 10: happy path stops by itself after the post-charge rest; every flush i
   expect(boundaries(r.lines)).toEqual(["start"]);
   expect(r.statuses.some((s) => s.includes("Do not plug in yet"))).toBe(true);
   expect(r.statuses).toContain("Plug in the charger now.");
+  // C3: the timeline walks Rest 10 min, Plug in, Charge, Rest 30 min, Saved in order.
+  expect(stepTransitions("happy", r.statuses)).toEqual([1, 2, 3, 4, 5]);
+  expect(consoleMarks(r.statuses)).toEqual(["logged", "logged", "logged", "logged", "done"]);
+  // C3 repair fix 1: a console that did not observe the run (final line replayed on mount) claims nothing per step.
+  expect(consoleMarks(r.statuses.slice(-1))).toEqual(NO_MARKS);
+  // C3 repair fix 4: the reached step is the furthest seen; a later lower line (here a rest line after Charging) keeps it.
+  const charging = r.statuses.find((line) => chargeStep(line) === 3) ?? "";
+  const resting = r.statuses.find((line) => chargeStep(line) === 1) ?? "";
+  expect(reachedStep(reachedStep(undefined, charging), resting)).toBe(3);
   // 10: drain() leaves nothing flushed in memory; every flush ends on a whole line after a complete exchange.
   expect(r.stream.appends.length).toBeGreaterThan((1020 + POST_REST_S) / 30 - 2);
   expect(r.stream.appends.every((a) => a.buffered === 0 && a.text.endsWith("\n"))).toBe(true);
@@ -329,6 +369,8 @@ it("5: a lost transport reconnects and logs on; when reconnecting keeps failing,
   expect(after(recover.lines, "22 2414", 30).next).toBe("ATZ");
   const { log } = await replay(recover.stream.content);
   expect(log.current.some((p) => p.t > 40)).toBe(true);
+  // C3: the reconnect's "Lost the ELM327" and "Starting the ELM327." lines keep the rest step.
+  expect(stepTransitions("disconnect-recover", recover.statuses)).toEqual([1, 5]);
 
   vi.useFakeTimers({ now: new Date("2026-09-25T00:00:00Z") });
   const giveUp = await run("disconnect-give-up", plan, {
@@ -339,6 +381,7 @@ it("5: a lost transport reconnects and logs on; when reconnecting keeps failing,
   expect(giveUp.endS).toBeGreaterThanOrEqual(30 + SILENT_STOP_S - 5);
   expect(giveUp.endS).toBeLessThan(30 + SILENT_STOP_S + 10);
   expect(boundaries(giveUp.lines)).toEqual(["start"]);
+  expect(stepTransitions("disconnect-give-up", giveUp.statuses)).toEqual([1, 5]);
 }, SLOW);
 
 it("6: modules that answer NO DATA for 10 min stop the run as partial", async () => {
@@ -375,12 +418,18 @@ it("9: Disconnect pressed lets the command in flight complete, then stops, flush
   const { between, next } = after(r.lines, "22 2B43", 20);
   expect(next).toBeUndefined();
   expect(between.some((l) => l.dir === "rx" && l.data.includes("622B43"))).toBe(true);
+  expect(stepTransitions("stop-requested", r.statuses)).toEqual([1, 5]);
+  // A run stopped in the rest never shows the charge as done; replayed alone, the final line claims nothing.
+  expect(consoleMarks(r.statuses)).toEqual(["logged", "not-reached", "not-reached", "not-reached", "done"]);
+  expect(consoleMarks(r.statuses.slice(-1))).toEqual(NO_MARKS);
 }, SLOW);
 
 it("11: a failed copy to the folder still resolves and names the private file", async () => {
   const r = await run("copy-fails", { amps: () => REST }, { stopAt: 15, copyError: new Error("no capture folder remembered") });
   expect(r.result.saved).toBe(`NOT SAVED to the capture folder: no capture folder remembered. The log is in app storage (captures/${FILE}).`);
   expect(r.stream.content.length).toBeGreaterThan(0);
+  // C3 repair fix 2 (orchestrator Q1 ruling): the log is kept in app storage, so a failed folder copy still reaches Saved.
+  expect(stepTransitions("copy-fails", r.statuses)).toEqual([1, 5]);
 }, SLOW);
 
 it("13: a core retry on the first post-charge 2414 leaves the live samples and the replayed samples identical", async () => {
@@ -926,3 +975,38 @@ it("Decision 16: an error that is not a link error stops the run as partial, flu
   expect(final.stream.content.length).toBeGreaterThan(0);
   expect(final.recording.lines()).toEqual([]);
 }, SLOW);
+
+// C3: the console's own charge-log lines (ConsoleScreen.tsx chargeLog and Disconnect), built as the console builds them.
+it("X-2026-09-28 C3: the console's own charge-log lines keep or finish the timeline", () => {
+  const lines: [string, number | undefined][] = [
+    ["Starting the charge log…", undefined],
+    ["Stopping the charge log after the current command…", undefined],
+    ["Charge log stopped; preparing the beta upload…", 5],
+    [`Charge log stopped: disconnect pressed (partial). Saved ${FILE} to the capture folder. Reconnect for another run.`, 5],
+    // A log file that could not be created saved nothing, so it does not reach Saved (runChargeLog's early return).
+    ["Charge log stopped: the log file could not be created: storage full (partial). NOT SAVED: storage full. Reconnect for another run.", undefined],
+    [`Charge log stopped: post-charge rest logged (complete). Saved ${FILE} to the capture folder. Queued for beta upload. Reconnect for another run.`, 5],
+  ];
+  expect(lines.map(([line]) => chargeStep(line))).toEqual(lines.map(([, step]) => step));
+  expect(CHARGE_STEP_LABELS).toEqual(["Rest 10 min", "Plug in", "Charge", "Rest 30 min", "Saved"]);
+  stepsArtifact.console = lines.map(([line]) => ({ line, step: chargeStep(line) ?? null }));
+  saveSteps();
+});
+
+// Spec §Verification isolated failure 3: a recovery or retry line moves the step backwards.
+it("X-2026-09-28 C3 failure 3: recovery, retry and session-start lines keep the previous step", () => {
+  for (const line of [
+    `Cannot reach the dongle (dongle not found). Retrying in ${String(RECOVERY_WAIT_S)} s.`,
+    `Lost the ELM327 (BLE link lost). New session in ${String(RECOVERY_WAIT_S)} s.`,
+    "Starting the ELM327.",
+  ]) expect(chargeStep(line), line).toBeUndefined();
+});
+
+// Spec §Verification isolated failure 4: "Charge log not started: …" maps to Saved.
+it("X-2026-09-28 C3 failure 4: a charge log that never started is not Saved", () => {
+  for (const line of [
+    "Charge log not started: no capture folder (picker cancelled).",
+    "Charge log not started: the dongle disconnected. Reconnect and try again.",
+    "Charge log not started: the foreground service failed (denied). Reconnect before another run.",
+  ]) expect(chargeStep(line), line).toBeUndefined();
+});

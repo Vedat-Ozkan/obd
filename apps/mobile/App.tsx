@@ -56,6 +56,8 @@ export function App() {
   const [consentShare, setConsentShare] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [betaMessage, setBetaMessage] = useState("");
+  // C3: set by the console (onLockChange) while a diagnosis or a charge log runs; system back is blocked only then.
+  const [locked, setLocked] = useState(false);
   const route: Route = stack[stack.length - 1] ?? { name: "garage" };
   const push = (next: Route) => { setError(""); setStack((current) => [...current, next]); };
   const pop = () => { setError(""); setStack((current) => current.length > 1 ? current.slice(0, -1) : current); };
@@ -134,15 +136,13 @@ export function App() {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       // Consent opened by the Beta switch closes without a decision; sharing stays as it was.
       if (consentVisible && !beta.needsConsent) { setConsentOpen(false); return true; }
-      // C1: the console does not expose whether a diagnosis or charge log runs, so the check screen counts as locked and
-      // its own back button, with its unchanged disable conditions, is the way out.
-      const next = back(stack, true);
+      const next = back(stack, locked);
       if (next === "exit") return false;
       if (next !== "blocked") { setError(""); setStack(next); }
       return true;
     });
     return () => { subscription.remove(); };
-  }, [stack, consentVisible, beta]);
+  }, [stack, consentVisible, beta, locked]);
 
   if (beta && consentVisible) return <ConsentScreen beta={beta} betaMessage={betaMessage} consentShare={consentShare} setConsentShare={setConsentShare} busy={busy} decideBeta={decideBeta} />;
 
@@ -159,7 +159,7 @@ export function App() {
   const selectedEntry = "entryId" in route ? state.vehicles.find((entry) => entry.id === route.entryId) : undefined;
   const selectedVehicle = SUPPORTED_VEHICLES.find((item) => item.id === selectedEntry?.catalogId);
   if (route.name === "check" && selectedEntry && selectedVehicle && canUseEquinoxConsole(selectedVehicle)) return <View style={{ flex: 1, backgroundColor: colors.background }}>
-    <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} onBack={pop} onSaved={openSaved} />
+    <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} intent={route.intent} onBack={pop} onSaved={openSaved} onLockChange={setLocked} />
   </View>;
 
   const page = (heading: string, body: ReactNode, action?: ReactNode) => <Screen scroll blocks>
@@ -185,7 +185,7 @@ export function App() {
     // T2.10d's component, hosted unchanged; the route is only reachable from the development row.
     if (route.name === "aiSummary" && __DEV__) return page("AI summary (development)", <DevelopmentSummary key={`${routeReport.scannedAt}-${routeReport.recording}`} report={routeReport} />);
   }
-  if (route.name === "history") return page(`Battery reports for car ${route.entryId}`, <ReportHistory historyReports={historyReports} openReport={openReport} />);
+  if (route.name === "history") return page("Report history", <ReportHistory historyReports={historyReports} openReport={openReport} />);
   if (route.name === "addVehicle") return page("Add a vehicle", <AddVehicleScreen make={make} setMake={setMake} model={model} setModel={setModel} year={year} setYear={setYear} tag={tag} setTag={setTag} busy={busy} change={change} onAdded={pop} reopenInterest={reopenInterest} interests={state.interests} />);
   if (route.name === "interest") return page("Unsupported vehicle interest", <InterestScreen interest={interest} setInterest={setInterest} interestSaved={interestSaved} setInterestSaved={setInterestSaved} busy={busy} change={change} />);
   if (route.name === "settings") return page("Settings", <SettingsScreen beta={beta} openBeta={() => { push({ name: "beta" }); }} openPrivacy={() => { push({ name: "privacy" }); }} />);

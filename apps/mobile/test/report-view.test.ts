@@ -97,6 +97,8 @@ describe("report screens over the committed Equinox recordings", () => {
     expect(sections.cells.meaning.startsWith(report.health.reason)).toBe(true);
     expect(sections.capacity.meaning.startsWith(report.capacity.reason)).toBe(true);
     expect(sections.twelveVolt.meaning.startsWith(report.twelveVolt.reason)).toBe(true);
+    // C3 (C2 review finding 4): the Capacity source says nothing was measured, not that a charge log supplied the value.
+    expect(sections.capacity.source).toBe("Not measured; needs a completed charge log");
     // Chart 4: min ≤ avg ≤ max, and max − min is the report's own cell spread.
     expect(sections.cells.cellRange ?? null).toEqual(want.cellRange);
     if (want.cellRange && want.spreadVolts !== null) {
@@ -125,6 +127,51 @@ describe("report screens over the committed Equinox recordings", () => {
       { label: "Permanent codes (Mode 0A)", value: "not answered (negative response 11)" },
     ]);
     expect(moduleRows(report.codes, "7E8")).toBeUndefined();
+  });
+
+  it("shows only the spread when the adjacent reply lost its AVG (derived partial decode, synthetic)", async () => {
+    // C3 (C2 review finding 3). Derived in this test from discovery-targeted, which has several 2AF5 replies (AVG, MIN, MAX
+    // each): reply 1 loses its MAX and reply 2 its AVG, as a partial decode would. The spread is then reply 2's MIN/MAX pair,
+    // as buildBatteryDiagnosis pairs it, and reply 1's AVG must not be shown beside it.
+    const report = await load("2026-09-23-discovery-targeted.redacted.jsonl");
+    const cells = report.signals.filter((s) => s.source.command === "22 2AF5");
+    expect(cells.slice(0, 6).map((s) => s.id.replace("EQUINOXEV_HVBAT_C_V_", ""))).toEqual(["AVG", "MIN", "MAX", "AVG", "MIN", "MAX"]);
+    const [, , max1, avg2, min2, max2] = cells;
+    const derived: BatteryDiagnosisReport = {
+      ...report,
+      signals: report.signals.filter((s) => s !== max1 && s !== avg2),
+      cellSpread: { volts: max2.value - min2.value, tier: "community", min: min2.source, max: max2.source },
+    };
+    const detail = sectionDetail(derived, "cells");
+    // C3 repair 1 (orchestrator fix 3 ruling): an undecoded AVG leaves no whole reply to show, so only the spread is shown.
+    expect(detail.cellRange).toBeUndefined();
+    expect(detail.readings).toEqual([{ label: "Spread", value: `${((max2.value - min2.value) * 1000).toFixed(1)} mV`, tier: "community" }]);
+    expect(detail.source).toBe("22 2AF5 from ECU CB");
+    artifact["synthetic/derived-partial-2af5"] = { synthetic: true, derivedFrom: `${base}2026-09-23-discovery-targeted.redacted.jsonl`, cells: detail };
+    save();
+  });
+
+  it("shows only the spread when the adjacent MIN and MAX do not give the report's spread (derived, synthetic)", async () => {
+    // C3 repair 1 (reviewer finding 3). From discovery-targeted: reply 1 loses its MAX, the 22 2B43 read after it, and reply 2
+    // its AVG and MIN, so every row between reply 1's MIN and reply 2's MAX failed to decode. buildBatteryDiagnosis resets at reply 2's AVG and takes
+    // reply 3; the report cannot show that reset, and the adjacent MIN 1 / MAX 2 do not give reply 3's spread.
+    const report = await load("2026-09-23-discovery-targeted.redacted.jsonl");
+    const cells = report.signals.filter((s) => s.source.command === "22 2AF5");
+    expect(cells.slice(0, 9).map((s) => s.id.replace("EQUINOXEV_HVBAT_C_V_", ""))).toEqual(["AVG", "MIN", "MAX", "AVG", "MIN", "MAX", "AVG", "MIN", "MAX"]);
+    const [, min1, , , , max2, , min3, max3] = cells;
+    const [from, to] = [report.signals.indexOf(min1), report.signals.indexOf(max2)];
+    const derived: BatteryDiagnosisReport = {
+      ...report,
+      signals: report.signals.filter((_, i) => i <= from || i >= to),
+      cellSpread: { volts: max3.value - min3.value, tier: "community", min: min3.source, max: max3.source },
+    };
+    expect(max2.value - min1.value).not.toBe(max3.value - min3.value);
+    const detail = sectionDetail(derived, "cells");
+    expect(detail.cellRange).toBeUndefined();
+    expect(detail.readings.map((r) => r.label)).toEqual(["Spread"]);
+    expect(detail.source).toBe("22 2AF5 from ECU CB");
+    artifact["synthetic/derived-undecoded-between-replies"] = { synthetic: true, derivedFrom: `${base}2026-09-23-discovery-targeted.redacted.jsonl`, cells: detail };
+    save();
   });
 
   it("gives the scan-history chart one SoC point per check, oldest first", async () => {
@@ -156,6 +203,19 @@ describe("codes rating over the synthetic codes fixtures (synthetic, no vehicle 
     expect(view.rating).toEqual({ rating, basis });
     expect(view.codeCount).toBe(count);
     artifact[`synthetic/${name}`] = { synthetic: true, codes: view, modules: Object.fromEntries(view.modules.map((m) => [m.ecu, moduleRows(codes, m.ecu)])) };
+    save();
+  });
+
+  it("rates a stored code alone Poor (derived from codes-stored.jsonl, synthetic)", async () => {
+    // C3 (C2 review finding 2): codes-stored also has pending and permanent codes, so it cannot show that a stored code
+    // by itself decides the rating. Here its pending and permanent reads answer with no codes; only stored P0133 is left.
+    const codes = await codesReportFromRecording(parseRecording(read(new URL("fixtures/synthetic/codes-stored.jsonl", root), "latin1")));
+    const clear = <T extends { status: string }>(r: T): T => (r.status === "read" ? { ...r, dtcs: [] } : r);
+    const derived = { ...codes, modules: codes.modules.map((m) => ({ ...m, pending: clear(m.pending), permanent: clear(m.permanent) })) };
+    const view = codesView(derived);
+    expect(view.rating).toEqual({ rating: "poor", basis: CODE_POOR });
+    expect(view.codeCount).toBe(1);
+    artifact["synthetic/derived-stored-only"] = { synthetic: true, derivedFrom: "fixtures/synthetic/codes-stored.jsonl", rating: view.rating, modules: view.modules };
     save();
   });
 
@@ -193,6 +253,8 @@ describe("report routes", () => {
     expect(path).toEqual([spike2.recording, spike.recording, spike2.recording]);
     // A route naming a report that is not in the list resolves to nothing, not to another report.
     expect(findReport(history, { scannedAt: "2026-09-24T10:00:00.000Z", recording: spike.recording })).toBeUndefined();
+    // C3 (C2 review finding 2): a key that matches the spike's scannedAt but names spike-2's recording matches neither.
+    expect(findReport(history, { scannedAt: spike.scannedAt, recording: spike2.recording })).toBeUndefined();
     artifact.routes = path;
     save();
   });

@@ -1,26 +1,39 @@
 import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { View } from "react-native";
-import { batteryReportRows } from "../batteryScan.js";
-import { reportSummary } from "../app/reportView.js";
-import { Button, Card, Chip, Hero, ListRow, Text } from "../ui/kit.js";
-import { usePalette } from "../ui/theme.js";
-
-function ReportHistory({ historyReports, openReport }: { historyReports: readonly BatteryDiagnosisReport[]; openReport: (report: BatteryDiagnosisReport) => void }) {
-  const colors = usePalette();
-  const normal = { color: colors.text };
-  const muted = { color: colors.muted };
-  return <>
-    {historyReports.length === 0 ? <Text style={normal}>No battery reports saved for this car.</Text> : null}
-    {batteryReportRows(historyReports).map((row) => <Card key={`${row.report.scannedAt}-${row.report.recording}`}>
-      <Text style={normal}>{row.label}</Text>
-      <Text style={muted}>{row.report.recording}</Text>
-      <Button title="Open report" onPress={() => { openReport(row.report); }} />
-    </Card>)}
-  </>;
-}
+import { historyPoints, reportSummary } from "../app/reportView.js";
+import { ScanHistory } from "../ui/charts.js";
+import { Button, Chip, Hero, ListRow, SectionLabel, Text } from "../ui/kit.js";
+import { useTokens } from "../ui/theme.js";
 
 function checkedOn(scannedAt: string): string {
   return new Date(scannedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/**
+ * History (spec §Screens 6): chart 2, the battery checks (newest first, as batteryHistory.list returns them), then charge logs.
+ * Charge-log files are not linked to a garage car yet, so that section is an honest empty state (spec §Decisions 4).
+ */
+function ReportHistory({ historyReports, openReport }: { historyReports: readonly BatteryDiagnosisReport[]; openReport: (report: BatteryDiagnosisReport) => void }) {
+  const tokens = useTokens();
+  const muted = { color: tokens.muted };
+  // Two checks on one day are told apart by the time.
+  const when = (scannedAt: string) => new Date(scannedAt).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return <>
+    <View style={{ gap: 8 }}>
+      <SectionLabel>Scan history</SectionLabel>
+      <ScanHistory points={historyPoints(historyReports)} />
+    </View>
+    <View>
+      <SectionLabel>Battery checks</SectionLabel>
+      {historyReports.length === 0 ? <Text style={muted}>No battery checks saved for this car.</Text> : null}
+      {historyReports.map((report) => <ListRow key={`${report.scannedAt}-${report.recording}`} icon="car-battery" title={when(report.scannedAt)}
+        subtitle={report.scanStatus === "partial" ? "Partial scan" : "Complete scan"} onPress={() => { openReport(report); }} />)}
+    </View>
+    <View style={{ gap: 8 }}>
+      <SectionLabel>Charge logs</SectionLabel>
+      <Text style={muted}>Charge logs are saved to your capture folder; showing them per car comes later.</Text>
+    </View>
+  </>;
 }
 
 /** Report summary (spec §Screens 3): the SoC hero, four rows with value and rating chip, and one primary action. */

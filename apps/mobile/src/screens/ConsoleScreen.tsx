@@ -2,7 +2,8 @@ import { BleManager } from "react-native-ble-plx";
 import { useEffect, useRef, useState } from "react";
 import type { Transport } from "obd-core/transport";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
-import { FlatList, PermissionsAndroid, Platform, ScrollView, TextInput } from "react-native";
+import { PermissionsAndroid, Platform, ScrollView, Switch, TextInput, View } from "react-native";
+import { Icon, IconButton, TouchableRipple } from "react-native-paper";
 import { readLines } from "../beta/phoneStore.js";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "../ble/BleTransport.js";
 import { runCapture } from "../capture.js";
@@ -16,12 +17,16 @@ import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
 import { batteryHistory, betaOutbox, chargeRun, deferShare, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
-import { Button, Screen, styles, Text } from "../ui/kit.js";
-import { usePalette } from "../ui/theme.js";
+import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
+import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui/kit.js";
+import { useTokens } from "../ui/theme.js";
 
-function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogVehicle; entry: GarageVehicle; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void> }) {
-  const colors = usePalette();
-  const inputColors = { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.inputText };
+function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
+  vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>;
+  onLockChange: (locked: boolean) => void;
+}) {
+  const tokens = useTokens();
+  const inputColors = { backgroundColor: tokens.surface, borderColor: tokens.outline, color: tokens.text };
   const [manager] = useState(() => new BleManager());
   const [recording] = useState(() => new RecordingBuffer());
   const [connection, setConnection] = useState<BleConnection>();
@@ -58,6 +63,15 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
   const mounted = useRef(true);
   // Decision 21: set while the notification permission and the picker are open, before the run record is begun.
   const chargeStarting = useRef(false);
+  // X-2026-09-28-app-redesign C3, presentation only: the developer tools card, and the last timeline step (1–4) this run reached.
+  const [devOpen, setDevOpen] = useState(false);
+  const [reached, setReached] = useState<ChargeStep>();
+  // The one sanctioned hook: App blocks system back only while a diagnosis or a charge log runs; unmounting releases it.
+  useEffect(() => { onLockChange(diagnosing || chargeLogging); }, [diagnosing, chargeLogging, onLockChange]);
+  useEffect(() => () => { onLockChange(false); }, [onLockChange]);
+  // reachedStep keeps the previous step on retry, recovery and starting lines, and never moves back.
+  useEffect(() => { setReached((previous) => reachedStep(previous, status)); }, [status]);
+  useEffect(() => { if (chargeLogging) setReached(undefined); }, [chargeLogging]);
 
   // A session exists only while a run records, so closing it freezes the buffer: no rx lands after the run or a disconnect.
   const endRecording = (): string | undefined => {
@@ -293,33 +307,97 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
     void connectionRef.current?.transport.close().catch(() => undefined);
   };
 
-  return <Screen>
-    <Button title="Back to garage" color={colors.buttonBackground} disabled={diagnosing || chargeLogging} onPress={onBack} />
-    <Text style={{ color: colors.text, fontWeight: "bold" }}>2024 Chevrolet Equinox EV · garage car {entry.id}</Text>
-    <Text style={{ color: colors.text }}>{status}</Text>
-    <Text style={{ color: colors.muted }}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
-    <Text style={{ color: colors.text }}>Unplug the OBD dongle from the car after each check. Disconnecting Bluetooth leaves the dongle powered; it can drain the 12 V battery while the vehicle is off.</Text>
-    <Button title="Scan" color={colors.buttonBackground} disabled={!permitted || !!connection || connecting || capturing || diagnosing || chargeLogging} onPress={startScan} />
-    <Button title="Disconnect" color={colors.buttonBackground} disabled={!chargeLogging && (!connection || pending || diagnosing || capturing)} onPress={() => {
-      // During a charge log, Disconnect only asks the run to stop; the run saves the partial log and closes the link itself.
-      if (chargeRun.current()) { chargeRun.requestStop("Stopping the charge log after the current command…"); return; }
-      teardown("Disconnected by user.");
-    }} />
-    <FlatList data={devices} keyExtractor={(item) => item.id} renderItem={({ item }) => <Button title={`${item.name ?? "Unnamed"} (${item.id}) RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`} color={colors.buttonBackground} disabled={!!connection || connecting || diagnosing} onPress={() => void connect(item)} />} />
-    <TextInput style={[styles.input, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={colors.placeholder} editable={!capturing && !diagnosing && !chargeLogging} />
-    <Button title={`Vehicle Ready and in Park for diagnosis: ${diagnosisReady ? "yes" : "unknown"}`} color={colors.buttonBackground} disabled={diagnosing} onPress={() => { setDiagnosisReady((value) => !value); }} />
-    <Button title="Run battery diagnosis" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void diagnose()} />
-    {diagnosing ? <Button title="Cancel battery diagnosis" color={colors.buttonBackground} disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
-    <Button title="Run capture" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("recording")} />
-    <Button title="Run codes report" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("codes")} />
-    <Button title="Run charge log" color={colors.buttonBackground} disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void chargeLog()} />
-    {captureStep ? <Text style={{ color: colors.text }}>{captureStep}</Text> : null}
-    {captureLast ? <Text style={{ color: colors.muted }}>{captureLast}</Text> : null}
-    <TextInput style={[styles.input, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={colors.placeholder} autoCapitalize="characters" editable={!diagnosing} />
-    <Button title="Send (not saved)" color={colors.buttonBackground} disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void send()} />
-    {report ? <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}><Text style={[styles.consoleText, { color: colors.consoleText }]}>{report}</Text></ScrollView> : null}
-    <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: colors.consoleText }]}>{line}</Text>)}</ScrollView>
+  const saved = chargeStep(status) === 5;
+  const title = chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : "Battery check";
+  const marks = stepMarks(reached, saved);
+  const MARK = {
+    done: { icon: "check-circle", color: tokens.accent, word: "Done" }, logged: { icon: "check-circle", color: tokens.accent, word: "Logged" },
+    now: { icon: "progress-clock", color: tokens.accent, word: "Now" }, "not-reached": { icon: "minus-circle-outline", color: tokens.muted, word: "Not reached" },
+  };
+  const stepView = (n: number) => { const mark = marks[n - 1]; return mark ? MARK[mark] : { icon: "circle-outline", color: tokens.muted, word: "" }; };
+  const pane = [consoleStyle, { backgroundColor: tokens.surface, borderColor: tokens.outline }];
+  const disconnect = <Button title="Disconnect" tonal disabled={!chargeLogging && (!connection || pending || diagnosing || capturing)} onPress={() => {
+    // During a charge log, Disconnect only asks the run to stop; the run saves the partial log and closes the link itself.
+    if (chargeRun.current()) { chargeRun.requestStop("Stopping the charge log after the current command…"); return; }
+    teardown("Disconnected by user.");
+  }} />;
+
+  // Spec §Screens 9 and the check screen: a scrolling page, so every control stays reachable with 52 dp buttons on a small phone.
+  return <Screen scroll blocks>
+    <View style={[styles.row, { minHeight: 56 }]}>
+      <IconButton icon="arrow-left" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Back" disabled={diagnosing || chargeLogging} onPress={onBack} />
+      <Text accessibilityRole="header" style={[styles.h1, { flex: 1 }]}>{title}</Text>
+    </View>
+    <View accessibilityLiveRegion="polite" style={[styles.hero, styles.heroContent, { backgroundColor: tokens.container }]}>
+      <Text style={[styles.caption, { color: tokens.containerMuted }]}>2024 Chevrolet Equinox EV · garage car {entry.id}</Text>
+      <Text style={[styles.rowLabel, { color: tokens.onContainer }]}>{status}</Text>
+      <Text style={[styles.caption, { color: tokens.containerMuted }]}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
+    </View>
+    {chargeLogging || saved ? <Card>
+      <SectionLabel>Charge log steps</SectionLabel>
+      {CHARGE_STEP_LABELS.map((label, i) => {
+        const view = stepView(i + 1);
+        return <View key={label} style={[styles.row, { minHeight: 48 }]}>
+          <Icon source={view.icon} size={24} color={view.color} />
+          <Text style={[styles.rowLabel, { flex: 1 }]}>{`${String(i + 1)}. ${label}`}</Text>
+          {view.word ? <Text style={{ color: tokens.muted }}>{view.word}</Text> : null}
+        </View>;
+      })}
+    </Card> : null}
+    {chargeLogging ? <>
+      <Card><Text>The charge log stops and saves by itself. Disconnect stops it early; what was logged so far is kept.</Text></Card>
+      {disconnect}
+    </> : <>
+      <View style={{ gap: 8 }}>
+        <SectionLabel>Dongle</SectionLabel>
+        <Button title="Scan" tonal disabled={!permitted || !!connection || connecting || capturing || diagnosing || chargeLogging} onPress={startScan} />
+        <View>{devices.map((item) => <ListRow key={item.id} icon="bluetooth" title={item.name ?? "Unnamed"} subtitle={`${item.id} · RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`}
+          disabled={!!connection || connecting || diagnosing} onPress={() => void connect(item)} />)}</View>
+      </View>
+      <View style={[styles.row, { minHeight: 60 }]}>
+        <View style={styles.rowText}>
+          <Text style={styles.rowLabel}>Vehicle Ready and in Park</Text>
+          <Text style={[styles.caption, { color: tokens.muted }]}>{diagnosisReady ? "Recorded with the battery check: yes" : "Recorded with the battery check: unknown"}</Text>
+        </View>
+        <Switch accessibilityLabel="Vehicle Ready and in Park" value={diagnosisReady} disabled={diagnosing} onValueChange={() => { setDiagnosisReady((value) => !value); }} />
+      </View>
+      {intent === "charge"
+        ? <Button title="Start charge log" disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void chargeLog()} />
+        : <Button title="Run battery check" disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void diagnose()} />}
+      {diagnosing ? <Button title="Cancel check" tonal disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
+      {disconnect}
+      <Card>
+        <View style={[styles.row, { alignItems: "flex-start" }]}>
+          <Icon source="information-outline" size={24} color={tokens.muted} />
+          <Text style={{ flex: 1 }}>Unplug the OBD dongle from the car after each check. Disconnecting Bluetooth leaves the dongle powered; it can drain the 12 V battery while the vehicle is off.</Text>
+        </View>
+      </Card>
+      <Card>
+        <TouchableRipple accessibilityRole="button" accessibilityState={{ expanded: devOpen }} onPress={() => { setDevOpen(!devOpen); }} style={{ minHeight: 48, justifyContent: "center" }}>
+          <View style={styles.row}>
+            <Icon source="tools" size={24} color={tokens.muted} />
+            <Text style={[styles.rowLabel, { flex: 1 }]}>Developer tools</Text>
+            <Icon source={devOpen ? "chevron-up" : "chevron-down"} size={24} color={tokens.muted} />
+          </View>
+        </TouchableRipple>
+        {devOpen ? <>
+          <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
+          <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("recording")} />
+          <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("codes")} />
+          {captureStep ? <Text>{captureStep}</Text> : null}
+          {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
+          <TextInput style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
+          <Button title="Send (not saved)" tonal disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void send()} />
+          {report ? <ScrollView nestedScrollEnabled style={pane}><Text style={[styles.consoleText, { color: tokens.text }]}>{report}</Text></ScrollView> : null}
+          <ScrollView nestedScrollEnabled style={pane}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: tokens.text }]}>{line}</Text>)}</ScrollView>
+        </> : null}
+      </Card>
+    </>}
   </Screen>;
 }
+
+// Fixed-height panes that scroll inside the page (nestedScrollEnabled): the page itself scrolls, so a flex pane would have no height.
+const consoleStyle = { borderWidth: 1, borderRadius: 12, padding: 8, height: 220 };
+const inputStyle = { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, minHeight: 48 };
 
 export { EquinoxConsole };
