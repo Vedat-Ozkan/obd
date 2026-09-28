@@ -8,26 +8,55 @@ const factSchema = z.strictObject({
 const requestSchema = z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v1"), facts: z.array(factSchema) });
 const summarySchema = z.strictObject({
   version: z.literal(1),
-  claims: z.array(z.strictObject({ text: z.string().trim().min(1), factIds: z.array(z.string().trim().min(1)).min(1) })).min(1),
+  claims: z.array(z.strictObject({ text: z.string().transform((text) => text.replace(/^ +| +$/g, "")).pipe(z.string().min(1)), factIds: z.array(z.string().trim().min(1)).min(1) })).min(1),
 });
 
-function numericPhrase(fact: SummaryFact): string | undefined {
-  return fact.unit && /^-?\d+(?:\.\d+)?$/.test(fact.value) ? `${fact.value} ${fact.unit}` : undefined;
+// Exact quantity/DTC grammar: T2.10a-exact-quantity-amendment, rules 2–6.
+const eligibleLabel = (label: string): boolean => /^[A-Za-z ()-]+$/.test(label) && /^[A-Za-z(]/.test(label) && /[A-Za-z)]$/.test(label);
+
+function acceptedBodies(cited: readonly SummaryFact[]): ReadonlySet<string> {
+  const bodies = new Set<string>();
+  const storedCodes: SummaryFact[] = [];
+  for (const fact of cited) {
+    if (fact.unit && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(fact.value) && /^[A-Za-z%]+(?:\/[A-Za-z%]+)?$/.test(fact.unit)) {
+      const quantity = `${fact.value} ${fact.unit}`;
+      if (eligibleLabel(fact.label)) bodies.add(`${fact.label}: ${quantity}`);
+      if (fact.label === "adapter-supply 12 V supply" && fact.unit === "V") {
+        bodies.add(`The adapter supply measured ${quantity}`);
+        bodies.add(`adapter supply was ${quantity}`);
+      }
+      if (fact.label === "Cell spread" && fact.unit === "volts" && fact.tier === "community") {
+        bodies.add(`The community cell spread measured ${quantity}`);
+      }
+    }
+    // DTC alphabet/encoding: docs/ELM327.md, DTC 2-byte encoding.
+    if (/^[PCBU][0-3][0-9A-F]{3}$/.test(fact.value)) {
+      if (eligibleLabel(fact.label)) bodies.add(`${fact.label}: ${fact.value}`);
+      if (fact.label === "stored diagnostic code") {
+        bodies.add(`Stored diagnostic code ${fact.value} was reported`);
+        bodies.add(`${fact.value} was stored`);
+        storedCodes.push(fact);
+      }
+    }
+  }
+  for (const first of storedCodes) {
+    for (const second of storedCodes) {
+      if (first.id !== second.id && first.value !== second.value) {
+        bodies.add(`Stored diagnostic codes ${first.value} and ${second.value} were reported`);
+      }
+    }
+  }
+  return bodies;
 }
 
 function checkClaim(text: string, cited: readonly SummaryFact[], allFactIds: ReadonlySet<string>): void {
   if ([...allFactIds].some((id) => text.includes(id))) throw new Error("summary claim includes a source identifier");
-  if (/\d+\s*[-–]\s*\d+/.test(text)) throw new Error("summary claim includes a range");
-  const withoutDtcs = text.replace(/\b[A-Z][0-9A-F]{4}\b/g, (dtc) => {
-    if (!cited.some((fact) => fact.value === dtc)) throw new Error("summary claim has an uncited DTC");
-    return " ".repeat(dtc.length);
-  });
-  for (const match of withoutDtcs.matchAll(/(?:(?:-|−|–)\s*)?\d+(?:\.\d+)?/g)) {
-    const value = match[0].replace(/[−–]/g, "-").replace(/\s/g, "");
-    const unit = text.slice(match.index + match[0].length).match(/^\s+([^\s.,;:!?]+)/)?.[1];
-    if (unit === undefined || !cited.some((fact) => numericPhrase(fact) === `${value} ${unit}`)) {
-      throw new Error("summary claim has an unsupported number or unit");
-    }
+  // Only symbol-free prose gets this route; quantities and codes require full coverage.
+  if (/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(text)) return;
+  if (/[^\x20-\x7E]/.test(text) || text.includes("  ")) throw new Error("summary claim has unsupported whitespace or characters");
+  const bodies = acceptedBodies(cited);
+  if (!text.endsWith(".") || !text.slice(0, -1).split(/; |, and /).every((body) => bodies.has(body))) {
+    throw new Error("summary claim has an unsupported quantity or DTC body");
   }
 }
 
@@ -35,7 +64,10 @@ function checkClaim(text: string, cited: readonly SummaryFact[], allFactIds: Rea
 export function checkSummaryFacts(request: SummaryRequest, response: unknown): StructuredSummary {
   const parsedRequest = requestSchema.parse(request);
   const parsedSummary = summarySchema.parse(response);
-  const facts = new Map(parsedRequest.facts.map((fact) => [fact.id, fact]));
+  // Boundary validation may trim strings; it must not authorize altered fact spellings.
+  const facts = new Map<string, SummaryFact>(parsedRequest.facts.map((fact, index) => [fact.id, {
+    ...fact, label: request.facts[index].label, value: request.facts[index].value, unit: request.facts[index].unit,
+  }]));
   if (facts.size !== parsedRequest.facts.length) throw new Error("summary request has duplicate fact identifiers");
   for (const claim of parsedSummary.claims) {
     if (new Set(claim.factIds).size !== claim.factIds.length) throw new Error("summary claim repeats a citation");

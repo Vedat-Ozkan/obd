@@ -6,9 +6,14 @@ import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
 import { batteryDiagnosisFromRecording, type BatteryDiagnosisReport } from "obd-battery/report";
 import { summarize, type LlmClient } from "../src/index.js";
 
-export type SavedSummaryCase = { name: string; response?: unknown; providerFailure?: boolean; report?: "synthetic-multi-dtc-no-recording" };
+export type SavedSummaryCase = { name: string; response?: unknown; providerFailure?: boolean; report?: "synthetic-multi-dtc-no-recording" | "synthetic-negative-signal-no-recording" | "synthetic-zero-signal-no-recording" };
 
 export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSummaryCase): BatteryDiagnosisReport {
+  if (item.report === "synthetic-negative-signal-no-recording" || item.report === "synthetic-zero-signal-no-recording") {
+    // Lexical controls copied from a replayed signal, not hardware observations.
+    return { ...report, signals: report.signals.map((signal) => signal.id === "EQUINOXEV_HVBAT_C_V_AVG"
+      ? { ...signal, value: item.report === "synthetic-zero-signal-no-recording" ? 0 : -signal.value } : signal) };
+  }
   if (item.report !== "synthetic-multi-dtc-no-recording") return report;
   return {
     ...report,

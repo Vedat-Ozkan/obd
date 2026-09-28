@@ -6,54 +6,1998 @@
       "response": {
         "version": 1,
         "claims": [
-          { "text": "The adapter supply measured 12.7 V.", "factIds": ["twelve-volt-0"] },
-          { "text": "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.", "factIds": ["capacity-status", "capacity-reason"] },
-          { "text": "The community cell spread measured 0.003 volts.", "factIds": ["cell-spread"] }
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          },
+          {
+            "text": "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.",
+            "factIds": [
+              "capacity-status",
+              "capacity-reason"
+            ]
+          },
+          {
+            "text": "The community cell spread measured 0.003 volts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
         ]
       }
     },
     {
       "name": "wrong-number",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.8 V.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.8 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "wrong-unit",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.7 volts.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 volts.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "wrong-sign",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured -12.7 V.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured -12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "wrong-unicode-minus",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured −12.7 V.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured −12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "wrong-en-dash-minus",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured –12.7 V.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured –12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "wrong-spaced-minus",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured - 12.7 V.", "factIds": ["twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured - 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "missing-citation",
-      "response": { "version": 1, "claims": [{ "text": "The adapter supply measured 12.7 V.", "factIds": [] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": []
+          }
+        ]
+      }
     },
     {
       "name": "malformed",
-      "response": { "version": 2, "claims": [] }
+      "response": {
+        "version": 2,
+        "claims": []
+      }
     },
     {
       "name": "synthetic-multi-dtc-no-recording",
       "report": "synthetic-multi-dtc-no-recording",
-      "response": { "version": 1, "claims": [{ "text": "Stored diagnostic code P0133 was reported.", "factIds": ["codes-0-stored-P0133"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Stored diagnostic code P0133 was reported.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "synthetic-multi-dtc-with-number-no-recording",
       "report": "synthetic-multi-dtc-no-recording",
-      "response": { "version": 1, "claims": [{ "text": "P0133 was stored, and adapter supply was 12.7 V.", "factIds": ["codes-0-stored-P0133", "twelve-volt-0"] }] }
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "P0133 was stored, and adapter supply was 12.7 V.",
+            "factIds": [
+              "codes-0-stored-P0133",
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
     },
-    { "name": "provider-failure", "providerFailure": true }
+    {
+      "name": "provider-failure",
+      "providerFailure": true
+    },
+    {
+      "name": "canonical-cell-spread",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell spread: 0.003 volts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ascii-outer-spaces",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "  The adapter supply measured 12.7 V.  ",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ordinary-prose-punctuation",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Capacity is not measured; health is not assessed (missing data), and that's honest!",
+            "factIds": [
+              "capacity-status",
+              "health-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "synthetic-negative-exact-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): -3.9297 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-negative-signal-no-recording"
+    },
+    {
+      "name": "synthetic-negative-absolute-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): 3.9297 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-negative-signal-no-recording"
+    },
+    {
+      "name": "synthetic-negative-wrong-sign-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): +3.9297 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-negative-signal-no-recording"
+    },
+    {
+      "name": "synthetic-negative-unicode-sign-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): −3.9297 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-negative-signal-no-recording"
+    },
+    {
+      "name": "synthetic-negative-detached-sign-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): - 3.9297 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-negative-signal-no-recording"
+    },
+    {
+      "name": "synthetic-zero-exact-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): 0 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-zero-signal-no-recording"
+    },
+    {
+      "name": "synthetic-zero-negative-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): -0 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-zero-signal-no-recording"
+    },
+    {
+      "name": "synthetic-zero-plus-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): +0 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-zero-signal-no-recording"
+    },
+    {
+      "name": "synthetic-zero-leading-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): 00 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-zero-signal-no-recording"
+    },
+    {
+      "name": "synthetic-zero-decimal-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell voltage (avg): 0.0 volts.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_AVG"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-zero-signal-no-recording"
+    },
+    {
+      "name": "prefix-plus-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ±12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-plus-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ± 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-less-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≤12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-less-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≤ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-less",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured <12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-less",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured < 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-greater",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured >12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-greater",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured > 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-ascii-less-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured <=12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-ascii-less-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured <= 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-ascii-greater-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured >=12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-ascii-greater-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured >= 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-greater-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≥12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-greater-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≥ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-not-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≠12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-not-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≠ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured =12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-equal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured = 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-at-least",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured at least 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-at-most",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured at most 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-less-than",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured less than 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-more-than",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured more than 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-no-more-than",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured no more than 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-tilde",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ~12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-tilde",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ~ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-approximately-symbol",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≈12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-approximately-symbol",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ≈ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-similar-symbol",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ∼12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-similar-symbol",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ∼ 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-ascii-plus-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured +/-12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-spaced-ascii-plus-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured +/- 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-about",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured about 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-approximately",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured approximately 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-roughly",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured roughly 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-around",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured around 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prefix-up-to",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured up to 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "suffix-or-less",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V or less.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "suffix-or-more",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V or more.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "suffix-approximately",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V approximately.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "suffix-plus-minus-zero",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V ±0 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-hyphen-range",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7-12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-en-dash-range",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7–12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-em-dash-range",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7—12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-to-range",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V to 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-between-range",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured between 12.7 V and 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-closed-interval",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured [12.7,12.7] V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-open-interval",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured (12.7,12.7) V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-scientific-lower",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 1.27e1 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-scientific-upper",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 1.27E+1 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-scientific-zero",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7e0 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-scientific-superscript",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V × 10⁰.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-fraction",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 127/10 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-unicode-fraction",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ½ V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-multiply",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V * 1.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-group-comma",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 1,2.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-group-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 1 2.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-decimal-comma",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12,7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-leading-zero",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 012.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-extra-decimal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.70 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-leading-point",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured .127 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-trailing-point",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7. V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-double-point",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7.0 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-missing-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-lower-unit",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 v.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-plus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured +12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-em-dash-sign",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured —12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-fullwidth-plus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ＋12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-fullwidth-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured －12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-zero-width",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.​7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-arabic-digits",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ١٢.٧ V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-fullwidth-digits",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured １２.７ V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-superscript",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured ¹².⁷ V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-parenthesized",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured (12.7 V).",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-appended-percent",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V%.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quantity-embedded-word",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured value12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-nbsp",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured  12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-nbsp",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-nbsp",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": " The adapter supply measured 12.7 V. ",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-thin",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured  12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-thin",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-thin",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": " The adapter supply measured 12.7 V. ",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-narrow",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured  12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-narrow",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-narrow",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": " The adapter supply measured 12.7 V. ",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-tab",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured \t12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-tab",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7\tV.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-tab",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "\tThe adapter supply measured 12.7 V.\t",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-newline",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured \n12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-newline",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7\nV.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-newline",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "\nThe adapter supply measured 12.7 V.\n",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-value-repeated-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured   12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-before-unit-repeated-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7  V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "spacing-outer-repeated-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "  The adapter supply measured 12.7 V.  ",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "whole-prefix",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "About The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "second-sentence",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V. This is certain.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing-terminal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "double-terminal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V..",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unrelated-known-citation",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown-citation",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "unknown"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate-citation",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0",
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "source-id-in-text",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "twelve-volt-0: 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "uncited-quantity",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "capacity-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nominal-label-quantity",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-claim",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unexpected-schema-field",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ],
+        "extra": true
+      }
+    },
+    {
+      "name": "synthetic-dtc-canonical-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "stored diagnostic code: P0133.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-grouped-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Stored diagnostic codes P0133 and P0420 were reported.",
+            "factIds": [
+              "codes-0-stored-P0133",
+              "codes-0-stored-P0420"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-after-quantity-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured 12.7 V; P0133 was stored.",
+            "factIds": [
+              "twelve-volt-0",
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-uncited-second-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Stored diagnostic codes P0133 and P0420 were reported.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-group-fact-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Stored diagnostic codes P0133 and P0420 were reported.",
+            "factIds": [
+              "codes-0-stored"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-lowercase-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "p0133 was stored.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-embedded-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "xP0133 was stored.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-wrong-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "P0420 was stored.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-malformed-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "P4133 was stored.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-arbitrary-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "A1234 was stored.",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "synthetic-dtc-modified-quantity-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "P0133 was stored, and adapter supply was ≤12.7 V.",
+            "factIds": [
+              "codes-0-stored-P0133",
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-multi-dtc-no-recording"
+    }
   ]
 }
