@@ -3,7 +3,7 @@ import { SUPPORTED_VEHICLES, vehicleAvailability, vehicleEvidence, type CatalogV
 import { LOCAL_INTEREST_NOTICE, type GarageState, type Interest, type Ownership } from "../garage/flow.js";
 import { garageFlow } from "../app/runtime.js";
 import { Button, Card, ListRow, SectionLabel, styles, Text } from "../ui/kit.js";
-import { usePalette } from "../ui/theme.js";
+import { useTokens } from "../ui/theme.js";
 
 type Change = (action: () => Promise<GarageState>, after?: () => void) => Promise<void>;
 type InterestForm = { make: string; model: string; year: string; joinBeta: boolean };
@@ -13,7 +13,7 @@ function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, 
   make: string; setMake: (make: string) => void; model: string; setModel: (model: string) => void; year: number | undefined; setYear: (year: number | undefined) => void;
   tag: Ownership; setTag: (tag: Ownership) => void; busy: boolean; change: Change; onAdded: () => void; reopenInterest: (saved?: Interest) => void; interests: readonly Interest[];
 }) {
-  const colors = usePalette();
+  const colors = useTokens();
   const normal = { color: colors.text };
   const muted = { color: colors.muted };
   const models = [...new Set(SUPPORTED_VEHICLES.filter((item) => item.make === make).map((item) => item.model))];
@@ -54,15 +54,15 @@ function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, 
 function InterestScreen({ interest, setInterest, interestSaved, setInterestSaved, busy, change }: {
   interest: InterestForm; setInterest: (interest: InterestForm) => void; interestSaved: boolean; setInterestSaved: (saved: boolean) => void; busy: boolean; change: Change;
 }) {
-  const colors = usePalette();
+  const colors = useTokens();
   const normal = { color: colors.text };
   const muted = { color: colors.muted };
-  const inputColors = { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.inputText };
+  const inputColors = { backgroundColor: colors.surface, borderColor: colors.outline, color: colors.text };
   return <>
     <Text style={muted}>This form saves your interest locally. {LOCAL_INTEREST_NOTICE}.</Text>
-    <TextInput style={[styles.input, inputColors]} value={interest.make} onChangeText={(value) => { setInterest({ ...interest, make: value }); setInterestSaved(false); }} placeholder="Make" placeholderTextColor={colors.placeholder} />
-    <TextInput style={[styles.input, inputColors]} value={interest.model} onChangeText={(value) => { setInterest({ ...interest, model: value }); setInterestSaved(false); }} placeholder="Model" placeholderTextColor={colors.placeholder} />
-    <TextInput style={[styles.input, inputColors]} value={interest.year} onChangeText={(value) => { setInterest({ ...interest, year: value }); setInterestSaved(false); }} placeholder="Model year" keyboardType="number-pad" placeholderTextColor={colors.placeholder} />
+    <TextInput style={[styles.input, inputColors]} value={interest.make} onChangeText={(value) => { setInterest({ ...interest, make: value }); setInterestSaved(false); }} placeholder="Make" placeholderTextColor={colors.muted} />
+    <TextInput style={[styles.input, inputColors]} value={interest.model} onChangeText={(value) => { setInterest({ ...interest, model: value }); setInterestSaved(false); }} placeholder="Model" placeholderTextColor={colors.muted} />
+    <TextInput style={[styles.input, inputColors]} value={interest.year} onChangeText={(value) => { setInterest({ ...interest, year: value }); setInterestSaved(false); }} placeholder="Model year" keyboardType="number-pad" placeholderTextColor={colors.muted} />
     <Button title={`Join future beta interest: ${interest.joinBeta ? "yes" : "no"}`} onPress={() => { setInterest({ ...interest, joinBeta: !interest.joinBeta }); setInterestSaved(false); }} />
     <Button title="Save interest on this phone" disabled={busy} onPress={() => void change(() => garageFlow.saveInterest({ make: interest.make, model: interest.model, year: Number(interest.year), joinBeta: interest.joinBeta }), () => { setInterestSaved(true); })} />
     {interestSaved ? <Text style={normal}>{LOCAL_INTEREST_NOTICE}</Text> : null}

@@ -18,6 +18,7 @@ import { batteryReportsDocumentStore } from "../batteryReportsDocumentStore.js";
 import type { RunFile, SaveTargets } from "../runFiles.js";
 import { garageDocumentStore } from "../garage/documentStore.js";
 import { createGarageFlow } from "../garage/flow.js";
+import { parseThemePreference, type ThemePreference } from "../ui/text.js";
 
 // The app's one-per-JS-runtime objects, moved verbatim from App.tsx (X-2026-09-28-app-redesign Stage A).
 
@@ -139,4 +140,20 @@ const foregroundService = {
   stop: (): Promise<void> => BackgroundService.stop(),
 };
 
-export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, deferShare, chargeRun, betaOutbox, queueForBeta, foregroundService };
+// Settings › Theme (X-2026-09-28-app-redesign §Decisions 10): a private file, never uploaded; missing or corrupt means System default.
+const themeFile = () => new File(Paths.document, "theme.txt");
+const loadThemePreference = async (): Promise<ThemePreference> => {
+  try { const file = themeFile(); return parseThemePreference(file.exists ? await file.text() : undefined); } catch { return "system"; }
+};
+/** A failed write keeps the choice for this session only; the next start falls back to what the file holds. */
+const saveThemePreference = (preference: ThemePreference) => {
+  try { themeFile().write(preference); } catch { /* see above */ }
+};
+
+/** Settings › Save folder: the remembered folder's name (Directory.name decodes the SAF tree URI's last segment), or undefined. */
+const folderLabel = async (): Promise<string | undefined> => {
+  const remembered = captureFolderFile();
+  return remembered.exists ? new Directory((await remembered.text()).trim()).name : undefined;
+};
+
+export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, deferShare, chargeRun, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };

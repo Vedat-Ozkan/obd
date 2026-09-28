@@ -155,6 +155,7 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
 - Stage C1 phone steps 1–9 in the Stage C1 implementer report (Garage → Car navigation and system back, SoC hero in JetBrains Mono, ownership dialog, remove refusal, Add a vehicle, Settings › Beta with consent on switch-on, Privacy note, T2.9 Stage D steps 1–4 and 6 with the switch under Settings). No new build: C1's fingerprint equals B's.
 - Stage C2 phone steps 1–8 in the Stage C2 implementer report (report summary rows and chips, the four section details with charts 4 and 2, Codes with the recently-cleared card and module detail, the AI summary route in `__DEV__`, route resolution across history back-and-forth, light/dark and font scale 2.0). No new build: C2's fingerprint equals B's.
 - Stage C3 phone steps 1–8 in the Stage C3 implementer report (History, the check screen fitting or scrolling at 360 dp, system back locked only during a run, a real charge log from start to Saved, Disconnect during a charge log, light/dark and font scale 2.0). No new build: C3's fingerprint equals B's.
+- Stage C4 phone steps 1–8 in the Stage C4 implementer report (Settings groups and values, Theme re-theming at once and surviving a restart, a corrupt theme.txt, Save folder name and "Choose again at next save", Version, Open-source licenses, the formatted Privacy note, the Consent screen's six sections with T2.9 behaviour, light/dark and font scale 2.0). No new build: C4's fingerprint equals B's.
 
 ## Stage B implementer (Claude, 2026-09-28)
 
@@ -640,3 +641,78 @@ Changed in addition: `apps/mobile/src/app/reportView.ts`, `apps/mobile/test/repo
     - (1) The cellReply comment overstated the guarantee. The orchestrator added the residual clause (comment-only; typecheck and lint re-run).
     - (2) The same-ECU conditions on MAX and AVG are untested. Harmless today, because 2AF5 is read only from ECU CB and the spread check bounds it. This is noted for the obd-battery follow-up.
 - C3 closed and committed by path.
+
+## Stage C4 implementer (Claude, 2026-09-28)
+
+Base: HEAD `2320990`, tree clean (`git status` at start). Repair count 0 of 2.
+
+Changed (10 files): `apps/mobile/App.tsx`, `src/app/runtime.ts`, `src/ui/theme.ts`, `src/screens/SettingsScreens.tsx`, `src/screens/ConsentScreen.tsx`, `src/screens/AddVehicleScreen.tsx`, `src/screens/DevelopmentSummary.tsx`; created `src/ui/text.ts`, `src/app/licenses.ts`, `test/redesign-text.test.ts`. The spec's C4 list is eight; `AddVehicleScreen.tsx` and `DevelopmentSummary.tsx` are the last two `usePalette()` callers (deviation 1). Plus this record.
+
+- **text.ts** (pure): `consentSections(text)` splits on blank lines; the first paragraph is the intro, and each other paragraph must be `**Title:** body` (else it throws, so a re-pin in another shape fails the test, not the screen). `noteBlocks(text)`: one block per non-empty line; `- ` → bullet, an all-bold line → heading, else para; spans for `**bold**` and `*italic*`. Backticks are not treated as markers and show as written. Also `ThemePreference` and `parseThemePreference(text | undefined)`: trimmed `light`/`dark` are kept, anything else (missing, empty, other case, garbage) is `system`.
+- **Consent pin untouched**: `src/beta/consent.ts` and `test/beta-consent.test.ts` have an empty diff; C-1 passes on the same digest. The "Your control" section still reads "Garage → Beta data sharing", verbatim (§Decisions 5, owner's pending re-pin).
+- **licenses.ts**: `LICENSES`, the 17 non-workspace runtime dependencies of `apps/mobile/package.json` with the `license` field of each installed `package.json` (15 MIT; the two `@expo-google-fonts` packages `MIT AND OFL-1.1`). `OBDB_ATTRIBUTION`: the Equinox EV and SAEJ1979 OBDb signalsets, CC-BY-SA-4.0, with repo URL and commit from their vendored READMEs (ADR-010). Versions are not listed, so the test does not have to track patch bumps.
+- **Theme** (§Decisions 10): `theme.ts` keeps one preference per JS runtime (`setThemePreference`, `useThemePreference` through `useSyncExternalStore`); `useScheme` returns the system scheme for System default, else the choice, so `useTokens`, `paperTheme` and the status bar all follow it and a choice re-themes at once. `runtime.ts`: `loadThemePreference()` reads `Paths.document/theme.txt` through `parseThemePreference` (any read error → System default); `saveThemePreference(p)` writes it (a failed write keeps the choice for this session only). `Root` applies the saved choice before the first frame (it already waits for fonts), so an override never flashes the system scheme.
+- **Save folder**: `folderLabel()` returns `new Directory(<capture-folder.txt>).name` or undefined. expo-file-system 57.0.7 `Paths.basename` decodes the URI path first (`src/pathUtilities/index.ts:95-101`), so a SAF tree `…/tree/primary%3ADocuments%2FOBD` shows `OBD`. The page shows it (or "Not chosen"), one sentence on what goes there, and **Choose again at next save** (tonal) → the existing `phoneTargets.forgetFolder()`, then re-reads the label. The button is disabled while the label is "Not chosen" (nothing to forget).
+- **Settings**: Data › Beta data sharing (On/Off), Save folder (name / Not chosen); Display › Theme (System default / Light / Dark); About › Version (`app.json` `expo.version`, 1.0.0), Privacy note, Open-source licenses. Values on the right, chevrons on sub-pages. Theme is three choice rows (check mark + `radio` role). Licenses lists the packages with their license, then "Vehicle data" with the OBDb attribution. Privacy note renders `noteBlocks(PRIVACY_NOTE)`: heading, paragraphs, indented bullets, bold and italic spans, selectable.
+- **Consent**: h1 `CONSENT_TITLE`, `beta.line`, `betaMessage` (as before), the intro paragraph, six collapsible cards (closed by default, `expanded` state announced) with each pinned paragraph's body, then the `CONSENT_SWITCH_LABEL` switch and Continue. Behaviour unchanged: the switch is `consentShare`, reset to off on every appearance by App's existing effect; Continue calls `decideBeta(consentShare)`; the gate in App is untouched.
+- **usePalette deleted** from `theme.ts`. The callers now read `useTokens()` with the same values the map returned (`inputBackground`→`surface`, `border`→`outline`, `inputText`→`text`, `placeholder`→`muted`, `background`→`bg`).
+- Glyphs used (`folder-outline`, `theme-light-dark`, `information-outline`, `scale-balance`) are present in the installed MaterialCommunityIcons glyph map.
+
+### Verification (Stage C4)
+
+- **Tests first**, `test/redesign-text.test.ts` written before `text.ts`/`licenses.ts` existed. It failed to load (`../src/app/licenses.js` missing). With placeholder stubs (intro = whole text, no sections; one para block; empty license list; corrupt → light) 5 of 7 failed: 6, 7, 8 and both theme cases. 5 and 9 passed on the stubs (nothing lost; an empty list has nothing to mismatch); their mutants below fail them. After implementation: 7/7 PASS.
+  - Failure 5 (a consent paragraph goes missing): intro plus the sections rejoined as `**Title:** body` equals `CONSENT_TEXT` exactly.
+  - Failure 6: titles are What is sent, What is removed on your phone first, How it's labeled, Why, How long, Your control.
+  - Failure 7: blocks written back as markdown equal `PRIVACY_NOTE`'s non-empty lines; no span shows a `*`; kinds follow the lines.
+  - Failures 8 and 9: the name set equals the non-workspace dependencies; each license equals the installed `package.json` field.
+  - Theme parse/fallback (brief's addition): the three values and `dark\n` read back; `undefined`, `""`, `Dark`, `blue`, `light dark`, `\u0000` → system.
+- **Mutations** (each restored from a backup, `cmp` clean): PASS.
+
+  | Mutant | Result |
+  |---|---|
+  | consentSections drops the last paragraph | 5 and 6 failed |
+  | intro swallows the first section | 6 failed |
+  | noteBlocks strips backticks | 7 failed |
+  | bullets not recognised | 7 failed |
+  | italic not parsed | 7 failed (after adding the no-`*` assertion; it survived the first draft) |
+  | bold not flagged | 7 failed |
+  | a license entry removed | 8 failed |
+  | a license changed to Apache-2.0 | 9 failed |
+  | no trim | theme read failed |
+  | case-insensitive parse | theme fallback failed |
+  | corrupt → light | both theme cases failed |
+- `pnpm check`: PASS, exit 0 (core 239, battery 21, assist 142, mobile 337 = 330 + 7, relay 58, backend/intake/summary 42, Ruff, pytest 1). C-1 digest test unchanged and green. `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile`: PASS (the first run flagged two unnecessary conditions in the new code; fixed).
+- `expo export --platform android` into the scratchpad, removed afterwards: PASS (`AppEntry-3c2df21b….hbc`, 3.3 MB).
+- Fingerprint `d66ba328b7116976e29d34d6aac3378c2be9ecaf`, equal to Stage B: PASS. No new dependency.
+- **Artifacts**, overwritten by `pnpm check` (all mtimes 05:49–05:51, after the 05:48:38 start; nothing deleted): codes `01d894f4…` (b, c1), charge-log `fbb90c17…` (b, c1), C2 intake `bfacfd43…`, `/tmp/t2.10d-mobile-flow.json` `4eb12fbc…` (no flake), navigation `817aaefd…`, report view `f533bbe6…`, charge steps `f475f03e…`: PASS, all identical on the first run.
+- **Logic freeze** (spec path list against `2320990`): empty. PASS. No sanctioned exception was needed in C4. `test/` changes only by the new file; `package.json`, `app.json`, lockfile unchanged.
+- Only the files listed above changed (`git status --short`): PASS.
+- Phone: NOT RUN (no phone in this WSL2 session). Owner steps, on the Stage B dev client through Metro (`cd apps/mobile && pnpm start`):
+  1. Garage › gear › Settings: Data (Beta data sharing On/Off, Save folder with the folder name or "Not chosen"), Display (Theme with "System default"), About (Version 1.0.0, Privacy note, Open-source licenses).
+  2. Theme › Dark on a light system: every screen, the status bar and Paper surfaces turn dark at once; Light on a dark system the reverse; System default follows the system again. Force-stop and relaunch: the choice holds, with no flash of the other scheme. Note the nav-bar icon contrast with an override opposite to the system (spec risk; `expo-navigation-bar` is a follow-up if poor). Native Alert dialogs still follow the system scheme.
+  3. Corrupt theme file (optional, needs `adb shell run-as com.ev.obd`): write `purple` into `files/theme.txt`, relaunch → System default.
+  4. Save folder after one saved capture: the folder's name shows; Choose again at next save → "Not chosen"; the next Run capture or codes report opens the folder picker again.
+  5. Open-source licenses: 17 packages with their licenses, then the two OBDb signalsets with CC-BY-SA-4.0.
+  6. Privacy note: the bold heading, italic lead-ins ("Who.", "What we collect…"), bullets indented; the contact placeholder in backticks as written.
+  7. Consent: fresh install (or newer consent version) shows title, status line, the intro, six closed sections that open to the pinned paragraphs, the switch off, Continue. Continue with it off → no sharing; Settings › Beta switch on → consent with the switch off again; Continue on → sharing on; system back on that consent closes it without a decision. T2.9 Stage D steps 1–4 and 6 still apply.
+  8. Light and dark screenshots, and font scale 2.0, for Settings, Theme, Save folder, Licenses (long package names and OBDb subtitles wrap), Privacy note and Consent.
+
+### Deviations
+
+1. `AddVehicleScreen.tsx` and `DevelopmentSummary.tsx` are outside the C4 file list, but deleting `usePalette` (spec §Files C4, §Interfaces) needs their call sites changed. Each change is the import and key renames onto the same token values (DevelopmentSummary: 3 lines). DevelopmentSummary is T2.10d's file (§Sequencing); no other line of it changed.
+2. `parseThemePreference` and `ThemePreference` live in `text.ts`, because `theme.ts` and `runtime.ts` import React Native/Expo and cannot load under vitest.
+3. `licenses.ts` also exports `OBDB_ATTRIBUTION` (both vendored OBDb signalsets: the Equinox JSON ships in the bundle, and obd-core's J1979 table is taken from SAEJ1979).
+4. The theme override is JS-only (`useScheme`), not `Appearance.setColorScheme`: RN 0.86's `setColorScheme` does not emit a JS change event, so "re-themes at once" would depend on the native round trip. Consequence: native Alert dialogs and the nav bar follow the system scheme (owner step 2).
+5. "Choose again at next save" is disabled while no folder is remembered.
+- 2026-09-28, orchestrator, on the C4 report:
+  - Deviations 1–5 accepted.
+  - Deviation 1: the token rename in T2.10d's DevelopmentSummary.tsx is 3 lines, same values, no behaviour change. Codex has no edits in flight on it. **Tell Codex** (noted in the final summary to the owner).
+  - Deviation 4: the theme override is JS-only, so native Alert dialogs and the nav bar follow the system scheme when overridden. Accepted and disclosed; C4 owner step 2 checks it.
+  - Next: C4 reviewer.
+- 2026-09-28, C4 reviewer: **APPROVE**.
+  - Reproduced: pnpm check PASS (mobile 337). Consent verbatim (test 5 logic sound; consent.ts and C-1 unchanged; decide semantics unchanged). Theme fallback, no flash. Save folder calls only forgetFolder. 17 license entries match. Logic freeze empty. 16 of 19 mutations killed; the 3 survivors are equivalent on the pinned text. Fingerprint `d66ba328…`. All artifacts identical.
+  - Findings:
+    - (1) `zod` (MIT, bundled through the workspace packages) is missing from LICENSES. Test 8 checks only apps/mobile's direct dependencies.
+    - (2) The theme-preference tests cover a failure the spec does not list. Add it to the spec rather than delete the tests.
+    - (3) folderLabel shows `primary:` for a volume-root folder. Cosmetic; C4 owner step 4 will show it.
+- C4 closed and committed by path. Findings 1 and 2 are fixed in a small follow-up commit (orchestrator edit plus a short review). Finding 3 stays with the owner step.

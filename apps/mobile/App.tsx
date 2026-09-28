@@ -14,9 +14,9 @@ import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./src/garage/catalog.j
 import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { back, type Route } from "./src/app/navigation.js";
 import { findReport } from "./src/app/reportView.js";
-import { batteryHistory, betaOutbox, garageFlow } from "./src/app/runtime.js";
+import { batteryHistory, betaOutbox, garageFlow, loadThemePreference } from "./src/app/runtime.js";
 import { Button, Screen, styles, Text } from "./src/ui/kit.js";
-import { FONTS, paperTheme, usePalette, useScheme, useTokens } from "./src/ui/theme.js";
+import { FONTS, paperTheme, setThemePreference, useScheme, useTokens } from "./src/ui/theme.js";
 import { AddVehicleScreen, InterestScreen } from "./src/screens/AddVehicleScreen.js";
 import { CarScreen } from "./src/screens/CarScreen.js";
 import { ConsentScreen } from "./src/screens/ConsentScreen.js";
@@ -25,7 +25,7 @@ import { GarageScreen } from "./src/screens/GarageScreen.js";
 import { DevelopmentSummary } from "./src/screens/DevelopmentSummary.js";
 import { ReportHistory, ReportSummary } from "./src/screens/ReportScreens.js";
 import { CodesScreen, ModuleScreen, SECTION_TITLES, SectionScreen } from "./src/screens/SectionScreens.js";
-import { BetaScreen, PrivacyScreen, SettingsScreen } from "./src/screens/SettingsScreens.js";
+import { BetaScreen, LicensesScreen, PrivacyScreen, SaveFolderScreen, SettingsScreen, ThemeScreen } from "./src/screens/SettingsScreens.js";
 
 /** Top app bar: back arrow below the first route, a wrapping h1 title (never truncated at large font scales), and an optional action. */
 function TopBar({ title, onBack, action }: { title: string; onBack?: () => void; action?: ReactNode }) {
@@ -38,7 +38,6 @@ function TopBar({ title, onBack, action }: { title: string; onBack?: () => void;
 }
 
 export function App() {
-  const colors = usePalette();
   const tokens = useTokens();
   const [state, setState] = useState<GarageState>();
   const [error, setError] = useState("");
@@ -95,8 +94,8 @@ export function App() {
     catch (cause) { setError(`Garage storage error: ${cause instanceof Error ? cause.message : String(cause)}`); }
     finally { setBusy(false); }
   };
-  const title = { color: colors.text, fontWeight: "bold" as const, fontSize: 20 };
-  const normal = { color: colors.text };
+  const title = { color: tokens.text, fontWeight: "bold" as const, fontSize: 20 };
+  const normal = { color: tokens.text };
   const clearPicker = () => { setMake(""); setModel(""); setYear(undefined); setTag("mine"); push({ name: "addVehicle" }); };
   const reopenInterest = (saved?: Interest) => {
     setInterest(saved ? { make: saved.make, model: saved.model, year: String(saved.year), joinBeta: saved.joinBeta } : { make: "", model: "", year: "", joinBeta: false });
@@ -158,7 +157,7 @@ export function App() {
 
   const selectedEntry = "entryId" in route ? state.vehicles.find((entry) => entry.id === route.entryId) : undefined;
   const selectedVehicle = SUPPORTED_VEHICLES.find((item) => item.id === selectedEntry?.catalogId);
-  if (route.name === "check" && selectedEntry && selectedVehicle && canUseEquinoxConsole(selectedVehicle)) return <View style={{ flex: 1, backgroundColor: colors.background }}>
+  if (route.name === "check" && selectedEntry && selectedVehicle && canUseEquinoxConsole(selectedVehicle)) return <View style={{ flex: 1, backgroundColor: tokens.bg }}>
     <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} intent={route.intent} onBack={pop} onSaved={openSaved} onLockChange={setLocked} />
   </View>;
 
@@ -188,20 +187,27 @@ export function App() {
   if (route.name === "history") return page("Report history", <ReportHistory historyReports={historyReports} openReport={openReport} />);
   if (route.name === "addVehicle") return page("Add a vehicle", <AddVehicleScreen make={make} setMake={setMake} model={model} setModel={setModel} year={year} setYear={setYear} tag={tag} setTag={setTag} busy={busy} change={change} onAdded={pop} reopenInterest={reopenInterest} interests={state.interests} />);
   if (route.name === "interest") return page("Unsupported vehicle interest", <InterestScreen interest={interest} setInterest={setInterest} interestSaved={interestSaved} setInterestSaved={setInterestSaved} busy={busy} change={change} />);
-  if (route.name === "settings") return page("Settings", <SettingsScreen beta={beta} openBeta={() => { push({ name: "beta" }); }} openPrivacy={() => { push({ name: "privacy" }); }} />);
+  if (route.name === "settings") return page("Settings", <SettingsScreen beta={beta} openBeta={() => { push({ name: "beta" }); }} openSaveFolder={() => { push({ name: "saveFolder" }); }}
+    openTheme={() => { push({ name: "theme" }); }} openPrivacy={() => { push({ name: "privacy" }); }} openLicenses={() => { push({ name: "licenses" }); }} />);
   if (route.name === "beta") return page("Beta data sharing", <BetaScreen beta={beta} betaMessage={betaMessage} busy={busy} decideBeta={decideBeta} setConsentOpen={setConsentOpen} deleteBeta={deleteBeta} />);
+  if (route.name === "theme") return page("Theme", <ThemeScreen />);
+  if (route.name === "saveFolder") return page("Save folder", <SaveFolderScreen />);
   if (route.name === "privacy") return page("Privacy note", <PrivacyScreen />);
+  if (route.name === "licenses") return page("Open-source licenses", <LicensesScreen />);
   // Garage, and the fallback for a route whose car is gone.
   return page("Garage", <GarageScreen state={state} busy={busy} openCar={(id) => { void openCar(id); }} addVehicle={clearPicker} />,
     <IconButton icon="cog-outline" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Settings" onPress={() => { push({ name: "settings" }); }} />);
 }
 
-/** Providers, fonts and a status bar that follows the scheme; App renders below them. */
+/** Providers, fonts, the saved theme choice and a status bar that follows the scheme; App renders below them. */
 export function Root() {
   const scheme = useScheme();
   const [fontsLoaded, fontError] = useFonts({ [FONTS.medium]: Manrope_500Medium, [FONTS.semibold]: Manrope_600SemiBold, [FONTS.bold]: Manrope_700Bold, [FONTS.extrabold]: Manrope_800ExtraBold, [FONTS.mono]: JetBrainsMono_600SemiBold });
+  // C4: the theme.txt choice is applied before the first frame, so a Light or Dark override never flashes the system scheme.
+  const [themeLoaded, setThemeLoaded] = useState(false);
+  useEffect(() => { void loadThemePreference().then((preference) => { setThemePreference(preference); setThemeLoaded(true); }); }, []);
   // A font that fails to load falls back to the system font rather than blocking the app.
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || !themeLoaded) return null;
   return <SafeAreaProvider>
     <PaperProvider theme={paperTheme(scheme)}>
       <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />

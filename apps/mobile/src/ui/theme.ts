@@ -1,5 +1,7 @@
+import { useSyncExternalStore } from "react";
 import { useColorScheme } from "react-native";
 import { configureFonts, MD3DarkTheme, MD3LightTheme, type MD3Theme } from "react-native-paper";
+import type { ThemePreference } from "./text.js";
 
 export type Scheme = "light" | "dark";
 export type Rating = "great" | "good" | "ok" | "poor" | "not-rated";
@@ -42,8 +44,22 @@ const TOKENS: Record<Scheme, Tokens> = {
 // Family names are the keys App.tsx registers with useFonts; each weight is its own family, so no synthetic bold.
 const FONTS = { medium: "Manrope_500Medium", semibold: "Manrope_600SemiBold", bold: "Manrope_700Bold", extrabold: "Manrope_800ExtraBold", mono: "JetBrainsMono_600SemiBold" };
 
+// Settings › Theme (C4): one choice per JS runtime, read from theme.txt at start (runtime.ts); every useScheme follows it.
+let themePreference: ThemePreference = "system";
+const themeListeners = new Set<() => void>();
+function setThemePreference(preference: ThemePreference) {
+  themePreference = preference;
+  themeListeners.forEach((listener) => { listener(); });
+}
+const subscribeTheme = (listener: () => void) => { themeListeners.add(listener); return () => { themeListeners.delete(listener); }; };
+function useThemePreference(): ThemePreference {
+  return useSyncExternalStore(subscribeTheme, () => themePreference);
+}
+
 function useScheme(): Scheme {
-  return useColorScheme() === "dark" ? "dark" : "light";
+  const system = useColorScheme() === "dark" ? "dark" : "light";
+  const preference = useThemePreference();
+  return preference === "system" ? system : preference;
 }
 
 function useTokens(): Tokens {
@@ -68,10 +84,4 @@ function paperTheme(scheme: Scheme): MD3Theme {
   };
 }
 
-/** The Stage A palette keys, now read from the tokens; deleted in C4 once every screen uses tokens. */
-function usePalette() {
-  const t = useTokens();
-  return { background: t.bg, text: t.text, muted: t.muted, border: t.outline, inputBackground: t.surface, inputText: t.text, placeholder: t.muted, consoleBackground: t.surface, consoleText: t.text, buttonBackground: t.accent };
-}
-
-export { FONTS, paperTheme, TOKENS, usePalette, useScheme, useTokens };
+export { FONTS, paperTheme, setThemePreference, TOKENS, useScheme, useThemePreference, useTokens };

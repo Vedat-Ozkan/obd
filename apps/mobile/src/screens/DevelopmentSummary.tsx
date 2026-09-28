@@ -5,10 +5,10 @@ import { Linking, Switch, TextInput, View } from "react-native";
 import { createDevelopmentSummaryAccess, SUMMARY_DISCLOSURE } from "../summaryAccess.js";
 import { createDevelopmentSummaryFlow, type SummaryView } from "../summaryFlow.js";
 import { Button, Card, styles, Text } from "../ui/kit.js";
-import { usePalette } from "../ui/theme.js";
+import { useTokens } from "../ui/theme.js";
 
 function DevelopmentSummary({ report }: { report: BatteryDiagnosisReport }) {
-  const colors = usePalette();
+  const colors = useTokens();
   const [url, setUrl] = useState<string>(() => {
     const configured: unknown = process.env.EXPO_PUBLIC_SUMMARY_URL;
     return typeof configured === "string" ? configured : "";
@@ -35,7 +35,7 @@ function DevelopmentSummary({ report }: { report: BatteryDiagnosisReport }) {
     setSummary(result); setPending(false);
   };
   const normal = { color: colors.text };
-  const inputColors = { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.inputText };
+  const inputColors = { backgroundColor: colors.surface, borderColor: colors.outline, color: colors.text };
   return <Card>
     <Text style={normal}>Development AI summary</Text>
     <Text style={normal}>Local laptop URL. Enter only the separate development access token. Do not enter an OpenRouter API key. The token stays in memory for this detail view.</Text>
