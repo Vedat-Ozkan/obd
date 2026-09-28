@@ -5,7 +5,22 @@ import { createBatteryReportHistory } from "./batteryReports.js";
 import { hasEquinoxSocFingerprint, runBatteryDiagnosisScan } from "./batteryScan.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./garage/catalog.js";
 import type { GarageVehicle } from "./garage/flow.js";
-import type { RecordingBuffer } from "./recording.js";
+import type { BleConnection } from "./ble/BleTransport.js";
+import type { RecordingBuffer, RecordingMeta } from "./recording.js";
+
+/** The battery scan's start line. The power state comes from the app's Ready and Park toggle (yes or unknown), both in
+ *  the note (read by older replays) and in the powerState key the upload scrubber keeps (X-2026-09-27-power-state-meta). */
+export function batteryScanMeta(link: Pick<BleConnection, "writeCharacteristicUuid" | "notifyCharacteristicUuid" | "mtu">, ready: boolean): RecordingMeta {
+  return {
+    car: "chevrolet-equinox-ev-2024",
+    dongle: "veepeak-obdcheck-ble",
+    note: ready ? "battery diagnosis; Ready, Park confirmed in app" : "battery diagnosis; vehicle power state unknown",
+    powerState: ready ? "ready" : "unknown",
+    writeChar: link.writeCharacteristicUuid,
+    notifyChar: link.notifyCharacteristicUuid,
+    mtu: link.mtu,
+  };
+}
 
 /** A frozen private scan is the only source used to build the persisted diagnosis. */
 export async function runAndSaveBatteryDiagnosis(input: {

@@ -8,17 +8,21 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { latin1Decode, latin1Encode, parseRecording } from "obd-core/recording";
 import { betaManifestSchema, betaProvenanceSchema, type BetaManifest, type BetaProvenance } from "obd-core/recording/provenance";
-import { scrubRecording } from "obd-core/recording/scrub";
+import { SCRUB_VERSION, scrubRecording } from "obd-core/recording/scrub";
 import { codesReportFromRecording } from "obd-core/report";
 import type { Transport } from "obd-core/transport";
+import { ReplayTransport } from "obd-core/transport/replay";
 import { importObdbMode22 } from "obd-core/vehicles";
 import signalsetJson from "obd-core/vehicles/equinox-signalset";
+import { batteryDiagnosisFromRecording } from "obd-battery/report";
 import { chargeLogFromRecording, chargePhases } from "obd-battery/session";
 import { handleRequest } from "../../../tools/beta-backend/handler.js";
 import { createBetaClient } from "../src/beta/client.js";
 import { BACKOFF_MAX_S, BackendError, createBetaOutbox, PART_BYTES, type Auth, type BetaBackend } from "../src/beta/outbox.js";
+import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../src/batteryDiagnosisFlow.js";
+import { createBatteryReportHistory } from "../src/batteryReports.js";
 import { runChargeLog } from "../src/chargeLogger.js";
-import type { GarageVehicle } from "../src/garage/flow.js";
+import { createGarageFlow, type GarageVehicle } from "../src/garage/flow.js";
 import { RecordingBuffer } from "../src/recording.js";
 import { finishRun } from "../src/runFiles.js";
 import { FakeBetaBackend, MemoryBetaFiles, MemoryBucket } from "./fakeBeta.js";
@@ -27,6 +31,13 @@ import { FakeTargets } from "./fakeTargets.js";
 const readText = readFileSync as (path: URL, encoding: "latin1") => string;
 const write = writeFileSync as (path: string, text: string) => void;
 const PHONE = readText(new URL("../../../fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl", import.meta.url), "latin1");
+// Synthetic full scan (labeled synthetic in its first meta note); battery-diagnosis-flow.test.ts replays the same file.
+const FULL_SCAN = parseRecording(readText(new URL("../../../fixtures/synthetic/battery-diagnosis-full-scan.jsonl", import.meta.url), "latin1"));
+class TextStoreMemory {
+  value?: string;
+  read() { return Promise.resolve(this.value); }
+  write(value: string) { this.value = value; return Promise.resolve(); }
+}
 const HEADING = { vehicle: "2024 Chevrolet Equinox EV", date: "2026-10-03", result: { sent: 10, total: 10 } };
 const MINE: GarageVehicle = { id: "1", catalogId: "chevrolet-equinox-ev-2024", ownership: "mine" };
 const CHECKED: GarageVehicle = { id: "2", catalogId: "chevrolet-equinox-ev-2024", ownership: "checked" };
@@ -226,6 +237,42 @@ describe.each(BACKENDS)("E2E over $name", ({ artifact, make }) => {
     expect(chargePhases(before).postRest).toBeDefined();
     write(`/tmp/t2.9-${artifact}-charge-log.jsonl`, uploaded);
   }, 120_000);
+
+  // X-2026-09-27-power-state-meta E1: the app's battery-scan start line keeps its powerState through scrub and upload.
+  it.each([true, false])("a battery scan with Ready confirmed = %s keeps its powerState through the upload and replays into the same 12 V observations", async (ready) => {
+    const state = ready ? "ready" : "unknown";
+    const recording = new RecordingBuffer(() => 1);
+    recording.start(batteryScanMeta({ writeCharacteristicUuid: "fff1", notifyCharacteristicUuid: "fff2", mtu: 23 }, ready));
+    const garage = createGarageFlow(new TextStoreMemory());
+    const entry = (await garage.add("chevrolet-equinox-ev-2024", "mine")).vehicles[0];
+    const signals = importObdbMode22(signalsetJson);
+    let kept = "";
+    const result = await runAndSaveBatteryDiagnosis({
+      entry, transport: new ReplayTransport(FULL_SCAN), recording, scannedAt: "2026-09-24T00:00:00.000Z",
+      keepScan: (_, __, jsonl) => { kept = jsonl; return "battery-scan.jsonl"; }, history: createBatteryReportHistory(new TextStoreMemory(), garage),
+      importedSignals: signals, getInterruption: () => undefined, onProgress: () => undefined,
+    });
+    if (result.status !== "saved") throw new Error(result.status);
+
+    const files = new MemoryBetaFiles();
+    const backend = make(files);
+    const outbox = outboxOver(files, backend, { s: T0 });
+    await outbox.decide(true);
+    expect(await outbox.queue("battery-scan", MINE, kept)).toBe(QUEUED);
+    await outbox.drain();
+
+    const uploaded = backend.uploaded(onlyFile(backend));
+    const { body, provenance } = split(uploaded);
+    expect(body).toBe(scrubRecording(kept).text);
+    expect(scrubRecording(body).text).toBe(body);
+    expect(provenance).toMatchObject({ kind: "battery-scan", scrubVersion: SCRUB_VERSION });
+    expect(JSON.parse(lines(body)[0])).toMatchObject({ note: "removed before upload", powerState: state });
+    const replayed = await batteryDiagnosisFromRecording(body, { garageVehicleId: entry.id, catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-24T00:00:00.000Z", recording: result.recording, scanStatus: result.report.scanStatus }, signals);
+    expect(replayed.twelveVolt.observations.length).toBeGreaterThan(0);
+    expect(replayed.twelveVolt.observations.every((o) => o.powerState === state)).toBe(true);
+    expect(replayed.twelveVolt).toEqual(result.report.twelveVolt);
+    write(`/tmp/x-power-state-${artifact}-${state}.jsonl`, uploaded);
+  });
 });
 
 describe("outbox failure modes", () => {

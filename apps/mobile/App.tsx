@@ -16,7 +16,7 @@ import { createBetaOutbox, type BetaStatus } from "./src/beta/outbox.js";
 import { betaPhoneFiles, putFile, readLines } from "./src/beta/phoneStore.js";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "./src/ble/BleTransport.js";
 import { runCapture } from "./src/capture.js";
-import { runAndSaveBatteryDiagnosis } from "./src/batteryDiagnosisFlow.js";
+import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "./src/batteryDiagnosisFlow.js";
 import { runChargeLog, type StreamTargets } from "./src/chargeLogger.js";
 import { createChargeRunRecord } from "./src/chargeRun.js";
 import { createBatteryReportHistory } from "./src/batteryReports.js";
@@ -222,7 +222,7 @@ function EquinoxConsole({ vehicle, entry, onBack, onSaved }: { vehicle: CatalogV
     diagnosingRef.current = true; diagnosisScanActive.current = true; setDiagnosing(true); setCanCancelDiagnosis(true);
     const scanRecording = new RecordingBuffer();
     const scannedAt = new Date().toISOString();
-    scanRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: diagnosisReady ? "battery diagnosis; Ready, Park confirmed in app" : "battery diagnosis; vehicle power state unknown", writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    scanRecording.start(batteryScanMeta(active, diagnosisReady));
     const scanTransport: Transport = {
       write: (bytes) => active.transport.write(bytes),
       onData: (callback) => active.transport.onData(callback),

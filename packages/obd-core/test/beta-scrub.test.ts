@@ -362,6 +362,20 @@ describe("isolated scrubber failure modes", () => {
     }
   });
 
+  // X-2026-09-27-power-state-meta S1-S3: powerState is kept only for "ready" and "unknown"; anything else refuses quietly.
+  it("power-state-refusal: out-of-set and non-string powerState values refuse with the line number and no value", () => {
+    const strings: unknown[] = ["other", "Ready", "ready, park", "2026-09-27", VIN];
+    const nonStrings: unknown[] = [true, 1, null, ["ready"], {}];
+    for (const table of [strings, nonStrings]) {
+      for (const powerState of table) {
+        const e = refusal(file([START, { t: 1, dir: "meta", note: "x", powerState }]));
+        expect(e.line, JSON.stringify(powerState)).toBe(2);
+        expect(e.message).toBe("line 2: meta powerState outside the battery-scan allowlist");
+        assertQuiet(e);
+      }
+    }
+  });
+
   it("12 refusals: malformed input is refused with a line number and no VIN in the message", () => {
     const f = frames("18DAF117", vin0902(VIN));
     const cases: [string, number][] = [

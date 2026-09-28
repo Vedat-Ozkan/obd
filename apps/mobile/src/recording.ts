@@ -4,6 +4,8 @@ export interface RecordingMeta {
   car: "chevrolet-equinox-ev-2024";
   dongle: "veepeak-obdcheck-ble";
   note: string;
+  /** Only the battery scan sets it (batteryDiagnosisFlow.ts batteryScanMeta). */
+  powerState?: "ready" | "unknown";
   writeChar: string;
   notifyChar: string;
   mtu: number;

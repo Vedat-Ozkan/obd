@@ -66,6 +66,28 @@ describe("battery diagnosis recording replay", () => {
     expect(result.error).toMatch(/single recording session/);
   });
 
+  // X-2026-09-27-power-state-meta R1-R2. Synthetic: battery-diagnosis-full-scan.jsonl with only line 1 replaced.
+  const synthetic = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
+  const withStart = (note: string, powerState: unknown) => {
+    const [, ...rest] = readFileSync(new URL(synthetic, root), "latin1").split("\n");
+    const start = { t: 0, dir: "meta", car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note, powerState, writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
+    return batteryDiagnosisFromRecording([JSON.stringify(start), ...rest].join("\n"), {
+      garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-24T00:00:00.000Z", recording: synthetic, scanStatus: "complete",
+    }, signalset);
+  };
+  const states = async (report: ReturnType<typeof withStart>) => (await report).twelveVolt.observations.map((o) => o.powerState);
+
+  it("power-state-key-wins: the start line's powerState key wins over the note", async () => {
+    expect(await states(withStart("synthetic; ready", "unknown"))).toEqual(["unknown"]);
+    expect(await states(withStart("synthetic; power state not noted", "ready"))).toEqual(["ready"]);
+  });
+
+  it("power-state-invalid: a powerState key outside ready/unknown is refused", async () => {
+    for (const value of ["other", 1]) {
+      await expect(withStart("synthetic; ready", value)).rejects.toThrow("battery scan power state meta is invalid");
+    }
+  });
+
   it("rejects malformed, future, nonfinite and unsourced saved reports", async () => {
     const valid = await replay(paths[0]);
     const cases = [

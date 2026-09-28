@@ -4,7 +4,7 @@
 import { vinCheckDigit } from "../obd/vin.js";
 import { recordingLineSchema } from "./format.js";
 
-export const SCRUB_VERSION = 1;
+export const SCRUB_VERSION = 2;
 export const SCRUB_RULES = [
   "vin-0902", "vin-4193", "vin-check-digit", "did-f180-f1ff", "mode09-infotype",
   "odometer-01a6", "user-note", "date-in-note", "meta-key",
@@ -36,9 +36,11 @@ const VIN_RULES: Readonly<Record<string, { rule: ScrubRule; prefix: readonly num
 const MODE09_KEPT = new Set([0x00, 0x02, 0x04, 0x0a]);
 // apps/mobile/src/recording.ts RecordingMeta plus t and dir, and the T2.4 charge-log session boundary (T2.4 Decisions
 // 9 and 13, this spec's Decision 15); everything else is dropped (fail-closed).
-const META_KEYS = new Set(["t", "dir", "car", "dongle", "note", "writeChar", "notifyChar", "mtu", "event", "reason"]);
+const META_KEYS = new Set(["t", "dir", "car", "dongle", "note", "writeChar", "notifyChar", "mtu", "event", "reason", "powerState"]);
 const SESSION_EVENT = "charge-log session";
 const SESSION_REASONS = new Set(["start", "lv-reset", "timeout", "disconnect", "elm-error"]);
+// apps/mobile/src/batteryDiagnosisFlow.ts batteryScanMeta; docs/specs/X-2026-09-27-power-state-meta.md.
+const POWER_STATES = new Set(["ready", "unknown"]);
 // Decision 16: tx and rx lines are fail-closed too.
 const LINE_KEYS = new Set(["t", "dir", "data"]);
 const USER_NOTE = "removed before upload";
@@ -280,6 +282,9 @@ export class UploadScrubber {
     const { event, reason, note } = record;
     if ((event !== undefined || reason !== undefined) && !(event === SESSION_EVENT && typeof reason === "string" && SESSION_REASONS.has(reason))) {
       throw new ScrubRefusal(n, "meta event or reason outside the charge-log session allowlist");
+    }
+    if ("powerState" in record && !(typeof record.powerState === "string" && POWER_STATES.has(record.powerState))) {
+      throw new ScrubRefusal(n, "meta powerState outside the battery-scan allowlist");
     }
     const kept = entries.filter(([k]) => META_KEYS.has(k));
     let changed = kept.length !== entries.length;

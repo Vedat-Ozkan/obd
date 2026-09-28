@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseRecording } from "../src/recording/format.js";
 import { betaManifestSchema, betaProvenanceSchema, provenanceLine, type BetaProvenance } from "../src/recording/provenance.js";
+import { SCRUB_VERSION } from "../src/recording/scrub.js";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -13,7 +14,7 @@ const valid: BetaProvenance = {
   kind: "codes-scan",
   consentVersion: "beta-1",
   appVersion: "1.0.0",
-  scrubVersion: 1,
+  scrubVersion: SCRUB_VERSION,
   month: "2026-10",
   catalogId: "chevrolet-equinox-ev-2024",
   ownership: "mine",

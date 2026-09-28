@@ -107,7 +107,11 @@ export async function batteryDiagnosisFromRecording(jsonl: string, input: { gara
   const sessionCars = lines.flatMap((line) => line.dir === "meta" && "car" in line ? [line.car] : []);
   if (sessionCars.length > 1) throw new Error("expected a single recording session");
   if (sessionCars[0] !== "chevrolet-equinox-ev-2024") throw new Error("Equinox recording meta is missing");
-  const powerState: VehiclePowerState = lines.some((line) => line.dir === "meta" && typeof line.note === "string" && /(?:^|[, ]+)ready(?:[, ]+|$)/i.test(line.note)) ? "ready" : "unknown";
+  // The app's battery-scan key (X-2026-09-27-power-state-meta) wins; older files carry the power state only in a note.
+  const start = lines.find((line) => line.dir === "meta" && "car" in line);
+  const key = start?.dir === "meta" ? start.powerState : undefined;
+  if (key !== undefined && key !== "ready" && key !== "unknown") throw new Error("battery scan power state meta is invalid");
+  const powerState: VehiclePowerState = key ?? (lines.some((line) => line.dir === "meta" && typeof line.note === "string" && /(?:^|[, ]+)ready(?:[, ]+|$)/i.test(line.note)) ? "ready" : "unknown");
   const session = new Elm327Session(new ReplayTransport(lines));
   const signalReadings: { reading: SignalReading; command: string }[] = [];
   const observations: TwelveVoltObservation[] = [];
