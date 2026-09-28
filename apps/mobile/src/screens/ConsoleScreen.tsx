@@ -2,7 +2,7 @@ import { BleManager } from "react-native-ble-plx";
 import { useEffect, useRef, useState } from "react";
 import type { Transport } from "obd-core/transport";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
-import { PermissionsAndroid, Platform, ScrollView, Switch, TextInput, View } from "react-native";
+import { Alert, PermissionsAndroid, Platform, ScrollView, Switch, TextInput, View } from "react-native";
 import { Icon, IconButton, TouchableRipple } from "react-native-paper";
 import { readLines } from "../beta/phoneStore.js";
 import { connectVeepeak, scanDevices, type BleConnection, type ScannedDevice } from "../ble/BleTransport.js";
@@ -13,6 +13,8 @@ import { keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
 import { RecordingBuffer } from "../recording.js";
+import { RelayClient, type RelayWebSocket } from "../relay/RelayClient.js";
+import { parseRelayAddress } from "../relay/parseRelayAddress.js";
 import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
@@ -63,6 +65,16 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const mounted = useRef(true);
   // Decision 21: set while the notification permission and the picker are open, before the run record is begun.
   const chargeStarting = useRef(false);
+  // T0.6b: the one synchronous BLE gate. React state (pending, capturing) lags a tap; these refs and the module-level chargeRun do not.
+  const bleOwner = useRef<"send" | "capture" | "relay" | undefined>(undefined);
+  const bleBusy = () => bleOwner.current !== undefined || chargeStarting.current || diagnosingRef.current || chargeRun.current() !== undefined;
+  const relayRef = useRef<{ client: RelayClient; socket: RelayWebSocket } | undefined>(undefined);
+  // The command the relay client has not answered yet (an open Mode 04 alert counts); undefined when idle.
+  const relayCommand = useRef<string | undefined>(undefined);
+  const [relayUrl, setRelayUrl] = useState("");
+  const [relayToken, setRelayToken] = useState("");
+  const [relayStatus, setRelayStatus] = useState("Disconnected");
+  const [relaying, setRelaying] = useState(false);
   // X-2026-09-28-app-redesign C3, presentation only: the developer tools card, and the last timeline step (1–4) this run reached.
   const [devOpen, setDevOpen] = useState(false);
   const [reached, setReached] = useState<ChargeStep>();
@@ -81,7 +93,16 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     return jsonl;
   };
   const closeDebugSession = () => { debugSession.current?.close(); debugSession.current = undefined; };
+  // Relay closes before BLE is reused: its reader comes off the transport and the socket closes, then ownership is released.
+  const closeRelay = () => {
+    const active = relayRef.current; if (!active) return;
+    relayRef.current = undefined; relayCommand.current = undefined;
+    active.client.close(); active.socket.close();
+    if (bleOwner.current === "relay") bleOwner.current = undefined;
+    setRelaying(false); setRelayStatus("Disconnected");
+  };
   const teardown = (message: string) => {
+    closeRelay();
     if (diagnosingRef.current) {
       if (diagnosisScanActive.current && !diagnosisInterruption.current && !diagnosisCloseExpected.current) {
         diagnosisInterruption.current = "disconnected";
@@ -114,6 +135,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     }, (error: unknown) => { setStatus(`Permission error: ${error instanceof Error ? error.message : String(error)}`); });
     return () => {
       mounted.current = false;
+      closeRelay();
       stopScan.current?.(); disconnectSubscription.current?.remove(); session.current?.close(); debugSession.current?.close();
       if (!unmountRun()) return; // the run's own end closes the transport and destroys the manager
       void connectionRef.current?.transport.close().catch(() => undefined); void manager.destroy();
@@ -148,7 +170,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     return session.current;
   };
   const send = async () => {
-    if (!connection || chargeStarting.current) return;
+    if (!connection || bleBusy()) return;
+    bleOwner.current = "send";
     if (!debugSession.current) {
       const scratch = new RecordingBuffer();
       scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
@@ -159,14 +182,15 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     setPending(true);
     try { const response = await debug.send(command); setTranscript((current) => [...current, `> ${command}`, `${response}>`]); }
     catch (error) { setStatus(`Command error: ${error instanceof Error ? error.message : String(error)}`); }
-    finally { setPending(false); }
+    finally { bleOwner.current = undefined; setPending(false); }
   };
   const capture = async (kind: "recording" | "codes") => {
+    if (bleBusy()) return;
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox capture unavailable for this model year."); return; }
-    if (chargeStarting.current) return;
     closeDebugSession();
+    bleOwner.current = "capture";
     const active = startRecording();
-    if (!active) return;
+    if (!active) { bleOwner.current = undefined; return; }
     setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus(kind === "codes" ? "Running codes scan…" : "Capturing…");
     let step = 0; let stepCommand = "";
     try {
@@ -189,12 +213,12 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       const outcome = await finishRun(kind, jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }, phoneTargets,
         (text) => queueForBeta(kind === "codes" ? "codes-scan" : "capture", entry, text));
       setReport(outcome.report); setStatus(`${summary} ${outcome.status}`);
-    } finally { setCapturing(false); }
+    } finally { bleOwner.current = undefined; setCapturing(false); }
   };
 
   const diagnose = async () => {
     const active = connectionRef.current;
-    if (!active || diagnosingRef.current || chargeRun.current() || chargeStarting.current || capturing || pending || !canUseEquinoxConsole(vehicle)) return;
+    if (!active || bleBusy() || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
     diagnosisInterruption.current = undefined;
     diagnosisCloseExpected.current = false;
@@ -230,7 +254,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   // docs/specs/T2.4-charge-logger.md Stage B2: one tap; the run stops and saves by itself.
   const chargeLog = async () => {
     const active = connectionRef.current;
-    if (!active || chargeRun.current() || chargeStarting.current || diagnosingRef.current || capturing || pending || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
+    if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
     const release = async (line: string) => {
       connectionRef.current = undefined; setConnection(undefined);
@@ -298,6 +322,55 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       await release(`Charge log not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}). Reconnect before another run.`);
     }
   };
+  // docs/specs/T0.6b-android-relay-mode.md: one alert per Mode 04 request; Cancel, back and a tap outside all deny.
+  const confirmMode04 = () => new Promise<boolean>((resolve) => {
+    Alert.alert("Clear trouble codes?", "The relay asks to clear diagnostic trouble codes. This also clears freeze-frame data. Confirm this one operation only.", [
+      { text: "Cancel", style: "cancel", onPress: () => { resolve(false); } },
+      { text: "Clear codes", style: "destructive", onPress: () => { resolve(true); } },
+    ], { cancelable: true, onDismiss: () => { resolve(false); } });
+  });
+  const connectRelay = () => {
+    const active = connectionRef.current;
+    if (!active || bleBusy()) return;
+    // Accepts host:port or the broker's printed ws://host:port/phone?token=... line; a token in the line is used when the token field is empty.
+    const parsed = parseRelayAddress(relayUrl, relayToken);
+    if (!parsed.ok) { if (parsed.clearAddress) setRelayUrl(""); setRelayStatus("Error: enter the ws://host:port address and the token."); return; }
+    // The query is built here and never shown, logged or stored; a pasted token leaves the address field and the token field is cleared once the socket opens.
+    setRelayUrl(parsed.base);
+    const url = `${parsed.base}/phone?${new URLSearchParams({ token: parsed.token }).toString()}`;
+    bleOwner.current = "relay"; closeDebugSession(); setRelaying(true); setRelayStatus("Connecting"); setStatus("Connecting relay…");
+    let socket: RelayWebSocket;
+    try { socket = new WebSocket(url); }
+    catch { bleOwner.current = undefined; setRelaying(false); setRelayStatus("Error: could not open the relay socket."); return; }
+    let opened = false;
+    // onTerminal can run inside the constructor, before relayRef is set; then closeRelay has nothing to release.
+    let terminated = false as boolean;
+    const client = new RelayClient(socket, active.transport, { vehicle: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu },
+      confirmMode04, undefined, undefined,
+      (uncertain) => {
+        // Fires for every end the client did not start itself.
+        terminated = true;
+        closeRelay();
+        if (bleOwner.current === "relay") bleOwner.current = undefined;
+        relayCommand.current = undefined; setRelaying(false);
+        if (uncertain) teardown("Relay ended mid-command; reconnect the dongle.");
+        else { const line = opened ? "Relay disconnected." : "Relay connection failed; check the address and token."; setRelayStatus(line); setStatus(line); }
+      },
+      (busyCommand) => { relayCommand.current = busyCommand; setRelayStatus(busyCommand === undefined ? "Connected" : `Busy: ${busyCommand}`); });
+    if (terminated) { socket.close(); return; }
+    relayRef.current = { client, socket };
+    socket.addEventListener("open", () => {
+      // RelayClient's own open listener runs first; if its hello failed, the relay is already closed.
+      if (relayRef.current?.socket !== socket) return;
+      opened = true; setRelayToken(""); setRelayStatus("Connected"); setStatus("Relay connected.");
+    });
+  };
+  const disconnectRelay = () => {
+    const uncertain = relayCommand.current !== undefined;
+    closeRelay();
+    if (uncertain) teardown("Relay disconnected mid-command; reconnect the dongle.");
+    else setStatus("Relay disconnected.");
+  };
   const cancelDiagnosis = () => {
     if (!diagnosingRef.current || !diagnosisScanActive.current) return;
     diagnosisInterruption.current = "cancelled";
@@ -362,8 +435,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         <Switch accessibilityLabel="Vehicle Ready and in Park" value={diagnosisReady} disabled={diagnosing} onValueChange={() => { setDiagnosisReady((value) => !value); }} />
       </View>
       {intent === "charge"
-        ? <Button title="Start charge log" disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void chargeLog()} />
-        : <Button title="Run battery check" disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void diagnose()} />}
+        ? <Button title="Start charge log" disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void chargeLog()} />
+        : <Button title="Run battery check" disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void diagnose()} />}
       {diagnosing ? <Button title="Cancel check" tonal disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
       {disconnect}
       <Card>
@@ -382,12 +455,19 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         </TouchableRipple>
         {devOpen ? <>
           <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
-          <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("recording")} />
-          <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging} onPress={() => void capture("codes")} />
+          <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
+          <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
           {captureStep ? <Text>{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
           <TextInput style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
-          <Button title="Send (not saved)" tonal disabled={!connection || pending || capturing || diagnosing || chargeLogging} onPress={() => void send()} />
+          <Button title="Send (not saved)" tonal disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void send()} />
+          {__DEV__ && connection ? <>
+            <SectionLabel>Relay</SectionLabel>
+            <TextInput style={[inputStyle, inputColors]} value={relayUrl} onChangeText={setRelayUrl} placeholder="ws://<WSL-host>:8765" placeholderTextColor={tokens.muted} autoCapitalize="none" autoCorrect={false} editable={!relaying} />
+            <TextInput style={[inputStyle, inputColors]} value={relayToken} onChangeText={setRelayToken} placeholder="Relay token" placeholderTextColor={tokens.muted} secureTextEntry autoCapitalize="none" autoCorrect={false} editable={!relaying} />
+            <Button title={relaying ? "Disconnect relay" : "Connect relay"} tonal disabled={!relaying && bleBusy()} onPress={relaying ? disconnectRelay : connectRelay} />
+            <Text style={{ color: tokens.muted }}>{relayStatus}</Text>
+          </> : null}
           {report ? <ScrollView nestedScrollEnabled style={pane}><Text style={[styles.consoleText, { color: tokens.text }]}>{report}</Text></ScrollView> : null}
           <ScrollView nestedScrollEnabled style={pane}>{transcript.map((line, index) => <Text key={index} style={[styles.consoleText, { color: tokens.text }]}>{line}</Text>)}</ScrollView>
         </> : null}
