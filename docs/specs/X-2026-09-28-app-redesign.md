@@ -222,8 +222,9 @@ No new PID, AT command, header or DTC decode is introduced.
   - `noteBlocks` (C4):
     7. Characters other than the markdown markers are dropped from `PRIVACY_NOTE`.
   - `licenses` (C4):
-    8. A runtime dependency in `apps/mobile/package.json` (except `workspace:*`) has no entry.
+    8. A runtime dependency that ships in the app has no entry: the non-workspace dependencies of `apps/mobile/package.json` and, transitively, of its `workspace:*` packages (added 2026-09-28 after the C4 review; `zod` ships through obd-core, obd-battery and obd-assist).
     9. An entry's license differs from the installed package's `package.json`.
+    10. A missing or corrupt `theme.txt` does not fall back to System default (added 2026-09-28 after the C4 review; §Decisions 10).
 
 **Stage D: hardware (owner phone; car for flows).** The screenshot matrix uses the owner's phone, with developer options for smallest width, cutout simulation and nav mode, instead of emulators. Emulators are optional.
 - [ ] Configs: 360 dp with punch-hole cutout; ~411 dp with 3-button nav; 430 dp with gesture nav. Each at font scale 1.0 and 2.0 in light. Then 411 dp at 1.0 and 2.0 in dark. That is eight shots per screen, for Garage, Car, Add vehicle, Report summary, each section detail, Codes, module detail, History, Settings and the Beta sub-page, Consent, Charge log and the check screen. Name each shot `<screen>-<dp>-<nav>-<scale>-<theme>.png`, kept locally (open question 8).

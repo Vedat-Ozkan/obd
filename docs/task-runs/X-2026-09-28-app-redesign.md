@@ -716,3 +716,5 @@ Changed (10 files): `apps/mobile/App.tsx`, `src/app/runtime.ts`, `src/ui/theme.t
     - (2) The theme-preference tests cover a failure the spec does not list. Add it to the spec rather than delete the tests.
     - (3) folderLabel shows `primary:` for a volume-root folder. Cosmetic; C4 owner step 4 will show it.
 - C4 closed and committed by path. Findings 1 and 2 are fixed in a small follow-up commit (orchestrator edit plus a short review). Finding 3 stays with the owner step.
+- 2026-09-28, orchestrator: C4 follow-up (findings 1 and 2) made directly. `zod` MIT added to LICENSES; tests 8 and 9 now walk workspace:* packages transitively; spec failure 8 widened and failure 10 added. pnpm check PASS; fingerprint `d66ba328…`. Mutation: dropping zod fails test 8. Reviewer APPROVE. Its minors (no visited set in `walk`, since the graph is acyclic today; the first zod copy is the one checked, and all three copies are identical) are noted and not needed now. Committed by path.
+- **Desk work for the redesign is complete (A, B, C1–C4).** Stage D is owner hardware; see Deferred to owner.

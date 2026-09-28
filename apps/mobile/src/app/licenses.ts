@@ -1,5 +1,6 @@
-// Settings › Open-source licenses (X-2026-09-28-app-redesign §Screens 7). Every runtime dependency of apps/mobile/package.json
-// except the workspace packages, with the `license` field of its installed package.json, read 2026-09-28;
+// Settings › Open-source licenses (X-2026-09-28-app-redesign §Screens 7). Every runtime dependency that ships in the app:
+// apps/mobile/package.json's and, transitively, its workspace packages' (zod), with the `license` field of its installed
+// package.json, read 2026-09-28;
 // test/redesign-text.test.ts checks both against the installed packages.
 export const LICENSES: readonly { name: string; license: string }[] = [
   { name: "@expo-google-fonts/jetbrains-mono", license: "MIT AND OFL-1.1" },
@@ -19,6 +20,7 @@ export const LICENSES: readonly { name: string; license: string }[] = [
   { name: "react-native-ble-plx", license: "MIT" },
   { name: "react-native-paper", license: "MIT" },
   { name: "react-native-safe-area-context", license: "MIT" },
+  { name: "zod", license: "MIT" },
 ];
 
 // ADR-010: the OBDb signalsets the app ships are CC-BY-SA-4.0 and must be attributed. Sources and commits are the

@@ -37,22 +37,36 @@ describe("noteBlocks", () => {
 });
 
 describe("licenses", () => {
-  const dependencies = (JSON.parse(read(new URL("package.json", mobile), "utf8")) as { dependencies: Record<string, string> }).dependencies;
-  const runtime = Object.keys(dependencies).filter((name) => !dependencies[name].startsWith("workspace:")).sort();
+  type Manifest = { dependencies?: Record<string, string>; license?: string };
+  const manifest = (dir: URL) => JSON.parse(read(new URL("package.json", dir), "utf8")) as Manifest;
+  // Runtime dependencies that ship in the app, each with the folder it is installed from: apps/mobile's own, then those of
+  // its workspace:* packages, transitively (pnpm installs each next to the package that declares it).
+  const shipped = new Map<string, URL>();
+  const walk = (dir: URL) => {
+    for (const [name, spec] of Object.entries(manifest(dir).dependencies ?? {})) {
+      const installed = new URL(`node_modules/${name}/`, dir);
+      if (spec.startsWith("workspace:")) walk(installed);
+      else if (!shipped.has(name)) shipped.set(name, installed);
+    }
+  };
+  walk(mobile);
 
-  it("8: every runtime dependency in apps/mobile/package.json (except workspace:*) has an entry", () => {
-    expect(LICENSES.map((entry) => entry.name).sort()).toEqual(runtime);
+  it("8: every shipped runtime dependency, including those of the workspace packages, has an entry", () => {
+    expect(shipped.has("zod")).toBe(true);
+    expect(LICENSES.map((entry) => entry.name).sort()).toEqual([...shipped.keys()].sort());
   });
 
   it("9: each entry's license is the installed package's package.json license", () => {
     for (const entry of LICENSES) {
-      const installed = JSON.parse(read(new URL(`node_modules/${entry.name}/package.json`, mobile), "utf8")) as { license: string };
-      expect(entry.license, entry.name).toBe(installed.license);
+      const dir = shipped.get(entry.name);
+      expect(dir, entry.name).toBeDefined();
+      if (dir) expect(entry.license, entry.name).toBe(manifest(dir).license);
     }
   });
 });
 
 describe("theme preference", () => {
+  // Failure 10 (spec §Verification, added after the C4 review).
   it("reads the three stored choices", () => {
     expect(["system", "light", "dark"].map(parseThemePreference)).toEqual(["system", "light", "dark"]);
     expect(parseThemePreference("dark\n")).toBe("dark");
