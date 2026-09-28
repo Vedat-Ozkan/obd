@@ -141,3 +141,119 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
   - (d) a charge-log start, then Disconnect (notification lifecycle);
   - (e) the deferred share after a failed folder copy, if practical;
   - (f) the scroll reset.
+- 2026-09-28, orchestrator: Stage B implementer spawned; repair count 0 of 2.
+  - Stage A's phone checks can run on the existing dev client (JS only) before the Stage B build. If they are not run first, the checks after Stage B cover both stages, and a regression cannot then be attributed to one stage.
+- 2026-09-28, owner: "do as many stages as possible, all the stages, for things that need my attention defer them, I'll handle them later". The orchestrator runs B, C1–C4 and the desk part of D back to back. Owner-only items collect in **Deferred to owner** below.
+
+## Deferred to owner
+
+- Stage A phone checks (a)–(f) (see the Stage A reviewer entry).
+- Optional, before the EAS build: `cd apps/mobile && pnpm exec expo install expo expo-modules-core expo-sharing` (patch bumps flagged by `expo install --check`), so one build covers them. The orchestrator can do this on request.
+- EAS dev-client build for Stage B's native change (fingerprint `d66ba328…`): `cd apps/mobile && pnpm dlx eas-cli@24.7.0 build --profile development --platform android`, then install it.
+- Stage B phone checks 2–6 in the Stage B report (light and dark screenshots, safe areas with gesture and 3-button nav, fonts, portrait lock). They can run once, after all C stages, together with the Stage D matrix.
+
+## Stage B implementer (Claude, 2026-09-28)
+
+Base: HEAD `1f41022`. The tree was clean apart from this record. The spec assigns no tests to Stage B (§Verification: Stage B lists only checks), so no test was written.
+
+Changed (7 files, all on the spec's Stage B list): `apps/mobile/package.json`, `pnpm-lock.yaml`, `apps/mobile/app.json`, `apps/mobile/App.tsx`, `apps/mobile/src/ui/theme.ts`, `apps/mobile/src/ui/kit.tsx`, and this record.
+
+- **Dependencies.** Installed with `pnpm exec expo install` in `apps/mobile`, which ran pnpm 9.15.9. Each package was checked first against `node_modules/expo/bundledNativeModules.json` (Expo 57.0.24):
+
+  | Package | Installed | License (from its installed `package.json`) | SDK 57 pin |
+  |---|---|---|---|
+  | react-native-paper | 5.15.3 | MIT | not listed (pure JS) |
+  | react-native-safe-area-context | 5.7.0 (`~5.7.0`) | MIT | `~5.7.0` |
+  | @expo/vector-icons | 15.1.1 (`^15.0.2`) | MIT | `^15.0.2` |
+  | expo-font | 57.0.4 (`~57.0.4`) | MIT | `~57.0.4` |
+  | @expo-google-fonts/manrope | 0.4.2 | MIT AND OFL-1.1 | not listed |
+  | @expo-google-fonts/jetbrains-mono | 0.4.1 | MIT AND OFL-1.1 | not listed |
+  | expo-system-ui | 57.0.4 (`~57.0.4`) | MIT | `~57.0.4` |
+
+  - **expo-system-ui** is included because the Expo color-themes guide, read on 2026-09-28 (https://docs.expo.dev/develop/user-interface/color-themes/), says: "When you are creating a development build, you have to install expo-system-ui to support the appearance styles for Android" and "android: userInterfaceStyle: Install expo-system-ui in your project to enable this feature."
+  - pnpm re-sorted the dependency keys alphabetically, which moves `obd-core` down one line. The lockfile gains 159 lines and loses 3; the 3 are the `obd-battery` entry moving because of that re-sort.
+  - `expo install` also added an `"expo-font"` config plugin to `app.json`. I removed it. The spec lists only the two `app.json` keys, and runtime `useFonts` does not need the plugin.
+- **app.json:** adds `"orientation": "portrait"` and `"userInterfaceStyle": "automatic"`.
+- **theme.ts:**
+  - `TOKENS` for light and dark, with every value from spec §Design (the cited section is in a comment). The dark chart highlight is `#C97A3C` (§Decisions 9).
+  - `paperTheme(scheme)` extends MD3 Light or Dark: primary is accent, background is bg, surface is surface, onSurface is text, and so on. Headline, display and title variants use Manrope 700; the rest use Manrope 500.
+  - `useTokens()` reads the system scheme; C4 adds the override. `useScheme()` is new.
+  - `FONTS` holds the family names.
+  - `usePalette()` now maps the old keys onto tokens: background→bg, text→text, muted→muted, border→outline, input→surface/text, placeholder→muted, console→surface/text, buttonBackground→accent.
+- **kit.tsx:**
+  - `Text` wraps Paper `Text`. By default it uses body type, 15 on a 1.5 line height, in the token text colour. A `bold`/`700` style maps to the Manrope 700 family, so there is no synthetic bold. An explicit `fontFamily` (the console's `monospace`) is kept.
+  - `Button` keeps React Native's `title`/`onPress`/`disabled`/`color` props. It is built from Paper `TouchableRipple` and the kit `Text`: at least 52 high, radius 16, accent fill, onAccent label in Manrope 600 at 16, and Paper's disabled colours.
+  - `Card` is a Paper `Card` in `contained` mode, radius 24, on surface.
+  - `Screen` pads by the safe-area insets plus 16 dp and draws on bg.
+- **App.tsx:**
+  - New `Root`, which is now the default export. It gates on `useFonts` for Manrope 500/600/700/800 and JetBrains Mono 600; if a font fails to load, the app falls back to the system font.
+  - It wraps the app in `SafeAreaProvider` › `PaperProvider theme={paperTheme(scheme)}`.
+  - The RN `StatusBar` is `dark-content` in light and `light-content` in dark.
+  - `App` itself is unchanged.
+- **Glyphs:** Paper finds its icons through `@expo/vector-icons/MaterialCommunityIcons`, its second fallback in `src/components/MaterialCommunityIcon.tsx:40-46`. The export bundles `MaterialCommunityIcons.ttf`. All five chip glyph names exist in the installed glyph map (C2 uses this): `star-circle`, `check-circle`, `alert-circle-outline`, `close-circle` and `minus-circle-outline`.
+
+### Verification (Stage B)
+
+- Tests assigned to Stage B: none in the spec. None were written.
+- Logic freeze: PASS. The spec's path list diffed against HEAD is empty. I extended the diff to `apps/mobile/test`, `apps/mobile/src/screens` and `apps/mobile/src/app`, and it is still empty.
+- Only listed files changed (`git status --short`): PASS. The changes are the six Stage B files plus this record.
+- `pnpm check`: PASS, exit 0. Counts: core 239, battery 21, assist 142, mobile 304, relay 58, backend/intake/summary 42, Ruff, pytest 1.
+- `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile`: PASS.
+- `pnpm exec expo export --platform android` into a scratch temp dir, deleted afterwards: PASS.
+  - Bundle: `AppEntry-b5a821ab….hbc`, 3.2 MB, 992 modules.
+  - Assets: the 4 Manrope and 1 JetBrains Mono `.ttf` files, and `MaterialCommunityIcons.ttf`.
+- `pnpm -F mobile exec expo install --check`: PASS for every new package; none is flagged. The command still exits 1, because it flags three existing dependencies that Stage B did not touch as one patch behind: expo 57.0.24 (expects ~57.0.25), expo-modules-core 57.0.18 (~57.0.19) and expo-sharing 57.0.21 (~57.0.22). Upgrading them is out of scope.
+- Expo fingerprint: `5d1377e547ea25caaaab8106951bf2b94c9b386e` before, `d66ba328b7116976e29d34d6aac3378c2be9ecaf` after. The change is expected: safe-area-context and expo-system-ui are native, and app.json changed. **A new EAS dev-client build is required.** From C1 to C4, each stage's fingerprint must equal `d66ba328…`.
+- Artifacts, deleted and then regenerated by `pnpm check`:
+  - Codes E2E `01d894f4…e9b4` (b and c1), charge-log E2E `fbb90c17…043e` (b and c1) and the C2 intake log `bfacfd43…cf7d`: all `cmp`-identical, PASS.
+  - `/tmp/t2.10d-mobile-flow.json`: PASS, `4eb12fbc…bc23`, but only on rerun (3 isolated reruns and 1 full `pnpm -F mobile test`). The first `pnpm check` run gave `6eaa5686…`, which differs by one `"phoneLatencyMs": 0` → `1`, a wall-clock measurement. This is an existing timing flake in T2.10d's test and `summaryFlow.ts`; both are frozen and untouched. I'm reporting it here and not fixing it.
+- Colour validation (dark highlight): recorded, not re-run. It ran in the design session, and its output is in spec §Decisions 9. `#C97A3C` is set from that result.
+- Safe-area before/after screenshots: NOT RUN (no phone in this WSL2 session).
+- New EAS dev build installs, launches and renders the fonts: NOT RUN (owner).
+
+### Deviations
+
+1. The kit `Button` is built from Paper's `TouchableRipple` and `Text`, not Paper's `Button`. Paper's `Button` renders its label with `numberOfLines={1}` (`Button.tsx:404`). That would truncate the titles that carry state, such as the console's "Vehicle Ready and in Park for diagnosis: yes/unknown" and the device row's name, id and RSSI. Truncating them would hide information.
+2. The spacing between `Screen` children stays at 8 dp, not §Design's 14 dp. In Stage B, children are single lines and buttons, not blocks. The console page does not scroll and now has 52 dp buttons, so a larger gap would push more of its controls off-screen (see the risk below).
+3. The type scale in B is the default body style plus the bold→Manrope 700 mapping. The h1, section, row-label and caption styles arrive with the C stage that first uses them (rule 10: no screen in B can use them). Titles keep the screens' own 20/bold.
+4. The default export is `Root` (providers and fonts). `App` stays a named export.
+5. `expo install` added the `expo-font` config plugin to app.json; I removed it (see Dependencies above).
+
+### Risk for the reviewer and orchestrator
+
+The console page (`ConsoleScreen.tsx`, frozen until C3) is a fixed page, not a scroll view. It has 9–10 buttons. They were about 36 dp high as RN buttons and are now at least 52 dp. By rough count, its fixed content grows from about 790 dp to about 950 dp plus insets. On a typical phone, the lowest controls ("Run charge log", the second input, "Send", the report and transcript panes) may be clipped and unreachable until C3's restyle. The owner should check this first on the new build.
+
+If they are clipped, the options are:
+- (a) accept the clipping until C3 and run the console flows on the Stage A dev client;
+- (b) allow a one-line console edit in B that makes that page scroll;
+- (c) bring C3's console restyle forward.
+
+### Owner steps (hardware, NOT RUN)
+
+1. Build and install the new dev client: `cd apps/mobile && pnpm dlx eas-cli@24.7.0 build --profile development --platform android`. Then `pnpm start` for Metro.
+2. Light theme, with the system in light mode: take screenshots of Garage, Add a vehicle, Unsupported vehicle interest, Report history, a report detail, the console, and the Consent screen.
+   - The status bar has dark icons.
+   - The bg is the light `bg` (a pale grey-green) and buttons are the green accent.
+   - Nothing sits under the status bar or cutout at the top, or under the nav bar at the bottom. Check both gesture and 3-button nav.
+3. Dark theme, with the system in dark mode: the same screens.
+   - The status bar has light icons.
+   - The bg is the dark `bg`, and the text is light and readable.
+4. Fonts: body text and button labels are Manrope, not Roboto. A bold heading such as "Garage" is visibly Manrope Bold. JetBrains Mono has no visible use until C1's hero, so its check moves to C1.
+5. The console (see Risk): every control is reachable, and the transcript pane is visible.
+6. The app stays portrait when the phone rotates.
+7. If not already done on the Stage A client: Stage A's phone checks (a)–(f).
+- 2026-09-28, orchestrator, on the Stage B report:
+  - Deviations 1–6 accepted.
+  - Q1 (console overflow at ≥52 dp buttons): accepted for B. The owner does no phone checks until all stages land, so **C3 must make the console fit or scroll**, and C3's brief says so.
+  - Q2: the T2.10d artifact passes on rerun. The flake is `phoneLatencyMs` wall-clock time in `/tmp/t2.10d-mobile-flow.json`. Follow-up for Codex: a fixed clock in the summaryFlow test.
+  - `expo install --check` exits 1 on three packages Stage B did not touch (expo ~57.0.25, expo-modules-core ~57.0.19, expo-sharing ~57.0.22). Moved to the deferred list: bump them just before the EAS build, so one build covers both.
+  - Next: Stage B reviewer.
+- 2026-09-28, Stage B reviewer: **APPROVE**.
+  - Reproduced: pnpm check PASS. All 7 dependencies match the table and their licenses; the lockfile diff is additions only. app.json has only portrait and automatic. theme.ts matches §Design hex for hex. The Button is accessible and ≥52 dp. Insets are applied once. Root renders on a font error. Logic freeze empty. Fingerprint `d66ba328…`. Bundle `b5a821ab…`. Artifacts identical on the first run.
+  - Contrast (body text): the lowest is onAccent/accent 4.70 in light; everything else is 5.4–13.
+  - Findings, carried into later briefs:
+    - (1) expo patch bumps: stay on the deferred list.
+    - (2) The hardcoded error colour `#B00020` is 2.23:1 on the dark bg (App.tsx:128, ReportScreens.tsx:27). **C1/C2 move it to an error token** that passes 4.5:1 in both themes.
+    - (3) kit `Text` maps every non-bold weight to Manrope 500. **C1 extends the mapping** for 600, 700 and 800 before the type scale uses them.
+    - (4) The six accepted deviations, named: 1 Button built on TouchableRipple (Paper's Button label is one line); 2 Screen child gap stays 8 dp in B; 3 only body and bold text styles in B; 4 default export is Root, App stays named; 5 expo-font config plugin removed from app.json; 6 pnpm re-sorted package.json keys.
+- Stage B closed and committed by path.

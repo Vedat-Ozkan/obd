@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
-import { Alert, AppState, View } from "react-native";
+import { Alert, AppState, StatusBar, View } from "react-native";
+import { useFonts } from "expo-font";
+import { Manrope_500Medium } from "@expo-google-fonts/manrope/500Medium";
+import { Manrope_600SemiBold } from "@expo-google-fonts/manrope/600SemiBold";
+import { Manrope_700Bold } from "@expo-google-fonts/manrope/700Bold";
+import { Manrope_800ExtraBold } from "@expo-google-fonts/manrope/800ExtraBold";
+import { JetBrainsMono_600SemiBold } from "@expo-google-fonts/jetbrains-mono/600SemiBold";
+import { PaperProvider } from "react-native-paper";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { BetaStatus } from "./src/beta/outbox.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./src/garage/catalog.js";
 import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { batteryHistory, betaOutbox, garageFlow } from "./src/app/runtime.js";
 import { Button, Screen, Text } from "./src/ui/kit.js";
-import { usePalette } from "./src/ui/theme.js";
+import { FONTS, paperTheme, usePalette, useScheme } from "./src/ui/theme.js";
 import { AddVehicleScreen, InterestScreen } from "./src/screens/AddVehicleScreen.js";
 import { ConsentScreen } from "./src/screens/ConsentScreen.js";
 import { EquinoxConsole } from "./src/screens/ConsoleScreen.js";
@@ -126,4 +134,18 @@ export function App() {
   </Screen>;
 }
 
-export default App;
+/** Providers, fonts and a status bar that follows the scheme; App itself is unchanged below them. */
+export function Root() {
+  const scheme = useScheme();
+  const [fontsLoaded, fontError] = useFonts({ [FONTS.medium]: Manrope_500Medium, [FONTS.semibold]: Manrope_600SemiBold, [FONTS.bold]: Manrope_700Bold, [FONTS.extrabold]: Manrope_800ExtraBold, [FONTS.mono]: JetBrainsMono_600SemiBold });
+  // A font that fails to load falls back to the system font rather than blocking the app.
+  if (!fontsLoaded && !fontError) return null;
+  return <SafeAreaProvider>
+    <PaperProvider theme={paperTheme(scheme)}>
+      <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />
+      <App />
+    </PaperProvider>
+  </SafeAreaProvider>;
+}
+
+export default Root;
