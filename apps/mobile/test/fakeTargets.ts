@@ -11,13 +11,13 @@ export class FakeTargets implements SaveTargets {
   folderRejects?: Error;
   /** A file name; its folder write throws `writeError`. */
   writeThrowsFor?: string;
-  writeError = new Error("permission revoked");
+  readonly writeError = new Error("permission revoked");
   /** A file name; its share rejects `shareError`. */
   shareRejectsFor?: string;
-  shareError = new Error("share already pending");
+  readonly shareError = new Error("share already pending");
   /** A slug; its keep throws `keepError`. */
   keepThrowsFor?: string;
-  keepError = new Error("disk full");
+  readonly keepError = new Error("disk full");
   /** When set, each share stays open until the test calls the resolver pushed here. */
   heldShares?: (() => void)[];
 

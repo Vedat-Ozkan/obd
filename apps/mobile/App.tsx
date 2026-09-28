@@ -365,13 +365,14 @@ const DIALOG_TITLES: Record<RunFile["slug"], string> = { "phone-console": "Expor
 const captureFolderFile = () => new File(Paths.document, "capture-folder.txt");
 
 const NOTIFICATION_INTERVAL_MS = 30_000; // spec T2.4 B2: the notification text changes at most every 30 s
+const CAPTURES = "captures"; // T0.9b: the private copy directory under Paths.document
 const COPY_CHUNK_BYTES = 1 << 20; // a charge log is tens of MB; never read it into one string
 
 // docs/specs/T0.9b-one-and-done-captures.md: a private copy under captures/, then the SAF folder picked once, else the share sheet.
 // T2.4 B2 adds the charge log's streaming save (StreamTargets): append to the private file, then a chunked copy to the folder.
 const phoneTargets: SaveTargets & StreamTargets = {
   keep(file) {
-    const dir = new Directory(Paths.document, "captures");
+    const dir = new Directory(Paths.document, CAPTURES);
     dir.create({ intermediates: true, idempotent: true });
     const base = localFilename(file.slug, file.extension); const stem = base.slice(0, -file.extension.length);
     let suffix = 1; let kept = new File(dir, base);
@@ -392,9 +393,9 @@ const phoneTargets: SaveTargets & StreamTargets = {
     // A failed delete is ignored: the next folder write fails again and falls back to the share sheet.
     try { const remembered = captureFolderFile(); if (remembered.exists) remembered.delete(); } catch { /* see above */ }
   },
-  share: (name, file) => Sharing.shareAsync(new File(Paths.document, "captures", name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
+  share: (name, file) => Sharing.shareAsync(new File(Paths.document, CAPTURES, name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
   create() {
-    const dir = new Directory(Paths.document, "captures");
+    const dir = new Directory(Paths.document, CAPTURES);
     dir.create({ intermediates: true, idempotent: true });
     const stem = `${localDate()}-charge-log`;
     let suffix = 1; let kept = new File(dir, `${stem}.jsonl`);
@@ -402,12 +403,12 @@ const phoneTargets: SaveTargets & StreamTargets = {
     kept.create(); // throws if the file exists; never overwrite a capture
     return kept.name;
   },
-  append(name, text) { new File(Paths.document, "captures", name).write(text, { append: true }); },
+  append(name, text) { new File(Paths.document, CAPTURES, name).write(text, { append: true }); },
   async copyToFolder(name) {
     const remembered = captureFolderFile();
     if (!remembered.exists) throw new Error("no capture folder is remembered");
     const dir = new Directory((await remembered.text()).trim());
-    const source = new File(Paths.document, "captures", name).open(FileMode.ReadOnly);
+    const source = new File(Paths.document, CAPTURES, name).open(FileMode.ReadOnly);
     try {
       const target = dir.createFile(name, "application/x-ndjson").open(FileMode.Append);
       try { for (let chunk = source.readBytes(COPY_CHUNK_BYTES); chunk.length > 0; chunk = source.readBytes(COPY_CHUNK_BYTES)) target.writeBytes(chunk); }
@@ -530,7 +531,11 @@ export function App() {
     setSelectedEntryId(report.garageVehicleId); setDetail(persisted); setView("detail");
   };
 
-  if (beta && view === "garage" && (beta.needsConsent || consentOpen)) return <ScrollView contentContainerStyle={[styles.garage, { backgroundColor: colors.background }]}>
+  const consentVisible = beta !== undefined && view === "garage" && (beta.needsConsent || consentOpen);
+  // Every appearance of the consent screen starts unticked, even after an async view change left it mid-choice.
+  useEffect(() => { if (consentVisible) setConsentShare(false); }, [consentVisible]);
+
+  if (beta && consentVisible) return <ScrollView contentContainerStyle={[styles.garage, { backgroundColor: colors.background }]}>
     <Text style={title}>{CONSENT_TITLE}</Text>
     <Text style={muted}>{beta.line}</Text>
     {betaMessage ? <Text style={normal}>{betaMessage}</Text> : null}
