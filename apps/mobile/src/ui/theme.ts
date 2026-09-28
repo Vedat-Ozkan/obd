@@ -6,6 +6,7 @@ export type Rating = "great" | "good" | "ok" | "poor" | "not-rated";
 export interface Tokens {
   bg: string; surface: string; container: string; onContainer: string; containerMuted: string; track: string;
   text: string; muted: string; outline: string; divider: string; accent: string; onAccent: string;
+  error: string;
   tag: Record<"verified" | "community" | "neutral", { bg: string; fg: string }>;
   rating: Record<Rating, { fg: string; bg: string }>;
   chart: { data: string; highlight?: string };
@@ -13,10 +14,12 @@ export interface Tokens {
 
 // Every value: docs/specs/X-2026-09-28-app-redesign.md §Design (Tokens, provenance tags, rating chips);
 // the dark chart highlight is §Decisions item 9 (validator PASS against #3FA884 on #242A26).
+// error is react-native-paper 5.15.3's MD3 error40 (light) and error80 (dark), src/styles/themes/v3/tokens.tsx;
+// WCAG contrast on bg/surface: light 5.91/6.30, dark 9.57/8.58 (the old #B00020 was 2.23/2.00 in dark).
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
     bg: "#F2F4F1", surface: "#FAFBF9", container: "#DFE7E1", onContainer: "#24302A", containerMuted: "#4C5B53", track: "#C6D3CA",
-    text: "#2A302C", muted: "#5C6660", outline: "#CFD6D1", divider: "#E7EBE8", accent: "#4E7D6A", onAccent: "#FFFFFF",
+    text: "#2A302C", muted: "#5C6660", outline: "#CFD6D1", divider: "#E7EBE8", accent: "#4E7D6A", onAccent: "#FFFFFF", error: "#B3261E",
     tag: { verified: { bg: "#EDF2EE", fg: "#3F6A58" }, community: { bg: "#F2EBDF", fg: "#735623" }, neutral: { bg: "#EEF1EE", fg: "#4F5853" } },
     rating: {
       great: { fg: "#2E7D4F", bg: "#E4EFE7" }, good: { fg: "#2E7D4F", bg: "#E4EFE7" }, ok: { fg: "#A8841A", bg: "#F4EEDA" },
@@ -26,7 +29,7 @@ const TOKENS: Record<Scheme, Tokens> = {
   },
   dark: {
     bg: "#1C211E", surface: "#242A26", container: "#2E3A34", onContainer: "#D4DED8", containerMuted: "#A8B7AE", track: "#3C4B43",
-    text: "#D6DCD8", muted: "#A3ADA7", outline: "#3C4540", divider: "#2F3632", accent: "#8DB5A2", onAccent: "#17251E",
+    text: "#D6DCD8", muted: "#A3ADA7", outline: "#3C4540", divider: "#2F3632", accent: "#8DB5A2", onAccent: "#17251E", error: "#F2B8B5",
     tag: { verified: { bg: "#2B3A33", fg: "#A9CCBA" }, community: { bg: "#3A3427", fg: "#D6BE90" }, neutral: { bg: "#2C322E", fg: "#B9C2BC" } },
     rating: {
       great: { fg: "#3A9C80", bg: "#25372E" }, good: { fg: "#3A9C80", bg: "#25372E" }, ok: { fg: "#B08B24", bg: "#3A3427" },

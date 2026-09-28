@@ -1,16 +1,17 @@
-import { TextInput } from "react-native";
+import { TextInput, View } from "react-native";
 import { SUPPORTED_VEHICLES, vehicleAvailability, vehicleEvidence, type CatalogVehicle } from "../garage/catalog.js";
 import { LOCAL_INTEREST_NOTICE, type GarageState, type Interest, type Ownership } from "../garage/flow.js";
 import { garageFlow } from "../app/runtime.js";
-import { Button, Card, styles, Text } from "../ui/kit.js";
+import { Button, Card, ListRow, SectionLabel, styles, Text } from "../ui/kit.js";
 import { usePalette } from "../ui/theme.js";
 
 type Change = (action: () => Promise<GarageState>, after?: () => void) => Promise<void>;
 type InterestForm = { make: string; model: string; year: string; joinBeta: boolean };
 
-function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, setTag, busy, change, setView, reopenInterest }: {
+/** Add a vehicle (spec §Screens 1): the picker, then the not-listed form and saved interests, moved here from Garage. */
+function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, setTag, busy, change, onAdded, reopenInterest, interests }: {
   make: string; setMake: (make: string) => void; model: string; setModel: (model: string) => void; year: number | undefined; setYear: (year: number | undefined) => void;
-  tag: Ownership; setTag: (tag: Ownership) => void; busy: boolean; change: Change; setView: (view: "garage") => void; reopenInterest: (saved?: Interest) => void;
+  tag: Ownership; setTag: (tag: Ownership) => void; busy: boolean; change: Change; onAdded: () => void; reopenInterest: (saved?: Interest) => void; interests: readonly Interest[];
 }) {
   const colors = usePalette();
   const normal = { color: colors.text };
@@ -19,22 +20,34 @@ function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, 
   const choices = SUPPORTED_VEHICLES.filter((item) => item.make === make && item.model === model);
   const selected: CatalogVehicle | undefined = choices.find((item) => item.year === year);
   return <>
-    <Text style={normal}>Choose make</Text>
-    {[...new Set(SUPPORTED_VEHICLES.map((item) => item.make))].map((choice) => <Button key={choice} title={`${choice}${make === choice ? " ✓" : ""}`} onPress={() => { setMake(choice); setModel(""); setYear(undefined); }} />)}
-    {make ? <Text style={normal}>Choose model</Text> : null}
-    {models.map((choice) => <Button key={choice} title={`${choice}${model === choice ? " ✓" : ""}`} onPress={() => { setModel(choice); setYear(undefined); }} />)}
-    {model ? <Text style={normal}>Choose model year</Text> : null}
-    {choices.map((choice) => <Button key={choice.id} title={`${String(choice.year)}${year === choice.year ? " ✓" : ""}`} onPress={() => { setYear(choice.year); }} />)}
+    <Text style={muted}>Vehicles and interests are saved privately on this phone.</Text>
+    <View>
+      <SectionLabel>Make</SectionLabel>
+      {[...new Set(SUPPORTED_VEHICLES.map((item) => item.make))].map((choice) => <ListRow key={choice} title={choice} selected={make === choice} onPress={() => { setMake(choice); setModel(""); setYear(undefined); }} />)}
+    </View>
+    {make ? <View>
+      <SectionLabel>Model</SectionLabel>
+      {models.map((choice) => <ListRow key={choice} title={choice} selected={model === choice} onPress={() => { setModel(choice); setYear(undefined); }} />)}
+    </View> : null}
+    {model ? <View>
+      <SectionLabel>Model year</SectionLabel>
+      {choices.map((choice) => <ListRow key={choice.id} title={String(choice.year)} selected={year === choice.year} onPress={() => { setYear(choice.year); }} />)}
+    </View> : null}
     {selected ? <Card>
-      <Text style={normal}>{selected.year} {selected.make} {selected.model} · {selected.tier}</Text>
+      <Text style={[styles.rowLabel, normal]}>{selected.year} {selected.make} {selected.model} · {selected.tier}</Text>
       <Text style={muted}>{vehicleAvailability(selected)}</Text>
       <Text style={muted}>{vehicleEvidence(selected)}</Text>
-      <Text style={normal}>Garage tag</Text>
-      <Button title={`Mine${tag === "mine" ? " ✓" : ""}`} onPress={() => { setTag("mine"); }} />
-      <Button title={`Checked${tag === "checked" ? " ✓" : ""}`} onPress={() => { setTag("checked"); }} />
-      <Button title="Add to garage" disabled={busy} onPress={() => void change(() => garageFlow.add(selected.id, tag), () => { setView("garage"); })} />
+      <SectionLabel>Garage tag</SectionLabel>
+      <ListRow title="Mine" selected={tag === "mine"} onPress={() => { setTag("mine"); }} />
+      <ListRow title="Checking" selected={tag === "checked"} onPress={() => { setTag("checked"); }} />
+      <Button title="Add to garage" disabled={busy} onPress={() => void change(() => garageFlow.add(selected.id, tag), onAdded)} />
     </Card> : null}
-    <Button title="My make, model, or year is not listed" onPress={() => { reopenInterest(); }} />
+    <View>
+      <SectionLabel>Not listed</SectionLabel>
+      <ListRow title="My make, model, or year is not listed" onPress={() => { reopenInterest(); }} />
+      {interests.map((saved, index) => <ListRow key={`${saved.make}-${saved.model}-${String(saved.year)}-${String(index)}`}
+        title={`${String(saved.year)} ${saved.make} ${saved.model}`} subtitle={`Beta interest ${saved.joinBeta ? "yes" : "no"} · ${LOCAL_INTEREST_NOTICE}`} onPress={() => { reopenInterest(saved); }} />)}
+    </View>
   </>;
 }
 

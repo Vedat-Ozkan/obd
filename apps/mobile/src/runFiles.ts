@@ -7,7 +7,7 @@ export interface RunFile {
   content: string;
 }
 
-/** The phone's storage. App.tsx implements it with expo-file-system and expo-sharing; tests use a fake. */
+/** The phone's storage. src/app/runtime.ts (phoneTargets) implements it with expo-file-system and expo-sharing; tests use a fake. */
 export interface SaveTargets {
   /** Writes a new file under the app's private documents directory, captures/<date>-<slug>[-N]<ext>, never
    *  overwriting. Returns the name used. Throws on failure. */

@@ -151,6 +151,7 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
 - Optional, before the EAS build: `cd apps/mobile && pnpm exec expo install expo expo-modules-core expo-sharing` (patch bumps flagged by `expo install --check`), so one build covers them. The orchestrator can do this on request.
 - EAS dev-client build for Stage B's native change (fingerprint `d66ba328…`): `cd apps/mobile && pnpm dlx eas-cli@24.7.0 build --profile development --platform android`, then install it.
 - Stage B phone checks 2–6 in the Stage B report (light and dark screenshots, safe areas with gesture and 3-button nav, fonts, portrait lock). They can run once, after all C stages, together with the Stage D matrix.
+- Stage C1 phone steps 1–9 in the Stage C1 implementer report (Garage → Car navigation and system back, SoC hero in JetBrains Mono, ownership dialog, remove refusal, Add a vehicle, Settings › Beta with consent on switch-on, Privacy note, T2.9 Stage D steps 1–4 and 6 with the switch under Settings). No new build: C1's fingerprint equals B's.
 
 ## Stage B implementer (Claude, 2026-09-28)
 
@@ -257,3 +258,76 @@ If they are clipped, the options are:
     - (3) kit `Text` maps every non-bold weight to Manrope 500. **C1 extends the mapping** for 600, 700 and 800 before the type scale uses them.
     - (4) The six accepted deviations, named: 1 Button built on TouchableRipple (Paper's Button label is one line); 2 Screen child gap stays 8 dp in B; 3 only body and bold text styles in B; 4 default export is Root, App stays named; 5 expo-font config plugin removed from app.json; 6 pnpm re-sorted package.json keys.
 - Stage B closed and committed by path.
+
+## Stage C1 implementer (Claude, 2026-09-28)
+
+Base: HEAD `7bd9803`, tree clean (`git status` at start). Repair count 0 of 2.
+
+Changed (12 files): `apps/mobile/App.tsx`, `src/ui/kit.tsx`, `src/ui/theme.ts`, `src/screens/{GarageScreen,AddVehicleScreen,ReportScreens}.tsx`, `src/runFiles.ts` (comment only); created `src/app/navigation.ts`, `src/app/reportView.ts`, `src/screens/CarScreen.tsx`, `src/screens/SettingsScreens.tsx`, `test/redesign-navigation.test.ts`. The spec's C1 list is nine files; `theme.ts`, `ReportScreens.tsx` (carried item 1) and `runFiles.ts` (carried item 3) were added by the orchestrator's brief. Plus this record.
+
+- **Route stack** (`navigation.ts`): the spec's `Route` union verbatim and `back(stack, locked)`: `exit` at one route, `blocked` when locked with `check` on top, else pop. `App` holds `stack` in state; `push`/`pop` helpers; `BackHandler` calls `back`. The consent screen covers the stack when the top is Garage (first run / newer consent version) or the Beta page (switch on); system back on consent opened by the switch closes it without a decision.
+- **Garage**: top bar "Garage" with a settings gear; rows of car icon, "`<year> <make> <model>`", Mine/Checking tag, chevron; an "Add a vehicle" row. Nothing else.
+- **Car**: SoC hero (`socHero`, JetBrains Mono 600, one decimal, charge bar, "Last check <date>"); tap opens the latest report (still today's detail view until C2). No report → "No check yet", not pressable. A report without an `EQUINOXEV_SOC` reading → "Not read", still opens the report. **Run check** (primary) and **Log a charge** (tonal) push `check` with their intent; both disabled with `vehicleAvailability` when `canUseEquinoxConsole` is false. Rows: Report history (count), Ownership (Alert with Cancel/Checking/Mine → existing `changeOwnership`). **Remove from garage**: error-colour text button → confirmation → existing `removeGarageVehicleWithReports`; its refusal shows unchanged through `change()` ("Garage storage error: This car has retained battery reports…").
+- **Add a vehicle**: make/model/year as choice rows with a check mark; the selected card with Mine/Checking choice rows and Add to garage (pops back to Garage on success); "Not listed" section with the not-listed row and the saved interests (moved from Garage), and the "saved privately" notice. The interest form itself is unchanged.
+- **Settings**: Data › Beta data sharing (On/Off), About › Privacy note. **Beta** sub-page: `CONSENT_SWITCH_LABEL` switch (on → `setConsentOpen(true)`, off → `decideBeta(false)`, unchanged), `beta.line`, Beta ID, `betaMessage`, **Delete my data** in the error colour with the existing confirmation. **Privacy**: `PRIVACY_NOTE` as plain selectable text (C4 formats it).
+- **Kit**: `ListRow` (≥60 dp, divider, icon, 16/600 label, subtitle, right value or node, chevron, `selected` choice mode with a check and `radio` role), `SectionLabel` (13/700, uppercase, 0.78 dp = 0.06em at 13), `Hero` (container, radius 28, mono number, track/accent bar). `Button` gains `tonal`. `Screen` gains `blocks` (14 dp gap); C1 pages use it, unreached pages keep 8 dp. A local `TopBar` in `App.tsx` (back arrow ≥48 dp, wrapping h1 28/700 so long car names are never truncated, optional action).
+- **Carried items**: (1) `error` token in `theme.ts`: light `#B3261E`, dark `#F2B8B5`, which are react-native-paper 5.15.3's MD3 `error40`/`error80` (`src/styles/themes/v3/tokens.tsx`). WCAG ratios, computed with the WCAG 2 relative-luminance formula: light 5.91 on bg, 6.30 on surface; dark 9.57 on bg, 8.58 on surface (old `#B00020`: 2.23/2.00 in dark). `App.tsx` and `ReportScreens.tsx` use it; no `#B00020` remains. (2) Kit `Text`: `600`→`Manrope_600SemiBold`, `700`/`bold`→`Manrope_700Bold`, `800`→`Manrope_800ExtraBold`, anything else →500; all four faces are loaded by `Root`'s `useFonts` (500, 600, 700, 800 plus JetBrains Mono 600). (3) `runFiles.ts:10` comment now names `src/app/runtime.ts (phoneTargets)`: the one sanctioned logic-freeze exception, one line, comment only. (4) C1 pages use the 14 dp rhythm.
+- Other contrast checks for pairs C1 introduces (text ≥4.5 unless noted): onContainer/container 10.88 light, 8.61 dark; containerMuted/container 5.69, 5.67; neutral tag fg/bg 6.47, 7.18; muted/bg 5.39, 7.07; accent check mark on bg (non-text, ≥3) 4.25, 7.21; accent bar fill on track (non-text) 3.04, 4.06.
+
+### Verification (Stage C1)
+
+- Tests first: `test/redesign-navigation.test.ts` was written before `navigation.ts`/`reportView.ts` existed. **Failing first**: the file failed on the missing `../src/app/navigation.js` import; with placeholder stubs (`back` always pops, `socHero` always `undefined`) 5 of 7 failed (both `back` cases; the three recordings with an `EQUINOXEV_SOC` reading). PASS after implementation: 7/7.
+  - Failure 1 (`back` on locked `check` pops) and failure 2 (`back` at `[garage]` does not exit): one test each.
+  - `socHero` E2E: the five committed Equinox `*.redacted.jsonl` recordings through `batteryDiagnosisFromRecording`, then `socHero`. Spike and spike-2 → 69.8 (the mockup value; the 27C6 HD signal would give 69.6), discovery-targeted → 85.1 (its last 2B43 reading; the first is 84.7), both phone-console recordings → `undefined` (no SoC read).
+  - Artifact `/tmp/x-redesign-navigation.json`, SHA-256 `817aaefd…17f1`, byte-identical on two runs: PASS.
+- **Mutations** (each reverted; file restored and diffed): drop the lock check → 1 failed; drop the exit case → 1 failed; `EQUINOXEV_SOC_HD` instead of `EQUINOXEV_SOC` → 3 failed; whole percent instead of one decimal → 3 failed; first reading instead of last → 1 failed. PASS.
+- `pnpm check`: PASS, exit 0 (core 239, battery 21, assist 142, mobile 311 = 304 + 7, relay 58, backend/intake/summary 42, Ruff, pytest 1).
+- `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile`: PASS.
+- `expo export --platform android` into a scratch temp dir, deleted afterwards: PASS (`AppEntry-103e3d83….hbc`, 3.2 MB, 996 modules).
+- Expo fingerprint: `d66ba328b7116976e29d34d6aac3378c2be9ecaf`, equal to Stage B: PASS. No new build.
+- Artifacts deleted, then regenerated by `pnpm check`: codes `01d894f4…` (b and c1), charge-log `fbb90c17…` (b and c1), C2 intake `bfacfd43…`: PASS. `/tmp/t2.10d-mobile-flow.json` `4eb12fbc…`: PASS. It flaked once on the first full `pnpm check` (`6eaa5686…`, the known wall-clock `phoneLatencyMs` line), then matched on three isolated reruns and on the second full `pnpm check`.
+- Logic freeze (spec path list against `7bd9803`): only `src/runFiles.ts`, 1 line, the comment above. PASS with the sanctioned exception. `test/` has only the new file.
+- Only listed files changed (`git status --short`): PASS (the 12 above plus this record).
+- Phone and car: NOT RUN (no phone or car in this WSL2 session). Owner steps, on the Stage B dev client through Metro (`cd apps/mobile && pnpm start`):
+  1. Garage: top bar with the gear; each car row shows the Mine/Checking tag and a chevron; "Add a vehicle" row. Nothing else on the page.
+  2. System back: Garage → back exits; Car → back returns to Garage; Settings › Beta → back twice returns to Garage. On the check screen system back does nothing (see deviation 1); the console's own "Back to garage" button returns to the Car.
+  3. Car for the Equinox: the hero shows the last check's SoC with one decimal in JetBrains Mono over a bar, and "Last check <date>"; tapping it opens that report. A car with no check shows "No check yet" and does nothing on tap. A non-Equinox catalog car shows its availability text and both buttons disabled.
+  4. Run check and Log a charge both open the existing console. One battery diagnosis there opens its saved report; back from the report returns to the Car, whose hero now shows that check.
+  5. Ownership row: the dialog changes Mine ↔ Checking and the row and the Garage tag follow.
+  6. Remove from garage on a car with saved reports: after confirming, the unchanged refusal text appears in the error colour. On a car without reports, the car is removed and the app returns to Garage.
+  7. Add a vehicle: pick make, model and year (check marks), Mine/Checking, Add to garage → back on Garage with the new row. "My make, model, or year is not listed" opens the interest form; a saved interest appears under "Not listed" and reopens.
+  8. Settings › Beta data sharing: switch on → the consent screen; Continue with the switch on → Beta page shows sharing on; switch off → off at once. Delete my data (red) shows the existing confirmation. Settings › Privacy note shows the note.
+  9. T2.9 Stage D steps 1–4 and 6, with the beta switch now under Settings › Beta data sharing. Light and dark screenshots of Garage, Car, Add a vehicle, Settings, Beta and Privacy, including a font scale 2.0 check that the car-name title wraps.
+
+### Deviations
+
+1. **System back is blocked on the whole check screen in C1**, not only while a diagnosis or charge log runs. `EquinoxConsole` keeps `diagnosing` and `chargeLogging` in its own state and is not in C1's file list, so `App` cannot see them; `App` passes `locked = true`. The console's own back button (with its unchanged disable conditions) is the way out. C3 needs a small console prop, for example `onLockChange(locked)`, to pass the real condition; C3's brief currently forbids handler edits in `ConsoleScreen.tsx`, so the orchestrator should allow this one prop there.
+2. The `socHero` E2E lives in `test/redesign-navigation.test.ts` (C1's only listed test file). It covers the brief's "reportView SoC selector" test; C2's `report-view.test.ts` will cover `reportSummary`, which contains it.
+3. `socHero` takes the **last** `EQUINOXEV_SOC` reading in the report. App diagnosis reports have one; discovery-targeted has many and the latest is the current value.
+4. The Car hero shows "Not read" for a report without an `EQUINOXEV_SOC` reading (the spec covers only report / no report).
+5. `ReportHistory` takes `openReport(report)` instead of `setDetail` + `setView`, since views are routes now. `ReportDetail` is unchanged apart from the error token. Its "Back to report history" returns to an existing history route on the stack, or opens one.
+6. After a diagnosis is saved, its report **replaces** the `check` route, so back from the report goes to the Car. Before, the detail's only exit was "Back to report history".
+7. Garage rows no longer show report counts, so `refreshReports` only loads the history, and `openSaved` no longer calls `garageFlow.load()` (it only fed those counts).
+8. The garage tag choice reads "Checking" (the stored value stays `checked`), per §Screens 1–2.
+9. The top bar is a small local `TopBar` in `App.tsx`, not Paper's `Appbar.Content`, which renders the title on one line and would truncate car names at font scale 2.0. The destructive text buttons are Paper `Button mode="text"` with the error colour (short fixed labels, so one line is fine).
+
+### Questions for the orchestrator
+
+1. Deviation 1: allow C3 one console prop that reports the lock?
+2. The Car's "Run check" opens the console whose back button still reads "Back to garage" but returns to the Car. C3 restyles that screen; OK to leave the label until then?
+- 2026-09-28, orchestrator, on the C1 report:
+  - Deviations 1–11 accepted. The reviewer verifies deviation 7 (openSaved no longer calls garageFlow.load) has no effect beyond the removed counts.
+  - Q1: yes. **C3 may add one ConsoleScreen prop, `onLockChange(locked)`**, so system back is blocked only during a diagnosis or charge log. This is the one sanctioned console-behaviour hook.
+  - Q2: yes. The console's "Back to garage" label stays until C3 relabels it "Back".
+  - Next: C1 reviewer.
+- 2026-09-28, C1 reviewer: **APPROVE**.
+  - Reproduced: pnpm check PASS (mobile 311). Bundle `103e3d83…`. Artifacts identical, plus `/tmp/x-redesign-navigation.json` `817aaefd…`. Logic freeze: only the runFiles.ts comment. Fingerprint `d66ba328…`. Reviewer mutations each fail exactly one test.
+  - Behaviour verified: T2.9 consent flows; deviation 10 safe (no decide on back); console never remounts mid-run; deviation 7 safe (garageFlow.load had no side effects; the count comes from fresh history); report replaces check.
+  - Findings, carried to C2:
+    - (1) The `report` route shows the shared `detail` state, not the report its route names, so a history back-and-forth path can show the wrong report. **C2 resolves the report from the route's scannedAt/recording.**
+    - (2) The `ListRow` `chevron` prop is unused. C2 uses it or drops it.
+    - (4) The socHero E2E partly restates the code. **C2 view tests use fixed literals per recording.**
+  - (3) Record fix, the two C1 deviations missing from the numbered list:
+    - **10**: system back on a consent opened by the Beta switch closes it without a decision.
+    - **11**: 12 files against the spec's 9. The extra three (theme.ts, ReportScreens.tsx, runFiles.ts) were added by the orchestrator's brief.
+- C1 closed and committed by path.
