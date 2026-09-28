@@ -81,9 +81,16 @@ async function start(): Promise<void> {
 async function stop(): Promise<void> {
   if (!child || child.exitCode !== null) return;
   const running = child;
-  await new Promise<void>((done) => { running.once("exit", () => { done(); }); running.kill("SIGTERM"); });
+  await new Promise<void>((done, reject) => {
+    const timeout = setTimeout(() => { running.kill("SIGKILL"); reject(new Error("Local Worker stop timed out")); }, 5000);
+    running.once("exit", () => { clearTimeout(timeout); done(); }); running.kill("SIGTERM");
+  });
 }
-afterAll(stop);
+afterAll(async () => {
+  if (child && child.exitCode === null) {
+    try { await eventControl({ release: true }); } finally { await stop(); }
+  }
+});
 
 function documents() {
   return {
@@ -101,9 +108,21 @@ async function control(settings: Settings = {}, reset = true): Promise<void> {
   const result = await fetch(`${origin}/__fixture`, { method: "POST", body: JSON.stringify({ reset, ...documents(), ...settings }) });
   expect(result.status).toBe(200);
 }
+async function eventControl(input: Record<string, unknown>): Promise<void> {
+  const response = await fetch(`${origin}/__fixture`, { method: "POST", body: JSON.stringify(input), signal: AbortSignal.timeout(10000) });
+  const acknowledgement: unknown = await response.json();
+  if (response.status !== 200) await captureSchedulingFailure(acknowledgement);
+  expect(response.status, JSON.stringify(acknowledgement)).toBe(200);
+}
 async function metadata() {
-  const response = await fetch(`${origin}/__fixture`);
-  return await response.json() as { localConnectingIp: string; headerNames: string[]; baseVarsLoaded: boolean; calls: { url: string; body: unknown; method: string }[]; budget: { uses: number; spent: number; inflight: string | null; disabled: number }; requests: { state: string; reservation: number; actual: number | null; error: string | null }[] };
+  const response = await fetch(`${origin}/__fixture`, { signal: AbortSignal.timeout(10000) });
+  return await response.json() as { events: string[]; preflightArrivals: number; localConnectingIp: string; headerNames: string[]; baseVarsLoaded: boolean; calls: { url: string; body: unknown; method: string }[]; budget: { uses: number; spent: number; inflight: string | null; disabled: number }; requests: { state: string; reservation: number; actual: number | null; error: string | null }[] };
+}
+async function captureSchedulingFailure(event: unknown): Promise<void> {
+  const meta = await metadata();
+  writeFileSync("/tmp/t2.10c-race-failure.json", JSON.stringify({ event, events: meta.events,
+    budget: { ...meta.budget, inflight: meta.budget.inflight === null ? null : "held" }, requests: meta.requests,
+    completionCalls: meta.calls.filter((call) => call.url.endsWith("/chat/completions")).length }, null, 2));
 }
 function body(request: SummaryRequest, id?: string) {
   sequence++;
@@ -113,7 +132,7 @@ async function post(input: unknown, headers: Record<string, string> = {}, chunke
   const json = typeof input === "string" ? input : JSON.stringify(input);
   let requestBody: BodyInit = json;
   if (chunked) requestBody = new ReadableStream({ start(controller) { const bytes = new TextEncoder().encode(json); controller.enqueue(bytes.slice(0, 12000)); controller.enqueue(bytes.slice(12000)); controller.close(); } });
-  const result = await fetch(`${origin}/v1/summaries`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...headers }, body: requestBody, ...(chunked ? { duplex: "half" } : {}) });
+  const result = await fetch(`${origin}/v1/summaries`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...headers }, body: requestBody, signal: AbortSignal.timeout(30000), ...(chunked ? { duplex: "half" } : {}) });
   return await result.json();
 }
 async function displayed(report: Awaited<ReturnType<typeof batteryDiagnosisFromRecording>>, result: unknown) {
@@ -130,14 +149,30 @@ it("replays real reports through public Worker HTTP, exact checker and summary w
   // A generated test-only entry has no provider key and never calls global fetch.
   // Controls expose only the fixture's temp D1, and do not exist in the product entry.
   writeFileSync(join(temp, "entry.ts"), `import { createSummaryWorker } from ${JSON.stringify(join(root, "tools/summary-backend/worker.ts"))};
-let settings = {}; let calls = []; let release; let currentTime = 1800000000000;
+let settings = {}; let calls = []; let currentTime = 1800000000000;
+// Create each promise in its waiting request; workerd cancels completed request continuations.
+const event = () => { let arrived=false; const waiters=[]; return {
+  wait: () => arrived ? Promise.resolve() : new Promise(resolve => {waiters.push(resolve)}),
+  resolve: () => {arrived=true;for(const resolve of waiters.splice(0))resolve();}
+}; };
+let events=[], releases=[], releasing=false, preflightArrivals=0, entered=0;
+let completion=event(), preflight=event(), arrivals=event(), settlement=event(), secondRelease=event();
+const wait = async (promise) => { let timer; try { return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Fixture event timeout: '+JSON.stringify(events))),5000);})]); } finally {clearTimeout(timer);} };
+const releaseAll = () => { releasing=true; for(const release of releases.splice(0)) release(); preflight.resolve(); arrivals.resolve(); secondRelease.resolve(); };
+const freshEvents = () => { events=[]; releases=[]; releasing=false; preflightArrivals=0; entered=0; completion=event(); preflight=event(); arrivals=event(); settlement=event(); secondRelease=event(); };
 const upstream = async (url, init) => {
   calls.push({url: String(url), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body) : null});
   if (String(url).endsWith('/models')) return new Response(settings.catalogRaw ?? JSON.stringify(settings.catalog), {status: settings.catalogStatus ?? 200});
   if (String(url).endsWith('/endpoints')) return Response.json(settings.endpoints, {status: settings.endpointStatus ?? 200});
-  if (String(url).endsWith('/key')) return Response.json(settings.key, {status: settings.keyStatus ?? 200});
+  if (String(url).endsWith('/key')) {
+    if(settings.preflightBarrier) {preflightArrivals++; if(preflightArrivals===2) {events.push('two-preflight-arrivals');preflight.resolve();} await wait(preflight.wait());}
+    return Response.json(settings.key, {status: settings.keyStatus ?? 200});
+  }
   if (String(url) !== 'https://openrouter.ai/api/v1/chat/completions') throw new Error('Unknown upstream URL');
-  if (settings.hold) await new Promise((resolve) => {release = resolve});
+  let held;
+  if(settings.hold) {const hold=event();releases.push(hold.resolve);held=hold.wait();if(releasing)hold.resolve();}
+  events.push('completion-arrived');completion.resolve();
+  if(held) await wait(held);
   if (settings.timeout) throw new DOMException('SENTINEL_PROVIDER_ERROR', 'AbortError');
   return new Response(settings.outputRaw ?? JSON.stringify(settings.output), {status: settings.outputStatus ?? 200});
 };
@@ -146,20 +181,33 @@ export default { async fetch(request, env) {
  if (new URL(request.url).pathname === '/__fixture') {
   if (request.method === 'POST') {
    const input = await request.json();
-   if (input.release) {release?.(); return Response.json({ok:true});}
-   if (input.reset) { await env.SUMMARY_DB.batch([env.SUMMARY_DB.prepare('DELETE FROM summary_requests'),env.SUMMARY_DB.prepare('UPDATE summary_budget SET uses=0, spent=0, inflight=NULL, disabled=0 WHERE id=1')]); calls=[]; worker=createSummaryWorker({fetch:upstream,now:()=>currentTime}); }
+   if(input.awaitEvent) {
+    try {await wait(({completion,preflight,arrivals,settlement})[input.awaitEvent].wait()); return Response.json({ok:true,events});}
+    catch {return Response.json({error:'fixture-event-timeout',events},{status:500});}
+   }
+   if(input.mark) {events.push(input.mark);return Response.json({ok:true});}
+   if(input.releaseSecond) {events.push('second-released-after-inspection');secondRelease.resolve();return Response.json({ok:true});}
+   if(input.release) {events.push('completion-released');releaseAll();return Response.json({ok:true});}
+   if (input.reset) { await env.SUMMARY_DB.batch([env.SUMMARY_DB.prepare('DELETE FROM summary_requests'),env.SUMMARY_DB.prepare('UPDATE summary_budget SET uses=0, spent=0, inflight=NULL, disabled=0 WHERE id=1')]); calls=[]; freshEvents(); worker=createSummaryWorker({fetch:upstream,now:()=>currentTime}); }
    settings=input; currentTime=input.now ?? currentTime;
    if(input.budget) await env.SUMMARY_DB.prepare('UPDATE summary_budget SET spent=? WHERE id=1').bind(input.budget).run();
    return Response.json({ok:true});
   }
   const budget=await env.SUMMARY_DB.prepare('SELECT uses, spent, inflight, disabled FROM summary_budget').first();
   const rows=await env.SUMMARY_DB.prepare('SELECT state,reservation,actual,error FROM summary_requests ORDER BY request_id').all();
-  return Response.json({calls,budget,requests:rows.results,baseVarsLoaded:env.FIXTURE_BASE_VARS==='synthetic-nonsecret-marker',localConnectingIp:request.headers.get('cf-connecting-ip'),headerNames:[...request.headers.keys()]});
+  return Response.json({events,preflightArrivals,calls,budget,requests:rows.results,baseVarsLoaded:env.FIXTURE_BASE_VARS==='synthetic-nonsecret-marker',localConnectingIp:request.headers.get('cf-connecting-ip'),headerNames:[...request.headers.keys()]});
  }
  const local={...env, SUMMARY_DEV_HOST:'127.0.0.1', SUMMARY_DEV_ENABLED:'1', SUMMARY_DEV_TOKEN:${JSON.stringify(token)}, OPENROUTER_API_KEY:'synthetic-key-not-a-credential', SUMMARY_KEY_LIMIT_USD:'1', SUMMARY_MAX_USES:'4', SUMMARY_BUDGET_MICRO_USD:'1000000', ...settings.authority};
  if(settings.incomingHost) request=new Request(request.url.replace('127.0.0.1', settings.incomingHost),request);
  if(Object.hasOwn(settings,'peer')) { const headers=new Headers(request.headers); if(settings.peer===null) headers.delete('cf-connecting-ip'); else headers.set('cf-connecting-ip',settings.peer); request=new Request(request,{headers}); }
- return worker.fetch(request,local);
+ if(settings.afterSettlement && new URL(request.url).pathname==='/v1/summaries') {
+   const ordinal=++entered;events.push(ordinal===1?'first-arrived':'second-arrived');if(entered===2)arrivals.resolve();
+   await wait(arrivals.wait());if(ordinal===2)await wait(secondRelease.wait());
+   const result=await worker.fetch(request,local);events.push(ordinal===1?'first-settled':'second-settled');if(ordinal===1)settlement.resolve();return result;
+ }
+ const result=await worker.fetch(request,local);
+ if(settings.hold) {const value=await result.clone().json();events.push(value.kind==='llm'?'worker-settled':'worker-denied');}
+ return result;
 }};
 `);
   writeFileSync(join(temp, "wrangler.toml"), `name = "t210c-fixture"\nmain = "entry.ts"\ncompatibility_date = "2026-09-27"\nworkers_dev = false\n[observability]\nenabled = false\n[env.local]\n[[env.local.d1_databases]]\nbinding = "SUMMARY_DB"\ndatabase_name = "summary-fixture"\ndatabase_id = "00000000-0000-0000-0000-000000000001"\n`);
@@ -175,7 +223,8 @@ export default { async fetch(request, env) {
   const baseReport = reports[0];
   const accepted = saved.cases.find((item) => item.name === "accepted");
   if (!accepted) throw new Error("Missing accepted fixture");
-  const output = envelope(accepted.response);
+  const acceptedResponse = accepted.response;
+  const output = envelope(acceptedResponse);
   async function check(name: string, settings: Settings, input: unknown, reason: string | null, completions: number, report = baseReport, chunked = false, headers: Record<string, string> = {}) {
     await control({ output, ...settings });
     const result = await post(input, headers, chunked) as { kind: string; reason?: string; usage?: { cachedInputTokens: number | null; providerCostUsd: number | null; latencyMs: number } };
@@ -307,13 +356,13 @@ export default { async fetch(request, env) {
   rows.push({ name: "captured-envelope", source: "synthetic", body: { ...captured?.body as object, messages: [sent.messages[0], { role: "user", content: "[untrusted synthetic facts omitted]" }] } });
 
   // Durable gates use the same actual D1 through HTTP; no store mock or helper call.
-  async function durable(name: string, result: unknown, completions: number) {
+  async function durable(name: string, result: unknown, completions: number, evidence: object = {}) {
     const meta = await metadata();
     const value = result as { kind: string; reason?: string };
     const shown = await displayed(baseReport, result);
     if (value.kind !== "llm") expect(shown.text).toBe(renderBatteryDiagnosis(baseReport));
     expect(meta.calls.filter((call) => call.url.endsWith("/chat/completions"))).toHaveLength(completions);
-    rows.push({ name, source: "synthetic-durable-D1", kind: value.kind, reason: value.reason ?? null, displayed: shown.text, completionCalls: completions, budget: { ...meta.budget, inflight: meta.budget.inflight === null ? null : "held" }, requests: meta.requests });
+    rows.push({ name, ...evidence, source: "synthetic-durable-D1", kind: value.kind, reason: value.reason ?? null, displayed: shown.text, completionCalls: completions, budget: { ...meta.budget, inflight: meta.budget.inflight === null ? null : "held" }, requests: meta.requests });
     return meta;
   }
   await control({ output });
@@ -324,28 +373,89 @@ export default { async fetch(request, env) {
   expect(await post(original)).toMatchObject({ kind: "fallback", reason: "already-requested" });
   await durable("same-id-settlement-once", await post({ ...original, request: hostile }), 1);
   expect((await metadata()).budget).toEqual(settled.budget);
+  function sanitized(meta: Awaited<ReturnType<typeof metadata>>) {
+    return { budget: { ...meta.budget, inflight: meta.budget.inflight === null ? null : "held" }, requests: meta.requests,
+      completionCalls: meta.calls.filter((call) => call.url.endsWith("/chat/completions")).length };
+  }
+  async function acquired() {
+    await eventControl({ awaitEvent: "completion" });
+    const meta = await metadata();
+    if (sanitized(meta).completionCalls !== 1) await captureSchedulingFailure("unexpected-held-completion-count");
+    expect(meta.budget).toMatchObject({ uses: 1, spent: reservation, disabled: 0 });
+    expect(meta.budget.inflight).not.toBeNull();
+    expect(meta.requests).toEqual([{ state: "inflight", reservation, actual: null, error: null }]);
+    expect(sanitized(meta).completionCalls).toBe(1);
+    await eventControl({ mark: "held-D1-inspected" });
+    return meta;
+  }
+  async function causalRow(name: string, results: unknown[], acquisition: Awaited<ReturnType<typeof metadata>>, expected: string[], completions: number) {
+    const meta = await metadata();
+    const displays = await Promise.all(results.map(async (result) => {
+      const value = result as { kind: string; reason?: string };
+      const shown = await displayed(baseReport, result);
+      expect(shown.kind).toBe(value.kind === "llm" ? "llm" : "template");
+      if (value.kind !== "llm") expect(shown.text).toBe(renderBatteryDiagnosis(baseReport));
+      else expect(shown.text).toBe((await displayed(baseReport, { kind: "llm", summary: acceptedResponse })).text);
+      return { category: value.reason ?? value.kind, kind: shown.kind, text: shown.text };
+    }));
+    displays.sort((a, b) => a.category.localeCompare(b.category));
+    expect(displays.map((item) => item.category)).toEqual(expected);
+    expect(sanitized(meta).completionCalls).toBe(completions);
+    expect(meta.budget).toMatchObject({ uses: completions, spent: completions * 66, inflight: null, disabled: 0 });
+    expect(meta.requests).toEqual(Array.from({ length: completions }, () => ({ state: "settled", reservation, actual: 66, error: null })));
+    rows.push({ name, source: "synthetic-durable-D1", events: meta.events, categories: expected, displays, completionCalls: completions,
+      ...(name === "different-id-after-settlement" ? { firstSettled: sanitized(acquisition) } : { acquisition: sanitized(acquisition) }), settled: sanitized(meta) });
+  }
   for (const same of [true, false]) {
     await control({ output, hold: true });
     const first = validBody();
     const pending = post(first);
-    for (let i = 0; i < 100 && !(await metadata()).budget.inflight; i++) await new Promise((done) => setTimeout(done, 20));
-    const loser = await post(same ? first : validBody());
-    expect(loser).toMatchObject({ reason: same ? "already-requested" : "unavailable" });
-    await fetch(`${origin}/__fixture`, { method: "POST", body: JSON.stringify({ release: true }) });
-    const winner = await pending;
-    expect(winner).toMatchObject({ kind: "llm" });
-    await durable(same ? "same-id-race" : "different-id-one-inflight", loser, 1);
+    const requests = [pending];
+    try {
+      const held = await acquired();
+      const denied = post(same ? first : validBody()); requests.push(denied);
+      const loser = await denied;
+      expect(loser).toMatchObject({ kind: "fallback", reason: same ? "already-requested" : "unavailable" });
+      expect(sanitized(await metadata())).toEqual(sanitized(held));
+      await eventControl({ mark: "denial-observed" });
+      await eventControl({ release: true });
+      const winner = await pending;
+      expect(winner).toMatchObject({ kind: "llm" });
+      await causalRow(same ? "same-id-race" : "different-id-one-inflight", [loser, winner], held,
+        same ? ["already-requested", "llm"] : ["llm", "unavailable"], 1);
+    } finally { await eventControl({ release: true }); await Promise.allSettled(requests); }
   }
   for (const same of [true, false]) {
-    await control({ output });
+    await control({ output, hold: true, preflightBarrier: true });
     const first = validBody();
-    const results = await Promise.all([post(first), post(same ? first : validBody())]);
-    const categories = results.map((result) => { const r = result as { kind: string; reason?: string }; return r.reason ?? r.kind; }).sort();
-    expect(categories).toEqual(same ? ["already-requested", "llm"] : ["llm", "unavailable"]);
-    const meta = await metadata(); expect(meta.budget.uses).toBe(1);
-    expect(meta.calls.filter((call) => call.url.endsWith("/chat/completions"))).toHaveLength(1);
-    rows.push({ name: same ? "simultaneous-same" : "simultaneous-different", source: "synthetic-durable-D1", categories, completionCalls: 1, budget: { ...meta.budget, inflight: null }, requests: meta.requests });
+    const contenders = [post(first), post(same ? first : validBody())];
+    try {
+      await eventControl({ awaitEvent: "preflight" });
+      const loser = await Promise.race(contenders);
+      const value = loser as { kind: string; reason?: string };
+      if (value.kind !== "fallback" || value.reason !== (same ? "already-requested" : "unavailable")) await captureSchedulingFailure("unexpected-contender-result");
+      expect(loser).toMatchObject({ kind: "fallback", reason: same ? "already-requested" : "unavailable" });
+      const held = await acquired();
+      expect(held.preflightArrivals).toBe(2);
+      await eventControl({ mark: "denial-observed" });
+      await eventControl({ release: true });
+      const results = await Promise.all(contenders);
+      await causalRow(same ? "simultaneous-same" : "simultaneous-different", results, held,
+        same ? ["already-requested", "llm"] : ["llm", "unavailable"], 1);
+    } finally { await eventControl({ release: true }); await Promise.allSettled(contenders); }
   }
+  await control({ output, afterSettlement: true });
+  const scheduled = [post(validBody()), post(validBody())];
+  try {
+    await eventControl({ awaitEvent: "arrivals" });
+    await eventControl({ awaitEvent: "settlement" });
+    const firstSettled = await metadata();
+    expect(firstSettled.budget).toEqual({ uses: 1, spent: 66, inflight: null, disabled: 0 });
+    expect(firstSettled.requests).toEqual([{ state: "settled", reservation, actual: 66, error: null }]);
+    expect(sanitized(firstSettled).completionCalls).toBe(1);
+    await eventControl({ releaseSecond: true });
+    await causalRow("different-id-after-settlement", await Promise.all(scheduled), firstSettled, ["llm", "llm"], 2);
+  } finally { await eventControl({ release: true }); await Promise.allSettled(scheduled); }
   await control({ output });
   for (let i = 0; i < 4; i++) expect(await post(validBody())).toMatchObject({ kind: "llm" });
   expect(await post(validBody())).toMatchObject({ reason: "no-credit" });
@@ -376,12 +486,11 @@ export default { async fetch(request, env) {
   await durable("snapshot-cache-expiry", { kind: "llm", summary: accepted.response }, 3);
   await control({ output, hold: true });
   const unresolved = post(validBody()).catch(() => undefined);
-  for (let i = 0; i < 100 && !(await metadata()).budget.inflight; i++) await new Promise((done) => setTimeout(done, 20));
-  expect((await metadata()).budget).toMatchObject({ uses: 1, spent: reservation });
+  const crashHeld = await acquired();
   await stop(); await unresolved; await start();
   await control({ output }, false);
   const restart = await post(validBody()); expect(restart).toMatchObject({ reason: "unavailable" });
-  const restarted = await durable("crash-restart-held", restart, 0);
+  const restarted = await durable("crash-restart-held", restart, 0, { acquisition: sanitized(crashHeld), categories: ["unavailable"], events: [...crashHeld.events, "held-D1-inspected", "process-stopped", "process-restarted", "restart-denied"] });
   expect(restarted.budget).toMatchObject({ uses: 1, spent: reservation });
   expect(restarted.budget.inflight).not.toBeNull();
   cli(["d1", "execute", "SUMMARY_DB", "--local", "--env", "local", "--config", join(temp, "wrangler.toml"), "--file", join(root, "tools/summary-backend/schema.sql")]);
