@@ -19,7 +19,8 @@
           "neverForLocation": false
         }
       ],
-      "./plugins/withChargeLogService"
+      "./plugins/withChargeLogService",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
