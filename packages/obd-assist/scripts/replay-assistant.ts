@@ -11,9 +11,11 @@ import {
   type AssistantAnswer, type AssistantClient, type AssistantSource, type AssistantTurnRequest, type AssistantUsage,
 } from "../src/index.js";
 
+/** dropReads removes one command's reads (its tx line and the reply after it) with t in [fromT, toT], in memory only. */
+export interface SourceSpec { kind: "battery-scan" | "charge-log"; recording: string; dropReads?: { command: string; fromT: number; toT: number } }
 export interface DatasetSpec {
   dataTag: string;
-  sources?: { kind: "battery-scan" | "charge-log"; recording: string }[];
+  sources?: SourceSpec[];
   /** Dataset whose sources are rebuilt with the injection below applied to the first one, in memory only. */
   base?: string;
   injection?: { note: string; recordingName: string; realNoteFragment: string };
@@ -46,7 +48,18 @@ export interface AssistantReplayArtifact {
 const SCANNED_AT = "2026-09-22T00:00:00.000Z";
 const SIGNALSET = "packages/obd-core/vehicles/chevrolet-equinox-ev/default.json";
 
-async function buildSource(spec: { kind: "battery-scan" | "charge-log"; recording: string }, root: URL, inject?: { note: string; recordingName: string }): Promise<AssistantSource> {
+function dropReads(text: string, drop: { command: string; fromT: number; toT: number }): string {
+  const lines = text.split("\n");
+  const kept: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] === "" ? undefined : (JSON.parse(lines[i]) as { dir: string; data?: string; t: number });
+    if (line?.dir === "tx" && line.data === `${drop.command}\r` && line.t >= drop.fromT && line.t <= drop.toT) i++;
+    else kept.push(lines[i]);
+  }
+  return kept.join("\n");
+}
+
+async function buildSource(spec: SourceSpec, root: URL, inject?: { note: string; recordingName: string }): Promise<AssistantSource> {
   const signals = importObdbMode22(JSON.parse(readFileSync(new URL(SIGNALSET, root), "utf8")));
   let text = readFileSync(new URL(spec.recording, root), "latin1");
   if (inject !== undefined) {
@@ -55,6 +68,7 @@ async function buildSource(spec: { kind: "battery-scan" | "charge-log"; recordin
     lines[0] = JSON.stringify({ ...(JSON.parse(lines[0]) as object), note: inject.note });
     text = lines.join("\n");
   }
+  if (spec.dropReads !== undefined) text = dropReads(text, spec.dropReads);
   const recording = inject?.recordingName ?? spec.recording;
   const meta = parseRecording(text).find((line) => line.dir === "meta");
   const synthetic = meta?.dir === "meta" && meta.synthetic === true;

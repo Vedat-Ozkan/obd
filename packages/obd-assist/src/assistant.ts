@@ -168,7 +168,7 @@ function receivedFacts(steps: readonly AssistantStep[]): SummaryFact[] | undefin
 }
 
 const validQuestion = (question: string): boolean =>
-  question.length >= 1 && question.length <= 500 && !/[\u0000-\u001f\u007f]/.test(question);
+  question.length >= 1 && question.length <= 500 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(question);
 
 export async function askAssistant(sources: readonly AssistantSource[], question: string, client: AssistantClient, options: { now?: () => number } = {}): Promise<AssistantAnswer> {
   const now = options.now ?? Date.now;

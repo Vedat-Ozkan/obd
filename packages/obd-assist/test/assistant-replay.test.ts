@@ -43,6 +43,16 @@ const questionOutcomes: Readonly<Record<string, { trace: string[]; text: string;
     text: "No stored session contains a driving range figure, so this cannot be answered.",
     cited: ["sessions/s1/kind"],
   },
+  q11: {
+    trace: ["get_capacity_estimate:-:ok"],
+    text: "Battery capacity is not measured because the charge log did not pass its checks.",
+    cited: ["s1/capacity-status", "s1/capacity-reason"],
+  },
+  q12: {
+    trace: ["get_session:s1:ok", "get_capacity_estimate:s1:ok"],
+    text: "The charge log gate passed, but battery capacity is not measured.",
+    cited: ["s1/gate", "s1/capacity-status"],
+  },
   q09: {
     trace: ["get_capacity_estimate:-:ok"],
     text: [
@@ -94,6 +104,14 @@ const expectedAdversarial: Readonly<Record<string, Outcome>> = {
     "The first session is a synthetic charge log.\nThe charge log gate passed.\nDiagnostic codes were not read in a charge log.",
     ["get_session:s1:ok", "get_codes:s1:ok"],
   ),
+  "invalid-question-del": fallback("invalid-input", [], 0),
+  "invalid-question-c1-u0080": fallback("invalid-input", [], 0),
+  "invalid-question-c1-u0085": fallback("invalid-input", [], 0),
+  "invalid-question-c1-u009f": fallback("invalid-input", [], 0),
+  "invalid-question-line-separator": fallback("invalid-input", [], 0),
+  "invalid-question-paragraph-separator": fallback("invalid-input", [], 0),
+  "gate-fail-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
+  "no-soc-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
 };
 
 describe("assistant replay over recordings and saved synthetic replies", () => {
@@ -117,7 +135,9 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
     ]);
     expect(artifact.sections.real.map((r) => r.id)).toEqual(["q01", "q02", "q03", "q04", "q05", "q06", "q07", "q08"]);
     expect(artifact.sections.real.every((r) => r.dataTag === "real")).toBe(true);
-    expect(artifact.sections.synthetic.map((r) => [r.id, r.dataTag])).toEqual([["q09", "synthetic"], ["q10", "synthetic (injected)"]]);
+    expect(artifact.sections.synthetic.map((r) => [r.id, r.dataTag])).toEqual([
+      ["q09", "synthetic"], ["q10", "synthetic (injected)"], ["q11", "synthetic (mutated)"], ["q12", "synthetic (mutated)"],
+    ]);
     expect(artifact.sections.adversarial.map((r) => r.name)).toEqual(Object.keys(expectedAdversarial));
   });
 
@@ -136,6 +156,7 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
   it("marks missing-data answers honest only when the named fact is cited and no claim has a digit", () => {
     for (const id of ["q05", "q06", "q07", "q08"]) expect(row(id).missingHonest).toBe(true);
     for (const id of ["q01", "q02", "q03", "q04", "q09", "q10"]) expect(row(id).missingHonest).toBeNull();
+    for (const id of ["q11", "q12"]) expect(row(id).missingHonest).toBe(true);
   });
 
   it("q01 lists sessions with the fixed session facts", () => {
@@ -158,6 +179,24 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
       `s1/capacity-method=${INTEGRATED_LABEL} (available)`,
       "s1/synthetic=yes (available)",
     ]);
+  });
+
+  it("a charge log that fails the T2.4 gate, or passes it without an estimate, is NOT MEASURED and never an estimate", () => {
+    // q11: 2414 reads dropped at t=3000..3010 (in memory) leave a 20 s gap that cuts the post-charge rest to 1280 s, so the gate fails
+    // while the estimator alone would still return a figure. q12: no 2B43 reads, so the gate passes and the estimator has no SOC.
+    expect(row("q11").trace[0].facts).toEqual([
+      "s1/capacity-status=not-measured (not-measured)",
+      "s1/capacity-reason=post-charge rest 1280 s < 1800 s (missing)",
+    ]);
+    expect(row("q12").trace).toEqual([
+      { tool: "get_session", sessionId: "s1", ok: true, facts: [
+        "s1/kind=charge log (available)", "s1/synthetic=yes (available)", "s1/gate=pass (available)", "s1/gate-reason=all gate conditions met (available)",
+      ] },
+      { tool: "get_capacity_estimate", sessionId: "s1", ok: true, facts: [
+        "s1/capacity-status=not-measured (not-measured)", "s1/capacity-reason=no SOC sample in a rest window (missing)",
+      ] },
+    ]);
+    for (const id of ["q11", "q12"]) expect(JSON.stringify(row(id).trace)).not.toContain("capacity-value");
   });
 
   it("q02 and q04 totals: sums, and any null round makes that total null", () => {
@@ -210,7 +249,8 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
     expect(named("unknown-session-then-prose-answer").trace[0].facts).toEqual(["step-1/error=unknown-session (missing)"]);
     expect(named("missing-session-id").trace[0].facts).toEqual(["step-1/error=missing-session-id (missing)"]);
     expect(named("unexpected-session-id").trace[0].facts).toEqual(["step-1/error=unexpected-session-id (missing)"]);
-    expect(named("unknown-session-then-recovers").trace[1].facts.length).toBeGreaterThan(10);
+    // After the error the model's retry returns exactly what a first-try get_session s1 returns.
+    expect(named("unknown-session-then-recovers").trace[1].facts).toEqual(row("q02").trace[0].facts);
     expect(JSON.stringify(named("session-id-injection-string-not-echoed").trace[0].facts)).not.toContain("IGNORE");
   });
 

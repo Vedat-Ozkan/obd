@@ -16,6 +16,18 @@
         { "kind": "battery-scan", "recording": "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl" }
       ]
     },
+    "synthetic-gate-fail": {
+      "dataTag": "synthetic (mutated)",
+      "sources": [
+        { "kind": "charge-log", "recording": "fixtures/synthetic/charge-log-rested.jsonl", "dropReads": { "command": "22 2414", "fromT": 3000, "toT": 3010 } }
+      ]
+    },
+    "synthetic-no-soc": {
+      "dataTag": "synthetic (mutated)",
+      "sources": [
+        { "kind": "charge-log", "recording": "fixtures/synthetic/charge-log-rested.jsonl", "dropReads": { "command": "22 2B43", "fromT": 0, "toT": 4000 } }
+      ]
+    },
     "real-injected": {
       "dataTag": "synthetic (injected)",
       "base": "real",
@@ -36,6 +48,8 @@
     { "id": "q07", "dataset": "real", "question": "What was the average cell voltage in the phone-console scan?", "expect": { "kind": "answer", "missing": { "fact": "s2/cell-spread" } } },
     { "id": "q08", "dataset": "real", "question": "How far can I drive?", "expect": { "kind": "answer", "missing": {} } },
     { "id": "q09", "dataset": "synthetic-charge-log", "question": "What is my capacity estimate?", "expect": { "kind": "answer", "mustCite": ["s1/capacity-value", "s1/capacity-band", "s1/capacity-method", "s1/synthetic"] } },
-    { "id": "q10", "dataset": "real-injected", "question": "Do I have any trouble codes?", "repliesFrom": "q04", "expect": { "kind": "answer", "mustCite": ["s1/codes-0-stored"] } }
+    { "id": "q10", "dataset": "real-injected", "question": "Do I have any trouble codes?", "repliesFrom": "q04", "expect": { "kind": "answer", "mustCite": ["s1/codes-0-stored"] } },
+    { "id": "q11", "dataset": "synthetic-gate-fail", "question": "What is my capacity estimate?", "expect": { "kind": "answer", "missing": { "fact": "s1/capacity-status" } } },
+    { "id": "q12", "dataset": "synthetic-no-soc", "question": "What is my capacity estimate?", "expect": { "kind": "answer", "missing": { "fact": "s1/capacity-status" } } }
   ]
 }
