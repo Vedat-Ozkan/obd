@@ -63,6 +63,9 @@ importers:
       obd-battery:
         specifier: workspace:*
         version: link:../../packages/obd-battery
+      obd-assist:
+        specifier: workspace:*
+        version: link:../../packages/obd-assist
       obd-core:
         specifier: workspace:*
         version: link:../../packages/obd-core
