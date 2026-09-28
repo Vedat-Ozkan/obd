@@ -28,6 +28,10 @@ fixtures/recordings/**/*-discovery*.jsonl
 tools/beta-backend/.wrangler/
 # local wrangler dev secrets (ADMIN_TOKEN for Stage D step 5)
 tools/beta-backend/.dev.vars
+# T2.10c: dedicated summary credentials and durable local development state.
+tools/summary-backend/.dev.vars
+tools/summary-backend/.dev.vars.*
+tools/summary-backend/.wrangler/
 # ADR-019: beta tester recordings and the intake index stay local unless a tester separately agrees to publication
 fixtures/recordings/*-beta-*/
 fixtures/beta-intake-index.json*

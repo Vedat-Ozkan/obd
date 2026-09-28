@@ -1,0 +1,115 @@
+import { z } from "zod";
+import { createOpenRouter, readBounded, reservationMicroUsd, type AdapterOptions, type AdapterResult, type SummaryFallback } from "./openrouter.js";
+
+interface D1Result { meta: { changes: number }; results?: unknown[] }
+interface D1Statement {
+  bind(...values: (string | number | null)[]): D1Statement;
+  first<T>(): Promise<T | null>;
+  all(): Promise<D1Result>;
+  run(): Promise<D1Result>;
+}
+export interface SummaryDatabase { prepare(sql: string): D1Statement; batch(statements: D1Statement[]): Promise<D1Result[]> }
+export interface SummaryEnv {
+  SUMMARY_DB?: SummaryDatabase;
+  SUMMARY_DEV_ENABLED?: string; SUMMARY_DEV_HOST?: string; SUMMARY_DEV_TOKEN?: string;
+  OPENROUTER_API_KEY?: string; SUMMARY_KEY_LIMIT_USD?: string; SUMMARY_MAX_USES?: string; SUMMARY_BUDGET_MICRO_USD?: string;
+}
+interface Budget { uses: number; spent: number; inflight: string | null; disabled: number }
+
+const nonblank = (max: number) => z.string().min(1).max(max).refine((value) => value.trim().length > 0);
+const id = nonblank(96).regex(/^[\x21-\x7e]+$/);
+const requestSchema = z.strictObject({
+  requestId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
+  consentVersion: z.literal("t2.10-openrouter-deepseek-v1"),
+  request: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v1"), facts: z.array(z.strictObject({
+    id, label: nonblank(160), value: nonblank(256), unit: nonblank(32).optional(), status: nonblank(64).optional(), tier: z.enum(["verified", "community"]).optional(),
+  })).max(64).refine((facts) => new Set(facts.map((fact) => fact.id)).size === facts.length) }),
+});
+const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
+const fallback = (reason: SummaryFallback, status = 200) => json({ kind: "fallback", reason }, status);
+
+function privateIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^(0|[1-9][0-9]{0,2})$/.test(part) || Number(part) > 255)) return false;
+  const [a, b] = parts.map(Number);
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+function enabled(request: Request, env: SummaryEnv): boolean {
+  const host = new URL(request.url).hostname;
+  const peer = request.headers.get("cf-connecting-ip");
+  return env.SUMMARY_DEV_ENABLED === "1" && !!env.SUMMARY_DEV_TOKEN && env.SUMMARY_DEV_TOKEN.length >= 32 &&
+    !!env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== env.SUMMARY_DEV_TOKEN && !!env.SUMMARY_DB &&
+    env.SUMMARY_DEV_HOST === host && (host === "localhost" || privateIpv4(host)) && (peer === null || privateIpv4(peer)) && env.SUMMARY_KEY_LIMIT_USD === "1" && env.SUMMARY_MAX_USES === "4" && env.SUMMARY_BUDGET_MICRO_USD === "1000000" &&
+    ![...request.headers.keys()].some((header) => header === "cf-ray" || header === "forwarded" || header.startsWith("x-forwarded-"));
+}
+async function budget(db: SummaryDatabase): Promise<Budget> {
+  const row = await db.prepare("SELECT uses, spent, inflight, disabled FROM summary_budget WHERE id=1").first<Budget>();
+  if (!row) throw new Error("missing budget");
+  return row;
+}
+async function reserve(db: SummaryDatabase, requestId: string): Promise<SummaryFallback | null> {
+  // Both writes form one transaction. The acquisition ID guards the insert after
+  // an unsuccessful conditional update; unique ID conflicts roll back the batch.
+  const result = await db.batch([
+    db.prepare("UPDATE summary_budget SET uses=uses+1, spent=spent+?, inflight=? WHERE id=1 AND disabled=0 AND inflight IS NULL AND uses<4 AND spent+?<=1000000 AND NOT EXISTS (SELECT 1 FROM summary_requests WHERE request_id=?)").bind(reservationMicroUsd, requestId, reservationMicroUsd, requestId),
+    db.prepare("INSERT INTO summary_requests (request_id,state,reservation,actual,error) SELECT ?, 'inflight', ?, NULL, NULL FROM summary_budget WHERE id=1 AND inflight=? AND changes()=1").bind(requestId, reservationMicroUsd, requestId),
+  ]);
+  if (result.length === 2 && result.every((entry) => entry.meta.changes === 1)) return null;
+  if (await db.prepare("SELECT request_id FROM summary_requests WHERE request_id=?").bind(requestId).first()) return "already-requested";
+  const row = await budget(db);
+  if (row.disabled || row.inflight) return "unavailable";
+  if (row.uses >= 4) return "no-credit";
+  return row.spent + reservationMicroUsd > 1000000 ? "budget-exhausted" : "unavailable";
+}
+async function settle(db: SummaryDatabase, requestId: string, result: AdapterResult): Promise<void> {
+  // The update uses the still-inflight request; a second settlement changes nothing.
+  const charged = result.actualMicroUsd ?? reservationMicroUsd;
+  const adjusted = result.kill ? Math.max(charged, reservationMicroUsd) : charged;
+  const writes = await db.batch([
+    db.prepare("UPDATE summary_budget SET spent=spent-?+?, inflight=NULL, disabled=MAX(disabled,?) WHERE id=1 AND inflight=? AND EXISTS (SELECT 1 FROM summary_requests WHERE request_id=? AND state='inflight')").bind(reservationMicroUsd, adjusted, result.kill ? 1 : 0, requestId, requestId),
+    db.prepare("UPDATE summary_requests SET state='settled',actual=?,error=? WHERE request_id=? AND state='inflight' AND changes()=1").bind(result.actualMicroUsd, result.reason ?? null, requestId),
+  ]);
+  if (writes.length !== 2 || !writes.every((entry) => entry.meta.changes === 1)) throw new Error("unsettled request");
+}
+
+export function createSummaryWorker(options: AdapterOptions = { fetch: globalThis.fetch.bind(globalThis), now: Date.now }) {
+  const adapter = createOpenRouter(options);
+  return { async fetch(request: Request, env: SummaryEnv): Promise<Response> {
+    if (!enabled(request, env)) return fallback("unavailable", 503);
+    if (request.headers.get("Authorization") !== `Bearer ${env.SUMMARY_DEV_TOKEN ?? ""}`) return fallback("unauthorized", 401);
+    const db = env.SUMMARY_DB;
+    const key = env.OPENROUTER_API_KEY;
+    if (!db || !key) return fallback("unavailable", 503);
+    try {
+      const path = new URL(request.url).pathname;
+      if (path === "/v1/status" && request.method === "GET") {
+        const row = await budget(db);
+        return json({ uses: row.uses, headroomMicroUsd: Math.max(0, 1000000 - row.spent), enabled: !row.disabled && !row.inflight && row.uses < 4 && row.spent + reservationMicroUsd <= 1000000 });
+      }
+      if (path !== "/v1/summaries" || request.method !== "POST") return fallback("invalid-request", 400);
+      let input: z.infer<typeof requestSchema>;
+      try {
+        const parsed = JSON.parse(await readBounded(request, 16384)) as unknown;
+        if (typeof parsed === "object" && parsed !== null && (!('consentVersion' in parsed) || parsed.consentVersion !== "t2.10-openrouter-deepseek-v1")) return fallback("consent-required", 400);
+        input = requestSchema.parse(parsed);
+      } catch { return fallback("invalid-request", 400); }
+      const seen = await db.prepare("SELECT request_id FROM summary_requests WHERE request_id=?").bind(input.requestId).first();
+      if (seen) return fallback("already-requested");
+      const current = await budget(db);
+      if (current.disabled || current.inflight) return fallback("unavailable");
+      if (current.uses >= 4) return fallback("no-credit");
+      if (current.spent + reservationMicroUsd > 1000000) return fallback("budget-exhausted");
+      try { await adapter.preflight(key); } catch { return fallback("unavailable"); }
+      const denied = await reserve(db, input.requestId);
+      if (denied) return fallback(denied);
+      const result = await adapter.generate(input.request, key);
+      await settle(db, input.requestId, result);
+      if (result.summary) return json({ kind: "llm", summary: result.summary, usage: result.usage });
+      return json({ kind: "fallback", reason: result.reason ?? "invalid-response", ...(result.usage ? { usage: result.usage } : {}) });
+    } catch { return fallback("unavailable", 503); }
+  } };
+}
+
+const worker = createSummaryWorker();
+// Wrangler's module entry requires a default export; the factory is the named API.
+export default worker;

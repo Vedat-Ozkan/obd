@@ -1,0 +1,23 @@
+# C1 only. Never deploy this local-credit service. Tool pin: wrangler@4.142.0.
+name = "obd-summary"
+main = "worker.ts"
+compatibility_date = "2026-09-27"
+workers_dev = false
+routes = []
+[observability]
+enabled = false
+
+# No enabled flag, host or credential: the owner supplies these privately.
+[env.local]
+workers_dev = false
+routes = []
+[env.local.observability]
+enabled = false
+[env.local.vars]
+SUMMARY_KEY_LIMIT_USD = "1"
+SUMMARY_MAX_USES = "4"
+SUMMARY_BUDGET_MICRO_USD = "1000000"
+[[env.local.d1_databases]]
+binding = "SUMMARY_DB"
+database_name = "summary-local"
+database_id = "00000000-0000-0000-0000-000000000001"
