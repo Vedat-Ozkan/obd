@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { ScrollView, StyleSheet, View, type DimensionValue, type Text as NativeText, type TextStyle } from "react-native";
 import { Card as PaperCard, Icon, Text as PaperText, TouchableRipple, useTheme } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { FONTS, useTokens } from "./theme.js";
+import { FONTS, useTokens, type Rating } from "./theme.js";
 
 // Each loaded Manrope weight is its own family (App.tsx useFonts: 500, 600, 700, 800); anything else renders as 500.
 const WEIGHT_FAMILY: Partial<Record<string, string>> = { bold: FONTS.bold, "600": FONTS.semibold, "700": FONTS.bold, "800": FONTS.extrabold };
@@ -51,10 +51,11 @@ export function SectionLabel({ children }: { children: string }) {
 }
 
 /** A list row: icon, label (16/600) and optional subtitle, a value or tag on the right, and a chevron when it opens something. At least 60 dp. */
-export function ListRow({ title, subtitle, icon, right, onPress, disabled = false, selected, chevron = !!onPress && selected === undefined }: {
-  title: string; subtitle?: string; icon?: string; right?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean; chevron?: boolean;
+export function ListRow({ title, subtitle, icon, right, onPress, disabled = false, selected }: {
+  title: string; subtitle?: string; icon?: string; right?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean;
 }) {
   const tokens = useTokens();
+  const chevron = !!onPress && selected === undefined;
   const color = disabled ? tokens.muted : tokens.text;
   // A choice row (selected defined) marks the current choice with a check, not colour alone.
   return <TouchableRipple accessibilityRole={selected === undefined ? onPress ? "button" : undefined : "radio"} accessibilityState={{ disabled, ...(selected === undefined ? {} : { checked: selected }) }} disabled={disabled || !onPress} onPress={onPress}
@@ -77,14 +78,14 @@ export function ListRow({ title, subtitle, icon, right, onPress, disabled = fals
  * `percent` fills the bar. Without a value the hero shows `empty` in Manrope instead (for example "No check yet"):
  * JetBrains Mono is for hero numbers only (§Design Type).
  */
-export function Hero({ value, unit, empty, label, caption, percent, onPress, accessibilityLabel }: {
-  value?: string; unit?: string; empty?: string; label: string; caption?: string; percent?: number; onPress?: () => void; accessibilityLabel: string;
+export function Hero({ value, unit, empty, label, caption, percent, tag, children, onPress, accessibilityLabel }: {
+  value?: string; unit?: string; empty?: string; label: string; caption?: string; percent?: number; tag?: ReactNode; children?: ReactNode; onPress?: () => void; accessibilityLabel: string;
 }) {
   const tokens = useTokens();
   return <TouchableRipple accessibilityRole={onPress ? "button" : undefined} accessibilityLabel={accessibilityLabel} disabled={!onPress} onPress={onPress} borderless
     style={[styles.hero, { backgroundColor: tokens.container }]}>
     <View style={styles.heroContent}>
-      <Text style={[styles.caption, { color: tokens.containerMuted }]}>{label}</Text>
+      <View style={styles.row}><Text style={[styles.caption, { color: tokens.containerMuted, flex: 1 }]}>{label}</Text>{tag}</View>
       {value === undefined ? <Text style={[styles.h1, { color: tokens.onContainer }]}>{empty}</Text> : <View style={styles.heroValue}>
         <Text style={[styles.heroNumber, { color: tokens.onContainer }]}>{value}</Text>
         {unit ? <Text style={[styles.heroUnit, { color: tokens.onContainer }]}>{unit}</Text> : null}
@@ -92,9 +93,33 @@ export function Hero({ value, unit, empty, label, caption, percent, onPress, acc
       {percent === undefined ? null : <View style={[styles.bar, { backgroundColor: tokens.track }]}>
         <View style={[styles.barFill, { width: `${String(Math.min(100, Math.max(0, percent)))}%` as DimensionValue, backgroundColor: tokens.accent }]} />
       </View>}
+      {children}
       {caption ? <Text style={[styles.caption, { color: tokens.containerMuted }]}>{caption}</Text> : null}
     </View>
   </TouchableRipple>;
+}
+
+/** A provenance tag (§Design): the signal tier, or a neutral word for anything derived or not read. */
+export function Tag({ tone, label }: { tone: "verified" | "community" | "neutral"; label: string }) {
+  const tokens = useTokens();
+  return <View style={[styles.tag, { backgroundColor: tokens.tag[tone].bg }]}><Text style={[styles.tagText, { color: tokens.tag[tone].fg }]}>{label}</Text></View>;
+}
+
+// §Design Rating chips: the glyph names confirmed in the installed MaterialCommunityIcons map (Stage B record).
+const CHIPS: Record<Rating, { icon: string; word: string }> = {
+  great: { icon: "star-circle", word: "Great" }, good: { icon: "check-circle", word: "Good" }, ok: { icon: "alert-circle-outline", word: "OK" },
+  poor: { icon: "close-circle", word: "Poor" }, "not-rated": { icon: "minus-circle-outline", word: "Not rated" },
+};
+
+/** A rating chip: always an icon and a word, never colour alone. Only the icon wears the status colour; the word wears the text token (text on text tokens). */
+export function Chip({ rating }: { rating: Rating }) {
+  const tokens = useTokens();
+  const { fg, bg } = tokens.rating[rating];
+  const { icon, word } = CHIPS[rating];
+  return <View accessible accessibilityLabel={`Rating: ${word}`} style={[styles.chip, { backgroundColor: bg }]}>
+    <Icon source={icon} size={16} color={fg} />
+    <Text style={[styles.tagText, { color: tokens.text }]}>{word}</Text>
+  </View>;
 }
 
 export function Card({ children }: { children: ReactNode }) {
@@ -108,5 +133,6 @@ const styles = StyleSheet.create({ container: { flex: 1, gap: 8 }, garage: { gap
   h1: { fontSize: 28, fontWeight: "700" }, sectionLabel: { fontSize: 13, fontWeight: "700", letterSpacing: 0.78 }, rowLabel: { fontSize: 16, fontWeight: "600" }, caption: { fontSize: 13 },
   listRow: { minHeight: 60, justifyContent: "center", paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth }, rowText: { flex: 1, gap: 2 },
   hero: { borderRadius: 28 }, heroContent: { padding: 20, gap: 8 }, heroValue: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" }, heroNumber: { fontFamily: FONTS.mono, fontSize: 48, lineHeight: 60 }, heroUnit: { fontFamily: FONTS.mono, fontSize: 24, lineHeight: 32 },
-  bar: { height: 12, borderRadius: 6, overflow: "hidden" }, barFill: { height: 12, borderRadius: 6 } });
+  bar: { height: 12, borderRadius: 6, overflow: "hidden" }, barFill: { height: 12, borderRadius: 6 },
+  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }, tagText: { fontSize: 13, fontWeight: "600" }, chip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 } });
 export { styles };

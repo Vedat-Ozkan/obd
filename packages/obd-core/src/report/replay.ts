@@ -22,4 +22,4 @@ export async function codesReportFromRecording(lines: readonly RecordingLine[]):
 }
 
 export { renderCodesReport } from "./render.js";
-export type { CodesReport } from "./codes.js";
+export type { CodesReport, Tri } from "./codes.js"; export { LOW_COUNTER } from "./codes.js";

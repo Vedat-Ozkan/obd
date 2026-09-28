@@ -152,6 +152,7 @@ Deviations: (1) `deferredShare` is assigned from the console, and an imported ES
 - EAS dev-client build for Stage B's native change (fingerprint `d66ba328…`): `cd apps/mobile && pnpm dlx eas-cli@24.7.0 build --profile development --platform android`, then install it.
 - Stage B phone checks 2–6 in the Stage B report (light and dark screenshots, safe areas with gesture and 3-button nav, fonts, portrait lock). They can run once, after all C stages, together with the Stage D matrix.
 - Stage C1 phone steps 1–9 in the Stage C1 implementer report (Garage → Car navigation and system back, SoC hero in JetBrains Mono, ownership dialog, remove refusal, Add a vehicle, Settings › Beta with consent on switch-on, Privacy note, T2.9 Stage D steps 1–4 and 6 with the switch under Settings). No new build: C1's fingerprint equals B's.
+- Stage C2 phone steps 1–8 in the Stage C2 implementer report (report summary rows and chips, the four section details with charts 4 and 2, Codes with the recently-cleared card and module detail, the AI summary route in `__DEV__`, route resolution across history back-and-forth, light/dark and font scale 2.0). No new build: C2's fingerprint equals B's.
 
 ## Stage B implementer (Claude, 2026-09-28)
 
@@ -331,3 +332,98 @@ Changed (12 files): `apps/mobile/App.tsx`, `src/ui/kit.tsx`, `src/ui/theme.ts`, 
     - **10**: system back on a consent opened by the Beta switch closes it without a decision.
     - **11**: 12 files against the spec's 9. The extra three (theme.ts, ReportScreens.tsx, runFiles.ts) were added by the orchestrator's brief.
 - C1 closed and committed by path.
+
+## Stage C2 implementer (Claude, 2026-09-28)
+
+Base: HEAD `8e060ff`, tree clean (`git status` at start). Repair count 0 of 2.
+
+Changed (8 files, all on the spec's C2 list): `apps/mobile/App.tsx`, `src/app/reportView.ts`, `src/screens/ReportScreens.tsx`, `src/ui/kit.tsx`, `packages/obd-core/src/report/replay.ts` (the sanctioned re-export line); created `src/screens/SectionScreens.tsx`, `src/ui/charts.tsx`, `test/report-view.test.ts`. Plus this record.
+
+- **reportView.ts**: `reportSummary`, `sectionDetail`, `codesView`, `historyPoints` per spec §Interfaces, plus `findReport(reports, { scannedAt, recording })` (carried item 1) and `moduleRows(codes, ecu)` (module detail rows, worded as `renderCodesReport`'s module section). Codes rating, in precedence order (§Decisions 1): any read stored/pending/permanent code → Poor ("Project policy: a reported code is Poor"); verdict `indicated` → Poor ("Project policy (T0.7): the recently-cleared check says yes"); no module's Mode 03/07/0A read succeeded → Not rated ("No module answered a code read"); `not-indicated` → Good; otherwise (`unknown`) → OK. SoC has no rating; cells, capacity and 12 V are Not rated, basis "No threshold yet". Provenance: signal tier for SoC and cells, otherwise neutral with the report's word ("Not measured", "Not assessed", "Not read"). "What this means" = the report's reason string (`health.reason` for cells, `capacity.reason`, `twelveVolt.reason`) plus one fixed sentence each, restating ADR-018 §Evidence and limits (snapshot does not certify health; capacity not measured until a charge log and reviewed estimator exist), T2.2b (cells stay community) and the §Sources row "12 V value is the ATRV adapter supply, not a battery test". SoC has no reason string, so two fixed sentences (ADR-018: a snapshot can show SOC; it does not certify battery health). Cell range: the MIN/AVG/MAX reply whose MIN/MAX reproduce `cellSpread.volts` exactly (the pair `buildBatteryDiagnosis` chose), in mV to 0.1.
+- **Screens**: `ReportSummary` replaces the text-dump `ReportDetail` (SoC hero → State of charge; four rows with value as subtitle, chip and chevron; "Run a new check"; `__DEV__` row "AI summary (development)"). `SectionScreen` (hero with provenance tag, chart 4 inside the Cell balance hero, rating card with "Basis: …", chart 2 on State of charge, readings with tier tags, What this means, Source, Log a charge on Capacity). `CodesScreen` (count hero, rating card, expandable "Recently cleared?" card with the four legs and the `LOW_COUNTER` thresholds sentence, modules list). `ModuleScreen` (per-mode rows).
+- **charts.tsx** (plain Views): `ScanHistory` (0–100 % axis; below two points "Appears after your second check"; latest dot 16 dp vs 10 dp, highlight colour, and a "Latest 69.8%, <date>" legend label), `CellRangeStrip` (min–max fill and avg tick on a mV axis padded by the spread, Min/Avg/Max labels).
+- **kit.tsx**: `Chip` (icon + word + colour; glyphs `star-circle`, `check-circle`, `alert-circle-outline`, `close-circle`, `minus-circle-outline`, all present in the installed glyph map, as are `chip`, `creation-outline`, `chevron-up/down`), `Tag`, `Hero` gains `tag` and `children`. Carried item 2: the unused `ListRow` `chevron` prop is dropped (it is now derived: shown when the row opens something).
+- **App.tsx**: the shared `detail` state is gone. `report`, `section`, `codes`, `module` and `aiSummary` resolve their report with `findReport(historyReports, route)` (carried item 1). `aiSummary` hosts `DevelopmentSummary` unchanged, only under `__DEV__`.
+- **replay.ts**: `export type { CodesReport, Tri } from "./codes.js"; export { LOW_COUNTER } from "./codes.js";`, the spec's §Interfaces line verbatim. The one sanctioned logic-freeze exception.
+
+### Verification (Stage C2)
+
+- Tests first: `test/report-view.test.ts` was written before any C2 function existed. **Failing first**: 13/13 failed (the view functions were not exported). PASS after implementation: 13/13.
+  - E2E: the five Equinox `*.redacted.jsonl` recordings → `batteryDiagnosisFromRecording` → `reportSummary`, `sectionDetail` ×4, `codesView`, `moduleRows`, `historyPoints`; the four synthetic codes fixtures → `codesReportFromRecording` → `codesView`. Expected values are fixed literals per recording, read off `renderBatteryDiagnosis`/`renderCodesReport` output (carried item 3): SoC 69.8 / 69.8 / 85.1 / none / none; cells "3.0 mV" / "3.0 mV" / "2.7 mV" / "Not read" ×2; 12 V "12.7 V" / "13.1 V" / "11.7 V" / "Not recorded" ×2; cell ranges 3928.7/3929.7/3931.7, 3927.8/3928.8/3930.8, 4076.4/4077.2/4079.1 mV; codes OK, OK, Not rated (discovery: no code read), OK, OK; synthetic cleared Poor (cleared basis), conflict OK, permanent Poor (code basis, 1 code), stored Poor (code basis, 2 codes). `max − min` equals `cellSpread.volts × 1000` and min ≤ avg ≤ max per recording. `historyPoints` over [spike-2, spike] gives two points oldest first, over [spike] one point, over all five three points.
+  - Route lookup: Car hero → latest report, then History → the older report, back twice → the latest again (`findReport` over the route, via `back`); an unknown key resolves to nothing.
+  - Artifact `/tmp/x-redesign-report-view.json`, SHA-256 `8de1172f35283b6e276d5b28455170f1d90f335e7da5f091c59896e86a9df910`, byte-identical on two runs: PASS.
+- **Mutations** (each reverted; `cmp` against a backup): code→Poor removed → 2 failed; indicated→Poor removed → 1; not-read→Not rated removed → 1; not-indicated→Good removed → 1; unknown→Good → 6; SoC given a rating → 5; cells rated OK → 5; `findReport` returns the first report → 1; `findReport` ignores scannedAt → 1; history unsorted → 1; cell range from the last reply → 1. PASS.
+- `pnpm check`: PASS, exit 0 (core 239, battery 21, assist 142, mobile 324 = 311 + 13, relay 58, backend/intake/summary 42, Ruff, pytest 1).
+- `pnpm -F mobile typecheck`: PASS. `eslint apps/mobile packages/obd-core/src/report`: PASS.
+- `expo export --platform android` into a `mktemp -d` dir, deleted afterwards: PASS (`AppEntry-e8ba15ba….hbc`, 3.3 MB).
+- Expo fingerprint: `d66ba328b7116976e29d34d6aac3378c2be9ecaf`, equal to Stage B: PASS. No new build.
+- Artifacts deleted, then regenerated by `pnpm check`: codes `01d894f4…` (b and c1), charge-log `fbb90c17…` (b and c1), C2 intake `bfacfd43…`, navigation `817aaefd…17f1`: PASS, unchanged (C2 does not touch `socHero` or `back`). `/tmp/t2.10d-mobile-flow.json`: PASS `4eb12fbc…bc23` on rerun; the full `pnpm check` run flaked once to `6eaa5686…` (the known wall-clock `phoneLatencyMs` line).
+- Logic freeze (spec path list against `8e060ff`): only `packages/obd-core/src/report/replay.ts`, 1 line, the sanctioned re-export: PASS. `test/` has only the new file.
+- Only listed files changed (`git status --short`): PASS (the 8 above plus this record).
+- Phone: NOT RUN (no phone or car in this WSL2 session). Owner steps, on the Stage B dev client through Metro (`cd apps/mobile && pnpm start`), after a battery check on the Equinox (or with saved reports):
+  1. Car hero → Report summary: SoC hero with one decimal; rows Cell balance, Capacity, 12 V battery, Diagnostic codes in that order, each with value, chip (icon + word) and chevron; "Run a new check" opens the check screen.
+  2. Each row's chip reads Not rated for cells, capacity and 12 V; Diagnostic codes reads OK (or Poor/Good/Not rated per the car's codes), and its rating card names the basis.
+  3. State of charge: no rating card; the scan-history chart shows "Appears after your second check" with one saved check, and dots with a larger labelled latest dot after two or more.
+  4. Cell balance: the range strip (Min/Avg/Max labels, mV) inside the hero with a Community tag; readings with Community tags; What this means; Source.
+  5. Capacity: Not measured with a neutral tag; Log a charge opens the check screen with the charge intent. 12 V: the adapter voltage with a "Not assessed" tag.
+  6. Codes: tap "Recently cleared?" to expand the four legs and the policy thresholds; tap a module → its per-mode rows.
+  7. Route resolution: from the Car hero open the latest report, back, open Report history, open an older report, then back twice: the summary shows the latest report again. In `__DEV__`, the "AI summary (development)" row opens T2.10d's summary for that report.
+  8. Light and dark screenshots of each of these screens, and font scale 2.0 (chips and row subtitles wrap, nothing clipped).
+
+### Deviations
+
+1. `findReport` and `moduleRows` are exported from `reportView.ts` beyond spec §Interfaces: the first is carried item 1's route lookup, the second the module detail rows (§Screens 5), kept pure so the E2E artifact covers them.
+2. `sectionDetail`'s hero carries a `tagLabel` (the word on the provenance tag), in addition to the spec's `tag` tone.
+3. The Good codes branch has no recording or fixture (none has all code reads answered with the verdict `not-indicated`). The test derives one in memory from the spike's codes report with the verdict set to `not-indicated`, labelled synthetic with `derivedFrom` in the artifact. No fixture file was added.
+4. "No module answered" is read as "no module's Mode 03/07/0A read succeeded" (the Q1 recommendation's wording). So discovery-targeted, whose modules answered PIDs but no code read, is Not rated, although its recently-cleared verdict is `not-indicated`.
+5. `codeCount` counts distinct codes across modules and modes (codes-stored: P0133 stored and permanent, U0158 pending → 2).
+6. The 12 V hero and summary value use the last observation; the detail adds "Readings in this check" when there is more than one (discovery-targeted has 44).
+7. Module detail rows repeat `render.ts`'s wording in `reportView.ts`, because `render.ts` exports only `renderCodesReport` and obd-core is frozen apart from the re-export.
+
+### Questions for the orchestrator
+
+1. **Chip contrast.** The §Design chip fg/bg pairs are below 4.5:1 for 13 dp text (WCAG 2 relative luminance): light Good 4.28, OK 3.02, Poor 4.35; dark Good 3.75, OK 3.86, Poor 3.56 (Not rated 5.24/5.67). As non-text (the glyph), every pair passes 3:1 (lowest 3.02). The colours are binding, so they are unchanged; the owner may want the Stage D contrast check to decide, or a darker fg step. Tags pass (5.43–6.85).
+2. The scan-history chart and the Car hero read `historyReports`, which `listReports` loads per car; a report route whose report is not in that list (it cannot happen through the UI) falls back to Garage like other stale routes. OK?
+- 2026-09-28, orchestrator, on the C2 report:
+  - Deviations 1–3 accepted.
+  - Q1 (chip label contrast): the label uses the **text token** on the chip's tint, and only the icon takes the status colour (≥ 3:1). This follows the approved mockups and the dataviz "text wears text tokens" rule, so no owner decision is needed. Sent back to the same implementer as a small fix.
+  - Q2: a stale report route falls back to Garage. Accepted.
+
+### C2 addendum (implementer, after the orchestrator's rulings)
+
+- The orchestrator ruled on Q1: the chip label wears the text token. `Chip` in `src/ui/kit.tsx` now draws the word in `tokens.text`, and only the icon uses the status colour. The spec colours are unchanged. WCAG 2 contrast on each chip background:
+
+  | Chip | Light label (#2A302C) | Light icon | Dark label (#D6DCD8) | Dark icon |
+  |---|---|---|---|---|
+  | Great / Good | 11.43 | 4.28 | 9.06 | 3.75 |
+  | OK | 11.61 | 3.02 | 8.87 | 3.86 |
+  | Poor | 10.91 | 4.35 | 9.60 | 3.56 |
+  | Not rated | 11.85 | 5.24 | 9.41 | 5.67 |
+
+  - Every label is at least 4.5:1 and every icon at least 3:1: PASS.
+  - No pure function decides these colours, so no test was added. They are checked in the Stage D screenshots.
+- Q2 was accepted: a stale report route falls back to Garage. Deviations 1–3 were accepted.
+- Re-run after the change:
+  - `pnpm check`: exit 0, mobile tests 324 pass. eslint passes on `kit.tsx`. PASS.
+  - Fingerprint: `d66ba328…`, unchanged. PASS.
+  - Artifacts: `01d894f4…`, `fbb90c17…`, `bfacfd43…`, `4eb12fbc…` (first run, no flake), `817aaefd…` and `8de1172f…` (report view), all unchanged. PASS.
+- 2026-09-28, C2 reviewer: **APPROVE**.
+  - Reproduced: pnpm check PASS (mobile 324); 19 of 24 reviewer mutations killed, the survivors equivalent or covered by the artifact; chip contrast recomputed and matching; chart values are the report's own; logic freeze is only the replay.ts line; fingerprint `d66ba328…`; all artifacts identical, including report view `8de1172f…`.
+  - Deviation 4 (discovery-targeted Not rated) judged sound.
+  - Findings:
+    - (1) Record: the orchestrator ruled only on deviations 1–3 of 7.
+    - (2) Surviving mutants: dropping `module.stored` from codeList; findReport ignoring `recording`.
+    - (3) cellReply re-finds the reply by float equality and could pair min/max with an earlier reply's avg on a partial decode.
+    - (4) Copy: the Capacity source line reads like the value came from a charge log; the Codes caption "5 modules answered" sits beside the basis "No module answered a code read".
+- 2026-09-28, orchestrator:
+  - **Deviations 4–7 accepted:**
+    - 4: discovery-targeted Not rated (reviewer: sound);
+    - 5: the code count is distinct codes;
+    - 6: the 12 V hero shows the last reading;
+    - 7: module rows repeat render.ts wording while obd-core is frozen.
+  - Findings 2–4 are folded into the C3 brief as required items, not a C2 repair round:
+    - a stored-only-code → Poor test;
+    - a findReport negative case that differs only in `recording`;
+    - cellReply selects min/max/avg from one reply by identity, not float equality;
+    - copy: "Not measured; needs a completed charge log" and "5 modules answered; none answered a code read".
+- C2 closed and committed by path.

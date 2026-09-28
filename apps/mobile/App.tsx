@@ -13,6 +13,7 @@ import type { BetaStatus } from "./src/beta/outbox.js";
 import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./src/garage/catalog.js";
 import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { back, type Route } from "./src/app/navigation.js";
+import { findReport } from "./src/app/reportView.js";
 import { batteryHistory, betaOutbox, garageFlow } from "./src/app/runtime.js";
 import { Button, Screen, styles, Text } from "./src/ui/kit.js";
 import { FONTS, paperTheme, usePalette, useScheme, useTokens } from "./src/ui/theme.js";
@@ -21,7 +22,9 @@ import { CarScreen } from "./src/screens/CarScreen.js";
 import { ConsentScreen } from "./src/screens/ConsentScreen.js";
 import { EquinoxConsole } from "./src/screens/ConsoleScreen.js";
 import { GarageScreen } from "./src/screens/GarageScreen.js";
-import { ReportDetail, ReportHistory } from "./src/screens/ReportScreens.js";
+import { DevelopmentSummary } from "./src/screens/DevelopmentSummary.js";
+import { ReportHistory, ReportSummary } from "./src/screens/ReportScreens.js";
+import { CodesScreen, ModuleScreen, SECTION_TITLES, SectionScreen } from "./src/screens/SectionScreens.js";
 import { BetaScreen, PrivacyScreen, SettingsScreen } from "./src/screens/SettingsScreens.js";
 
 /** Top app bar: back arrow below the first route, a wrapping h1 title (never truncated at large font scales), and an optional action. */
@@ -43,7 +46,6 @@ export function App() {
   // X-2026-09-28-app-redesign C1: a plain route stack (ADR-021); the top route is on screen.
   const [stack, setStack] = useState<readonly Route[]>([{ name: "garage" }]);
   const [historyReports, setHistoryReports] = useState<readonly BatteryDiagnosisReport[]>([]);
-  const [detail, setDetail] = useState<BatteryDiagnosisReport>();
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState<number>();
@@ -103,7 +105,7 @@ export function App() {
     catch (cause) { setError(`Battery report history error: ${cause instanceof Error ? cause.message : String(cause)}`); return false; }
   };
   const openCar = async (id: string) => { setError(""); if (await listReports(id)) push({ name: "car", entryId: id }); };
-  // Returns to this car's history if it is already on the stack (the detail's "Back to report history"), else opens it.
+  // Returns to this car's history if it is already on the stack, else opens it.
   const openHistory = async (id: string) => {
     setError("");
     if (!await listReports(id)) return;
@@ -112,14 +114,14 @@ export function App() {
       return at >= 0 ? current.slice(0, at + 1) : [...current, { name: "history", entryId: id }];
     });
   };
-  const openReport = (report: BatteryDiagnosisReport) => { setDetail(report); push({ name: "report", entryId: report.garageVehicleId, scannedAt: report.scannedAt, recording: report.recording }); };
+  const openReport = (report: BatteryDiagnosisReport) => { push({ name: "report", entryId: report.garageVehicleId, scannedAt: report.scannedAt, recording: report.recording }); };
   const openSaved = async (report: BatteryDiagnosisReport) => {
     const reports = await batteryHistory.list(report.garageVehicleId);
     const persisted = reports.find((item) => item.scannedAt === report.scannedAt && item.recording === report.recording);
     if (!persisted) throw new Error("Saved diagnosis could not be reopened from private history.");
     await refreshReports();
     // The saved report replaces the check screen, so back returns to the car, whose hero now shows this check.
-    setHistoryReports(reports); setDetail(persisted);
+    setHistoryReports(reports);
     setStack((current) => [...current.filter((item) => item.name !== "check"), { name: "report", entryId: persisted.garageVehicleId, scannedAt: persisted.scannedAt, recording: persisted.recording }]);
   };
 
@@ -160,8 +162,6 @@ export function App() {
     <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} onBack={pop} onSaved={openSaved} />
   </View>;
 
-  if (route.name === "report" && detail && selectedEntry) return <ReportDetail detail={detail} selectedEntry={selectedEntry} openHistory={openHistory} error={error} />;
-
   const page = (heading: string, body: ReactNode, action?: ReactNode) => <Screen scroll blocks>
     <TopBar title={heading} onBack={stack.length > 1 ? pop : undefined} action={action} />
     {error ? <Text style={{ color: tokens.error }}>{error}</Text> : null}
@@ -171,6 +171,20 @@ export function App() {
 
   if (route.name === "car" && selectedEntry && selectedVehicle) return page(vehicleName, <CarScreen entry={selectedEntry} vehicle={selectedVehicle} reports={historyReports} busy={busy} change={change}
     openReport={openReport} openCheck={(intent) => { push({ name: "check", entryId: selectedEntry.id, intent }); }} openHistory={() => { void openHistory(selectedEntry.id); }} onRemoved={pop} />);
+  // C2: report routes resolve their report from the route's scannedAt and recording, never from shared state.
+  const routeReport = "scannedAt" in route ? findReport(historyReports, route) : undefined;
+  if (routeReport && selectedEntry && selectedVehicle) {
+    const key = { entryId: selectedEntry.id, scannedAt: routeReport.scannedAt, recording: routeReport.recording };
+    const canCheck = canUseEquinoxConsole(selectedVehicle);
+    const openCheck = (intent: "check" | "charge") => { push({ name: "check", entryId: selectedEntry.id, intent }); };
+    if (route.name === "report") return page("Battery report", <ReportSummary report={routeReport} canCheck={canCheck} busy={busy} openSection={(section) => { push({ name: "section", ...key, section }); }}
+      openCodes={() => { push({ name: "codes", ...key }); }} openCheck={() => { openCheck("check"); }} openAiSummary={() => { push({ name: "aiSummary", ...key }); }} />);
+    if (route.name === "section") return page(SECTION_TITLES[route.section], <SectionScreen report={routeReport} section={route.section} history={historyReports} canCheck={canCheck} busy={busy} openCharge={() => { openCheck("charge"); }} />);
+    if (route.name === "codes") return page("Diagnostic codes", <CodesScreen codes={routeReport.codes} busy={busy} openModule={(ecu) => { push({ name: "module", ...key, ecu }); }} />);
+    if (route.name === "module") return page(`Module ${route.ecu}`, <ModuleScreen codes={routeReport.codes} ecu={route.ecu} />);
+    // T2.10d's component, hosted unchanged; the route is only reachable from the development row.
+    if (route.name === "aiSummary" && __DEV__) return page("AI summary (development)", <DevelopmentSummary key={`${routeReport.scannedAt}-${routeReport.recording}`} report={routeReport} />);
+  }
   if (route.name === "history") return page(`Battery reports for car ${route.entryId}`, <ReportHistory historyReports={historyReports} openReport={openReport} />);
   if (route.name === "addVehicle") return page("Add a vehicle", <AddVehicleScreen make={make} setMake={setMake} model={model} setModel={setModel} year={year} setYear={setYear} tag={tag} setTag={setTag} busy={busy} change={change} onAdded={pop} reopenInterest={reopenInterest} interests={state.interests} />);
   if (route.name === "interest") return page("Unsupported vehicle interest", <InterestScreen interest={interest} setInterest={setInterest} interestSaved={interestSaved} setInterestSaved={setInterestSaved} busy={busy} change={change} />);

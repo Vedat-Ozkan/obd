@@ -1,10 +1,9 @@
-import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
-import { ScrollView } from "react-native";
+import type { BatteryDiagnosisReport } from "obd-battery/report";
+import { View } from "react-native";
 import { batteryReportRows } from "../batteryScan.js";
-import type { GarageVehicle } from "../garage/flow.js";
-import { Button, Card, Screen, styles, Text } from "../ui/kit.js";
-import { usePalette, useTokens } from "../ui/theme.js";
-import { DevelopmentSummary } from "./DevelopmentSummary.js";
+import { reportSummary } from "../app/reportView.js";
+import { Button, Card, Chip, Hero, ListRow, Text } from "../ui/kit.js";
+import { usePalette } from "../ui/theme.js";
 
 function ReportHistory({ historyReports, openReport }: { historyReports: readonly BatteryDiagnosisReport[]; openReport: (report: BatteryDiagnosisReport) => void }) {
   const colors = usePalette();
@@ -20,17 +19,28 @@ function ReportHistory({ historyReports, openReport }: { historyReports: readonl
   </>;
 }
 
-function ReportDetail({ detail, selectedEntry, openHistory, error }: { detail: BatteryDiagnosisReport; selectedEntry: GarageVehicle; openHistory: (id: string) => Promise<void>; error: string }) {
-  const colors = usePalette();
-  const tokens = useTokens();
-  return <Screen>
-    <Button title="Back to report history" onPress={() => { void openHistory(selectedEntry.id); }} />
-    {error ? <Text style={{ color: tokens.error }}>{error}</Text> : null}
-    <ScrollView style={[styles.console, { backgroundColor: colors.consoleBackground, borderColor: colors.border }]}>
-      <Text style={[styles.consoleText, { color: colors.consoleText }]}>{renderBatteryDiagnosis(detail)}</Text>
-      {__DEV__ ? <DevelopmentSummary key={`${detail.scannedAt}-${detail.recording}`} report={detail} /> : null}
-    </ScrollView>
-  </Screen>;
+function checkedOn(scannedAt: string): string {
+  return new Date(scannedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export { ReportDetail, ReportHistory };
+/** Report summary (spec §Screens 3): the SoC hero, four rows with value and rating chip, and one primary action. */
+function ReportSummary({ report, canCheck, busy, openSection, openCodes, openCheck, openAiSummary }: {
+  report: BatteryDiagnosisReport; canCheck: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
+  openCodes: () => void; openCheck: () => void; openAiSummary: () => void;
+}) {
+  const summary = reportSummary(report);
+  const soc = summary.soc;
+  const caption = `Checked ${checkedOn(report.scannedAt)}${report.scanStatus === "partial" ? " · partial scan" : ""}`;
+  return <>
+    <Hero label="State of charge" value={soc?.percent.toFixed(1)} unit={soc ? "%" : undefined} empty="Not read" percent={soc?.percent} caption={caption}
+      onPress={() => { openSection("soc"); }} accessibilityLabel={`${soc ? `State of charge ${soc.percent.toFixed(1)} percent` : "State of charge not read"}, ${caption}. Opens state of charge.`} />
+    <View>
+      {summary.rows.map((row) => <ListRow key={row.section} title={row.label} subtitle={row.value} disabled={busy} right={<Chip rating={row.rating.rating} />}
+        onPress={() => { if (row.section === "codes") openCodes(); else openSection(row.section); }} />)}
+      {__DEV__ ? <ListRow icon="creation-outline" title="AI summary (development)" disabled={busy} onPress={openAiSummary} /> : null}
+    </View>
+    <Button title="Run a new check" disabled={busy || !canCheck} onPress={openCheck} />
+  </>;
+}
+
+export { ReportHistory, ReportSummary };
