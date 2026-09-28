@@ -176,8 +176,8 @@ describe("recording → public development flow → HTTP access → local checke
   });
 
   it("same-ID HTTP retry is sent unchanged and rejected without trusting a returned retry summary", async () => {
-    const h = harness((_input, init) => Promise.resolve(Response.json({ kind: "fallback", reason: (JSON.parse(bodyText(init ?? {})) as { requestId: string }).requestId === ids(1) ? "already-requested" : "unavailable" })));
-    const flow = createDevelopmentSummaryFlow({ access: h.access, nextRequestId: () => ids(1) });
+    const h = harness((_input, init) => Promise.resolve(Response.json({ kind: "fallback", reason: (JSON.parse(bodyText(init ?? {})) as { requestId: string }).requestId === ids(1) ? "already-requested" : "unavailable" })), true, undefined, () => ids(1));
+    const flow = h.flow;
     flow.consent(true);
     exactTemplate(await flow.summaryFor(reports[0]));
     const view = await flow.summaryFor(reports[0]);

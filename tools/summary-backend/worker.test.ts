@@ -30,7 +30,15 @@ const rows: unknown[] = [];
 
 function cachedWrangler(): string {
   const cache = join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "pnpm/dlx");
-  for (const entry of readdirSync(cache)) {
+  const prerequisite = "Prerequisite: prepare Wrangler 4.142.0 with pnpm dlx wrangler@4.142.0 --version using the same XDG_CACHE_HOME before tests; tests never install tools.";
+  let entries: string[];
+  try {
+    entries = readdirSync(cache);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(prerequisite);
+    throw error;
+  }
+  for (const entry of entries) {
     for (const version of readdirSync(join(cache, entry))) {
       const base = join(cache, entry, version);
       try {
@@ -39,7 +47,7 @@ function cachedWrangler(): string {
       } catch { /* Not a cached Wrangler tool. */ }
     }
   }
-  throw new Error("Prerequisite: cached Wrangler 4.142.0 is required; no install or substitute store is permitted.");
+  throw new Error(prerequisite);
 }
 
 const env = { ...process.env, WRANGLER_LOG_PATH: join(temp, "wrangler.log"), WRANGLER_SEND_METRICS: "false", CI: "true" };

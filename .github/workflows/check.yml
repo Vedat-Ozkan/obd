@@ -7,6 +7,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      XDG_CACHE_HOME: ${{ runner.temp }}/t210-ci-cache
+      WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
@@ -22,4 +25,6 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: pnpm install --frozen-lockfile
       - run: cd tools/hil-bridge && uv sync --frozen
+      - name: Prepare pinned Wrangler for local D1 tests
+        run: pnpm dlx wrangler@4.142.0 --version
       - run: pnpm check
