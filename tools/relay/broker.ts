@@ -38,9 +38,9 @@ export class RelayBroker implements RelayCommandChannel {
   private idle = false;
 
   constructor(options: BrokerOptions = {}) {
-    // An empty OBD_RELAY_TOKEN (a blank .env line) is unset; it must never become the token.
+    // An empty or whitespace-only OBD_RELAY_TOKEN (a blank .env line) is unset; it must never become the token.
     const configured = process.env.OBD_RELAY_TOKEN;
-    this.token = (configured === "" ? undefined : configured) ?? options.token ?? randomBytes(32).toString("base64url");
+    this.token = (configured?.trim() === "" ? undefined : configured) ?? options.token ?? randomBytes(32).toString("base64url");
     this.root = resolve(options.root ?? process.cwd());
     this.logger = options.logger ?? ((line) => process.stderr.write(line + "\n"));
     this.ws = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 1024 * 1024 });

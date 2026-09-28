@@ -261,7 +261,7 @@ describe("synthetic failure scenarios (one per listed failure)", () => {
 
 describe("relay address parsing (one per listed failure)", () => {
   it("rejects a portless address", () => { expect(parseRelayAddress("ws://host", "tok")).toMatchObject({ ok: false }); });
-  it("rejects userinfo before the host", () => { expect(parseRelayAddress("ws://user:pw@host:8765", "tok")).toMatchObject({ ok: false }); });
+  it("rejects userinfo before the host", () => { expect(parseRelayAddress("ws://user@host:8765", "tok")).toMatchObject({ ok: false }); });
   it("rejects a non-numeric or out-of-range port", () => {
     expect(parseRelayAddress("ws://host:8765x", "tok")).toMatchObject({ ok: false });
     expect(parseRelayAddress("ws://host:0", "tok")).toMatchObject({ ok: false });
@@ -273,6 +273,11 @@ describe("relay address parsing (one per listed failure)", () => {
   it("clears the address field when a rejected paste contains a token", () => {
     expect(parseRelayAddress("ws://host/phone?token=abc", "")).toEqual({ ok: false, clearAddress: true });
     expect(parseRelayAddress("ws://host", "")).toEqual({ ok: false, clearAddress: false });
+    expect(parseRelayAddress("ws://secret@host:8765x", "tok")).toEqual({ ok: false, clearAddress: true });
+  });
+  it("requires / before phone", () => {
+    expect(parseRelayAddress("ws://host:8765phone", "tok")).toMatchObject({ ok: false });
+    expect(parseRelayAddress("ws://host:8765/phone", "tok")).toEqual({ ok: true, base: "ws://host:8765", token: "tok" });
   });
   it("accepts the broker's printed line and takes its token when the field is empty", () => {
     expect(parseRelayAddress("ws://192.168.2.10:8765/phone?token=abc", "")).toEqual({ ok: true, base: "ws://192.168.2.10:8765", token: "abc" });

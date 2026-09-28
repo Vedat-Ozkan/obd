@@ -22,7 +22,8 @@ export async function main(broker = new RelayBroker()): Promise<void> {
     // A disconnect already ended the recording; its cause, not stopRecording's "no recording active", is the failure.
     try { for (const command of sequence) live.push(Buffer.from((await broker.send(command)).bytes).toString("latin1")); }
     catch (error) { await broker.stopRecording().catch(() => undefined); throw error; }
-    await broker.stopRecording();
+    // A disconnect between the last reply and the stop already ended the recording; report it, never PASS.
+    try { await broker.stopRecording(); } catch (error) { throw broker.isConnected() ? error : new Error("relay: disconnected"); }
   } finally { await broker.close(); }
   const raw = live.at(-1) ?? "";
   if (!raw.endsWith(">") || !raw.replace(/\s/g, "").includes("4100")) throw new Error("relay: 0100 did not return prompt-terminated 4100");

@@ -223,10 +223,10 @@ describe("authenticated fake phone, recording, and MCP", () => {
       await broker.close(); if (previous === undefined) delete process.env.OBD_RELAY_TOKEN; else process.env.OBD_RELAY_TOKEN = previous;
     }
   });
-  it("treats an empty OBD_RELAY_TOKEN as unset", async () => {
-    const previous = process.env.OBD_RELAY_TOKEN; process.env.OBD_RELAY_TOKEN = "";
+  it.each(["", "   ", "\t"])("treats an empty or whitespace-only OBD_RELAY_TOKEN %j as unset", async (value) => {
+    const previous = process.env.OBD_RELAY_TOKEN; process.env.OBD_RELAY_TOKEN = value;
     const root = await mkdtemp(join(tmpdir(), "obd-relay-")); const broker = new RelayBroker({ port: 0, root, logger: () => undefined });
-    try { expect(broker.token).not.toBe(""); await rejectedSocket(broker, ""); }
+    try { expect(broker.token.trim()).not.toBe(""); await rejectedSocket(broker, value); }
     finally { await broker.close(); if (previous === undefined) delete process.env.OBD_RELAY_TOKEN; else process.env.OBD_RELAY_TOKEN = previous; }
   });
   it("rejects a symlinked recording directory", async () => {
@@ -322,6 +322,25 @@ describe("authenticated fake phone, recording, and MCP", () => {
       expect(lines.map((line) => line.dir)).toEqual(["meta", "tx", "rx", "tx", "rx", "tx", "meta"]);
       expect(lines.at(-1)).toMatchObject({ note: "phone relay: disconnected" });
     } finally { await close(broker); }
+  });
+  it("hil:smoke reports a disconnect after the last reply as a disconnect", async () => {
+    const { broker, phone, root } = await fixture(false); const dir = join(root, "fixtures/recordings/chevrolet-equinox-ev-2024");
+    // Test-only seam: the window between the last reply and the final stop is otherwise not reproducible. The wrapper delegates to the real method.
+    const realStop = broker.stopRecording.bind(broker); let first = true;
+    broker.stopRecording = async () => { if (first) { first = false; phone.close(); await waitFor(() => !broker.isConnected()); } return realStop(); };
+    const written: string[] = []; const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+    try {
+      const run = hilSmoke(broker); const replies = [banner, "OK\r\r>", "OK\r\r>", "OK\r\r>", "OK\r\r>", "OK\r\r>", raw];
+      const settled = run.then(() => undefined, (error: unknown) => error);
+      for (const [i, reply] of replies.entries()) { await commands(phone, i + 1); phone.started(); phone.result(reply); }
+      const error = await settled;
+      expect(error).toBeInstanceOf(Error); expect((error as Error).message).toBe("relay: disconnected");
+      expect(written.join("")).not.toContain("Replay matched live response.");
+      expect(broker.port()).toBeUndefined();
+      const [file] = await readdir(dir); const lines = parseRecording(readFileSync(join(dir, file), "latin1"));
+      expect(lines.map((line) => line.dir)).toEqual(["meta", ...Array.from({ length: 7 }, () => ["tx", "rx"]).flat(), "meta"]);
+      expect(lines.at(-1)).toMatchObject({ dir: "meta", note: "phone relay: disconnected" });
+    } finally { stdout.mockRestore(); await close(broker); }
   });
 });
 
