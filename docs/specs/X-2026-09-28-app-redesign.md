@@ -191,7 +191,7 @@ No new PID, AT command, header or DTC decode is introduced.
 **Shared by every stage:**
 - [ ] `pnpm check` green, and `pnpm -F mobile test` passes (baseline 304 on 2026-09-28 at `78cd7d6`, plus the stage's new tests).
 - [ ] `cd apps/mobile && pnpm exec expo export --platform android` bundles.
-- [ ] Existing artifacts regenerate byte-identical: the T2.9 codes E2E `eb769cd0…976b` and charge-log E2E `e1bb7fee…5034` (`docs/task-runs/T2.9.md`), and `/tmp/t2.10d-mobile-flow.json` at its current recorded SHA-256 (`docs/task-runs/T2.10.md`).
+- [ ] Existing artifacts regenerate byte-identical: the T2.9 codes E2E `01d894f4…` and charge-log E2E `fbb90c17…` (scrubVersion 2, after X-2026-09-27-power-state-meta), the C2 intake log `bfacfd43…` (`docs/task-runs/T2.9.md`), and `/tmp/t2.10d-mobile-flow.json` at its current recorded SHA-256 (`docs/task-runs/T2.10.md`).
 - [ ] **Logic freeze:** `git diff --stat <stage base> -- apps/mobile/src/{beta,ble,garage}/ apps/mobile/src/{batteryDiagnosisFlow,batteryReports,batteryReportsDocumentStore,batteryScan,capture,chargeLogger,chargeRun,codesScan,console,recording,runFiles,summaryAccess,summaryFlow}.ts packages/obd-battery packages/obd-core/src` is empty. C2's re-export line in `replay.ts` is the one allowed exception.
 - [ ] `pnpm -F mobile exec fingerprint fingerprint:generate` hash: A equals the pre-A baseline, C1–C4 equal B's. A mismatch is FAIL unless the spec lists it.
 - [ ] Only the stage's listed files change (`git status --short` against the recorded baseline).
