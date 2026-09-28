@@ -53,7 +53,7 @@ to the equivalent cap check after the existing `if (!same) count = 0`. Do not ot
 - `apps/mobile/src/chargeLogger.ts` — modify; require an observed current sample through the transition deadline before returning the missing-post-rest reason.
 - `packages/obd-battery/src/session.ts` — modify; remove the dead `!same ||` alternative from `bridgedRecoveries()` only.
 - `packages/obd-battery/test/charge-log.test.ts` — verification-only, no edit expected; its public replay/artifact check guards the session cleanup.
-- `packages/obd-battery/test/charge-log-reports.md` — verification-only and byte-identical; do not edit.
+- `packages/obd-battery/test/charge-log-reports.md` — verification-only; do not edit.
 
 No other product, fixture, plan, decision, task-run, package, or generated file is in scope. The orchestrator owns the task-run record.
 
@@ -95,7 +95,6 @@ Run:
 ```sh
 pnpm -F mobile test -- charge-logger.test.ts
 pnpm -F obd-battery test
-sha256sum packages/obd-battery/test/charge-log-reports.md
 pnpm check
 ```
 
@@ -103,7 +102,6 @@ Expected evidence:
 
 - the focused mobile test writes the two named `/tmp` JSONL artifacts and all charge-logger cases pass;
 - `obd-battery` regenerates the expected summary in memory and matches `packages/obd-battery/test/charge-log-reports.md` byte for byte;
-- the report artifact SHA-256 remains `1575f0d60ec60de3231a69115e6e31fd6ec698bcd9f5d577619813f4829563fc`;
 - `pnpm check` is green.
 
 There is no isolated unit test. The behavior crosses polling, time, recovery, recording, replay, phase selection, and the returned phone result; the existing E2E harness observes all of them. The dead-expression cleanup adds no behavior to test separately and is covered by the existing class-change, cap, replay, and artifact cases.

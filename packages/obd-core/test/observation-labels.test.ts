@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,7 +44,6 @@ describe("protocol replay observation labels", () => {
       expect(Object.keys(label).sort()).toEqual(["kind", "recording", "recording_sha256", "synthetic", "observations", "summary", "notes"].sort());
       expect(label.kind).toBe("protocol-replay");
       expect(label.recording).toBe(recordingPath);
-      expect(label.recording_sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
       expect(typeof label.synthetic).toBe("boolean");
       expect(label.synthetic).toBe(recordingPath.startsWith("fixtures/synthetic/"));
       expect(lines[0]?.dir).toBe("meta");

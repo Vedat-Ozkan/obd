@@ -140,7 +140,7 @@ Use current official documentation for the selected provider when implementing; 
 
 **Deployment:** learn the export format and runtime selected for the actual model. Pure TypeScript evaluation may be sufficient. ONNX/TFLite and native Expo integration are only study requirements if the BM4 spec chooses them. Compare offline and phone outputs on identical inputs, measure phone latency and battery cost, and demonstrate a drift/stale-model check. A TypeScript script on a laptop is useful preparation but does not verify phone behavior.
 
-**Verification:** follow [AGENTS.md](../AGENTS.md) and [WORKFLOW.md](WORKFLOW.md). Prefer recordings through public entry points that produce a checkable artifact: replay summary, report, recording path, or eval output. The reviewer regenerates it. For necessary isolated tests, list failure modes in the spec first, write a test for each, and demonstrate failure before changing implementation. Do not add unit tests after the code to restate its behavior.
+**Verification:** follow [AGENTS.md](../AGENTS.md) and [WORKFLOW.md](WORKFLOW.md). Prefer recordings through public entry points that produce a checkable artifact: replay summary, report, recording path, or eval output. The reviewer reruns it and checks it. For necessary isolated tests, list failure modes in the spec first, write a test for each, and demonstrate failure before changing implementation. Do not add unit tests after the code to restate its behavior.
 
 **Communication:** keep a short evidence note with each artifact: question, source data and consent, method, versions, reproduction command, results with denominators, representative failures, limitations, and PASS/FAIL/NOT RUN. Derive the BM6 write-ups from completed experiments and task records as they become available. You do not need a separate week of portfolio exercises before returning to project work.
 
@@ -307,7 +307,7 @@ The topic blocks above explain the scope; this schedule tells you where to learn
 
 1. [React Native performance overview](https://reactnative.dev/docs/performance) — JS/UI thread work, development versus release performance, and profiling considerations. Connect this to inference and logging without blocking the app.
 2. Revisit [Android foreground services](https://developer.android.com/develop/background-work/services/fgs) for the capture lifecycle and [ML.md](ML.md) for offline/phone parity and drift requirements. Study ONNX/TFLite documentation only if the approved runtime choice requires it.
-3. [AGENTS.md testing rules](../AGENTS.md#testing-rules), [WORKFLOW.md](WORKFLOW.md), and [EVAL.md](EVAL.md) — learn what an independent reviewer must regenerate and which claims require real recordings or hardware.
+3. [AGENTS.md testing rules](../AGENTS.md#testing-rules), [WORKFLOW.md](WORKFLOW.md), and [EVAL.md](EVAL.md) — learn what an independent reviewer must rerun and which claims require real recordings or hardware.
 
 **Build (8–12 hours):** export a small practice estimator or model into a simple TypeScript representation, compare outputs on identical inputs, and save a parity report. Introduce a documented synthetic input shift and demonstrate a stale-data/model signal. Measure on a phone when the app and device are available; otherwise explicitly leave phone latency and battery cost NOT RUN.
 

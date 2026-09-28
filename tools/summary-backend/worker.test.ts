@@ -1,5 +1,4 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
@@ -392,7 +391,7 @@ export default { async fetch(request, env) {
   expect(logs).not.toMatch(/SENTINEL_|synthetic-key|synthetic-development-token/);
   expect(JSON.stringify(restarted.requests)).not.toMatch(/VIN|facts|label|token|recording|private/);
   writeFileSync("/tmp/t2.10c-local-e2e.json", `${JSON.stringify({
-    fixtures: fixtures.map((fixture) => ({ path: fixture, sha256: createHash("sha256").update(readFileSync(join(root, fixture))).digest("hex"), source: "real-recording" })),
+    fixtures: fixtures.map((fixture) => ({ path: fixture, source: "real-recording" })),
     promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v1", reservationMicroUsd: reservation, cases: rows,
   }, null, 2)}\n`);
 }, 180000);

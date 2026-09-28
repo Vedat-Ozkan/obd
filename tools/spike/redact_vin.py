@@ -188,7 +188,6 @@ def main(argv: list[str] | None = None) -> int:
     print(dst)
     print(f"{out.count(chr(10))} lines")
     print("\n".join(entries) if entries else "no VIN found")
-    print(f"sha256 {hashlib.sha256(out.encode('utf-8')).hexdigest()}")
     return 0
 
 

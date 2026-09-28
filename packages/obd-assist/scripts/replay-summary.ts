@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +23,7 @@ export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSu
   };
 }
 
-export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<{ fixture: string; reportDigest: string; promptVersion: "t2.10-v1"; cases: { name: string; kind: string; text: string }[] }> {
+export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<{ fixture: string; promptVersion: "t2.10-v1"; cases: { name: string; kind: string; text: string }[] }> {
   const cases = [];
   for (const item of saved.cases) {
     const caseReport = reportForSavedCase(report, item);
@@ -35,7 +34,7 @@ export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport
     const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
     cases.push({ name: item.name, kind: result.kind, text: result.text });
   }
-  return { fixture: report.recording, reportDigest: createHash("sha256").update(JSON.stringify(report)).digest("hex"), promptVersion: "t2.10-v1", cases };
+  return { fixture: report.recording, promptVersion: "t2.10-v1", cases };
 }
 
 async function main(args: readonly string[]): Promise<void> {

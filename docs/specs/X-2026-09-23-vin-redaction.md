@@ -8,7 +8,7 @@ The originals leave the git index but stay on the owner's disk, gitignored and u
 
 Test-visible outcome:
 - `pnpm -F obd-core test` replays both `.redacted.jsonl` files.
-- `uv run --no-project --with pytest pytest tools/spike` proves that the byte diff is limited to the VIN serial positions and that no form of the serial remains.
+- `uv run --no-project --with pytest pytest tools/spike` proves that the changes are limited to the VIN serial positions and that no form of the serial remains.
 - `git status` shows the originals staged for removal from the index while still present on disk.
 
 Owner decision 2026-09-23: "redact + ADR", with no history rewrite. It is recorded in `docs/specs/T0.4-elm327-session.md` Decisions item 4 and in `docs/task-runs/X-2026-09-23-vin-redaction.md`. This task runs before T0.4 implementation.
@@ -17,7 +17,7 @@ Owner decision 2026-09-23: "redact + ADR", with no history rewrite. It is record
 
 - **No git history rewrite.** Commits up to `c88dffa` still contain the originals, and the owner has accepted that. The ADR says so.
 - **No redaction at source.** The phone console (T0.8), the relay (ADR-013), `hil:smoke`, and the `tools/spike` recorders keep writing raw recordings. The ADR names redaction at source as a follow-up, and nothing here implements it.
-- **No committed or local redacted copies of the discovery recordings.** See Open question 2. `2026-09-23-discovery.jsonl` and `-discovery-targeted.jsonl` stay gitignored and byte-identical. `tools/spike/targeted_watch.json` keeps citing them by SHA-256 and line.
+- **No committed or local redacted copies of the discovery recordings.** See Open question 2. `2026-09-23-discovery.jsonl` and `-discovery-targeted.jsonl` stay gitignored and unedited. `tools/spike/targeted_watch.json` keeps citing them by SHA-256 and line.
 - ~~No change to `targeted_watch.json`, `discover.py`, or `targeted.py`.~~ Superseded by Decision 3: removing DID `17`/`4193` from the tools is in scope. `targeted.py` still does not change.
 - **No redaction of anything but the VIN serial.** That excludes the first 11 VIN characters, ECU names (`090A`), timestamps, and the meta line's `platform`/`bleak` fields. Also excluded are the `F18x` part and serial numbers in the discovery files, which that data would need before it could ever be committed.
 - **No edits to closed specs or task records.** Their citations stay as history under the ADR's mapping rule (below).
@@ -58,7 +58,7 @@ def redact(text: str, source: str, source_sha256: str) -> tuple[str, list[str]]:
 def main(argv: list[str] | None = None) -> int:
     """uv run tools/spike/redact_vin.py <recording.jsonl>
     Writes <stem>.redacted.jsonl beside the input (open mode "x": never overwrites), prints the output path,
-    line count, masked-message entries and the output SHA-256. Exit 0 ok, 1 refused (reason on stderr), 2 usage."""
+    line count and masked-message entries. Exit 0 ok, 1 refused (reason on stderr), 2 usage."""
 ```
 
 ### Behavior of `redact`
@@ -189,14 +189,13 @@ All commands run from the repo root. Tests and the spec never contain the real V
 
   Committed copies, always run (they are tracked):
   7. For each `2026-09-22-spike*.redacted.jsonl`:
-     - The last line is the marker, with `source_sha256` equal to `6c29956dfc2ade5a2f2071f6042120b18747bfc6d0a4b821bf431fb58ba387d5` for spike or `910f0d7551e8984b585211f5fed028a2e6f770ac35853581e31469aeadbc9b7f` for spike-2, `script_version == 1`, and `masked_messages == 2`.
+     - The last line is the marker, with `script_version == 1` and `masked_messages == 2`.
      - `messages()` finds exactly two complete `0902` messages (`18DAF117`, `18DAF128`), each 20 bytes starting `49 02 01`, with payload bytes 14–19 equal to `b"000000"`, and the two payloads equal.
 
   Local-only, `pytest.skip("NOT RUN: original not on disk")` when absent:
-  8. **Spike originals.** `redact(original)` equals the committed copy byte for byte. Only the 24 hex-digit serial positions, in lines 80, 81 and 82, may differ. After redaction they all read `30` (ASCII `0`), and every other byte is identical. The line count is original + 1. The serial learned at runtime from the original appears nowhere in the committed copy: not as ASCII, not as hex in either case, and not in any reassembled payload. The first 11 VIN characters are still present in the `0902` payloads.
+  8. **Spike originals.** Only the 24 hex-digit serial positions, in lines 80, 81 and 82, may differ. After redaction they all read `30` (ASCII `0`), and every other byte is identical. The line count is original + 1. The serial learned at runtime from the original appears nowhere in the committed copy: not as ASCII, not as hex in either case, and not in any reassembled payload. The first 11 VIN characters are still present in the `0902` payloads.
   9. **Discovery originals, in memory only, nothing written.** `redact()` reports 1 masked message for `2026-09-23-discovery.jsonl` and 9 for `-discovery-targeted.jsonl`, all `22 4193` from `18DAF117`. In each message only the 48 hex-digit positions of the four serial windows may differ, and after redaction they all read `30`. Every other byte is identical, and the safety net passes. The run is slow because the files have about 156k lines; mark it NOT RUN if the files are absent.
-- [ ] Before and after, `sha256sum` on both spike originals prints `6c29956d…87d5` and `910f0d75…9b7f` unchanged.
-- [ ] Run `uv run tools/spike/redact_vin.py fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.jsonl` and the same for `-spike-2.jsonl`. Each exits 0 and prints 2 masked messages (`L72 0902 18DAF117`, `L72 0902 18DAF128`) and the output SHA-256. Paste both summaries into the task record. A second run exits 1 because the output exists.
+- [ ] Run `uv run tools/spike/redact_vin.py fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.jsonl` and the same for `-spike-2.jsonl`. Each exits 0 and prints 2 masked messages (`L72 0902 18DAF117`, `L72 0902 18DAF128`). Paste both summaries into the task record. A second run exits 1 because the output exists.
 - [ ] `wc -l` on the redacted copies prints 172 (spike) and 174 (spike-2). `cmp -l <original> <redacted>` lists only byte offsets inside the 24 hex-digit serial positions, with the redacted byte `060` or `063` (octal for ASCII `0` and `3`), and `cmp` reports EOF on the original after byte 8764 (spike) and 8854 (spike-2). Together these show equal-length lines up to the appended marker.
 - [ ] `pnpm -F obd-core test` output lists `replays fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl` and `…-spike-2.redacted.jsonl`, both passing. The local originals and discovery files still pass too.
 - [ ] `pnpm check` is green.
@@ -227,7 +226,7 @@ Open questions:
    - (a) None now. The script is proven on them in memory (test 9), and the originals stay untouched and gitignored.
    - (b) Local `.redacted.jsonl` copies now.
 
-   **Recommendation: (a).** They must stay gitignored anyway, because they also hold `F18x` part and serial numbers (`docs/discovery-2026-09.md` line 5), which VIN masking does not cover. A local copy beside the original adds no privacy. It would also double the local replay time (about 120 s per file) and need a second `EARLY_PROMPT` SHA-256 entry in `recordings.test.ts`, since the copy's hash differs.
+   **Recommendation: (a).** They must stay gitignored anyway, because they also hold `F18x` part and serial numbers (`docs/discovery-2026-09.md` line 5), which VIN masking does not cover. A local copy beside the original adds no privacy. It would also double the local replay time (about 120 s per file) and need a second `EARLY_PROMPT` entry in `recordings.test.ts`.
 3. **DID `17`/`4193` in the targeted watch list.** It returns the full VIN on every rotation cycle, which conflicts with the T2.3a/T2.3b "no VIN reads" decision (`discover.py` `_VIN` blocks only `0902` and `22 F190`). Options:
    - (a) A separate small follow-up removes `["17", "4193", 44429]` from `targeted_watch.json`, adds `"22 4193"` to `_VIN`, and updates `test_targeted.py`'s rotate count from 839 to 838.
    - (b) Fold that into this task.

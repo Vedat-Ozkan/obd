@@ -1,6 +1,4 @@
 // @ts-expect-error Node-only fixture runner; Expo deliberately omits Node globals.
-import { createHash as nodeCreateHash } from "node:crypto";
-// @ts-expect-error Node-only fixture runner; Expo deliberately omits Node globals.
 import { readFileSync as nodeReadFileSync, writeFileSync as nodeWriteFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { importObdbMode22 } from "obd-core/vehicles";
@@ -11,7 +9,6 @@ import { createDevelopmentSummaryFlow, type SummaryView } from "../src/summaryFl
 
 const readFileSync = nodeReadFileSync as { (path: URL, encoding: string): string; (path: URL): Uint8Array };
 const writeFileSync = nodeWriteFileSync as (path: string, text: string) => void;
-const createHash = nodeCreateHash as (algorithm: string) => { update(bytes: Uint8Array): { digest(format: "hex"): string } };
 const bodyText = (init: RequestInit) => { if (typeof init.body !== "string") throw new Error("Expected JSON request body"); return init.body; };
 
 const root = new URL("../../../", import.meta.url);
@@ -56,7 +53,7 @@ beforeAll(async () => {
 });
 afterAll(() => {
   const groups = [
-    ...paths.map((path) => ({ source: "real", path, sha256: createHash("sha256").update(readFileSync(new URL(path, root))).digest("hex"), cases: rows.filter((row) => row.source === path) })),
+    ...paths.map((path) => ({ source: "real", path, cases: rows.filter((row) => row.source === path) })),
     { source: "synthetic", label: "Synthetic HTTP responses and missing lifecycle/error branches; no provider call.", cases: rows.filter((row) => row.source === "synthetic") },
   ];
   writeFileSync("/tmp/t2.10d-mobile-flow.json", `${JSON.stringify({ version: 1, groups }, null, 2)}\n`);

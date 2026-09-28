@@ -43,7 +43,6 @@ No OBD constants or new dependencies. Codex discovery and configuration follow t
 - Independently review workflow behavior for a scaffold task, absent required recordings, material questions, failed reviews, and resuming or transferring a task between Claude and Codex.
 - Confirm the workflow never runs Claude and Codex, or two roles, concurrently on one task; preserves completed valid stages on transfer; and requires the independent reviewer to rerun affected and spec-required checks.
 - Confirm every future handoff updates `docs/task-runs/<task-id>.md`. Its minimum transfer state is last tool and role, current stage and completed stages, spec path, approved decisions, baseline and touched files, exact verification commands and evidence, remaining review findings, repair count, escalation count and reason, current blocker, and next action.
-- Compare SHA-256 hashes of all pre-existing repository files with the pre-edit baseline.
 - `pnpm check`: NOT RUN for this setup change because no package manifest or check script exists yet. This does not waive the gate for subsequent product tasks.
 - Live feature execution and hardware verification: NOT RUN; this request adds workflow files only.
 

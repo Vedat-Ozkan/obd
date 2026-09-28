@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,10 +31,10 @@ function timedOut(lines: ReturnType<typeof parseRecording>, from: number): boole
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-// Known recorder defect, keyed by file SHA-256 -> 1-based tx line whose '>' was recorded on the line just
+// Known recorder defect, keyed by repo-relative path -> 1-based tx line whose '>' was recorded on the line just
 // before it (discover.py wrote tx after the BLE write returned; fixed in T2.3b). Only this line of this exact file.
 const EARLY_PROMPT: Readonly<Record<string, number>> = {
-  "520fc8fba7dd2453474a8471c22dd50dfb946c360cbde46d5d3f1a648e92cc53": 49776, // chevrolet-equinox-ev-2024/2026-09-23-discovery.jsonl
+  "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-23-discovery.jsonl": 49776,
 };
 
 async function replay(lines: RecordingLine[], earlyPrompt?: number): Promise<void> {
@@ -68,8 +67,7 @@ function replayTest(file: string): void {
   // Timeout: discovery recordings hold ~18k tx lines at ~1.15 ms per tx, well above vitest's 5 s default.
   it(`replays ${relative(repoRoot, file)}`, async () => {
     const bytes = readFileSync(file);
-    const hash = createHash("sha256").update(bytes).digest("hex");
-    await replay(parseRecording(bytes.toString("latin1")), EARLY_PROMPT[hash]);
+    await replay(parseRecording(bytes.toString("latin1")), EARLY_PROMPT[relative(repoRoot, file)]);
   }, 120_000);
 }
 

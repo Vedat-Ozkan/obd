@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
@@ -208,7 +207,6 @@ describe("summary recording replay", () => {
     }
     const artifact = {
       fixture: fixturePath,
-      reportDigest: createHash("sha256").update(JSON.stringify(report)).digest("hex"),
       promptVersion: "t2.10-v1",
       cases: results,
     };

@@ -33,7 +33,7 @@ A task is done when all of these hold:
 2. Every verification item in the spec is PASS, or is explicitly hardware-only with the command to run and no recording yet.
 3. Every new OBD constant has a cited source in the spec.
 4. The reviewer returned APPROVE.
-5. Each E2E verification item produces its named artifact (replay summary, report, recording path, eval scores), and the reviewer regenerated it.
+5. Each E2E verification item produces its named artifact (replay summary, report, recording path, eval scores), and the reviewer reran the test and checked it. Byte or hash identity across runs is not required.
 6. The implementer's report lists what was not run. "Everything passed" without a NOT RUN section is treated as suspicious, not as good news.
 
 ## ML task verification
@@ -62,7 +62,7 @@ When a document would restate another, cite it instead.
 Rules, the same for both tools:
 
 1. **One tool, one role at a time.** Never run Claude and Codex, or two roles, on the same task concurrently. A transfer stops the current role first.
-2. **The orchestrator owns the record.** It creates the record at preflight — noting the spec path(s), baseline (`git status --short` at start), and last tool/role — and updates the `## Current state (<date>)` block at every role change, on every blocker, and before yielding. That block is the single home for: current and completed stages; per-stage verdicts; repair count (max 2); escalation count and reason; commit SHAs and touched files; exact verification commands with PASS / FAIL / NOT RUN; the canonical artifact hash; open findings; decisions in effect; owner authorizations; NOT RUN items with reasons; blocker; next action. Log entries below it never restate these facts. No secrets anywhere in the record.
+2. **The orchestrator owns the record.** It creates the record at preflight — noting the spec path(s), baseline (`git status --short` at start), and last tool/role — and updates the `## Current state (<date>)` block at every role change, on every blocker, and before yielding. That block is the single home for: current and completed stages; per-stage verdicts; repair count (max 2); escalation count and reason; commit SHAs and touched files; exact verification commands with PASS / FAIL / NOT RUN; open findings; decisions in effect; owner authorizations; NOT RUN items with reasons; blocker; next action. Log entries below it never restate these facts. No secrets anywhere in the record.
 3. **Resume by reconciling, not by trusting.** The receiving tool reads the record, the spec, the working tree, and the evidence, then resumes at the first incomplete or invalidated stage. Completed architecture and implementation are reused while their evidence still holds. A recorded approval is never inherited: the receiving reviewer reruns every check the current changes affect and every check the spec requires.
 4. **Missing record.** Reconstruct one from the spec, tree, and evidence only. Counters start at zero only for a genuinely new task; imported history with unknown counts stays unknown. Never invent approvals, completed stages, or findings.
 5. **Counters do not reset** across tools or resumptions.

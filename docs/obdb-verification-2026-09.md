@@ -33,7 +33,7 @@ Use the **laptop and Veepeak OBDCheck BLE** that produced the first spike. The c
    uv run tools/spike/redact_vin.py "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-spike.jsonl"
    ```
 
-   Replace the example date and suffix with the exact printed path. The tool writes a *separate* `.redacted.jsonl` copy, prints its SHA-256 and a mask summary, and refuses to overwrite. Keep the original untouched and local. If redaction refuses, stop the handoff and report the error; never send the original.
+   Replace the example date and suffix with the exact printed path. The tool writes a *separate* `.redacted.jsonl` copy, prints a mask summary, and refuses to overwrite. Keep the original untouched and local. If redaction refuses, stop the handoff and report the error; never send the original.
 2. From the repo root, replay **only the redacted copy**:
 
    ```sh
@@ -41,7 +41,7 @@ Use the **laptop and Veepeak OBDCheck BLE** that produced the first spike. The c
    ```
 
    Replace the example date and suffix with the redactor's actual output path. If the `pnpm replay` wrapper hits the known `tsx` IPC `EPERM` in this environment, use the same script with `node --import tsx packages/obd-core/scripts/replay.ts "<actual redacted path>"`. The replay must show the three `DACB` reads, their decoded values when the car answers, and a summary; `33E5` may still say `nodata`.
-3. Send back the **redacted path or redacted file only**, its SHA-256, the dash SOC/local time/Ready-Park/charging note, and any error rows. The reviewer will fill line numbers, compare readings, rerun replay, and decide individual tiers. Do not share the raw file, VIN, plate, or a dashboard photo containing identifiers. Only the tool-produced `.redacted.jsonl` copy may be committed under `fixtures/recordings/` (ADR-017). If the raw original lives on a different laptop, copy the original to a local private location for redaction; do not put it in a public issue, PR, or chat.
+3. Send back the **redacted path or redacted file only**, the dash SOC/local time/Ready-Park/charging note, and any error rows. The reviewer will fill line numbers, compare readings, rerun replay, and decide individual tiers. Do not share the raw file, VIN, plate, or a dashboard photo containing identifiers. Only the tool-produced `.redacted.jsonl` copy may be committed under `fixtures/recordings/` (ADR-017). If the raw original lives on a different laptop, copy the original to a local private location for redaction; do not put it in a public issue, PR, or chat.
 
 ## Evidence worksheet
 
@@ -58,7 +58,7 @@ Use the **laptop and Veepeak OBDCheck BLE** that produced the first spike. The c
 
 For each new run, add a row here without altering the recording:
 
-| Redacted recording path and SHA-256 | Local start time | Dash SOC | Vehicle state / charging | Ambient | `27C6` / `2AF5` / `2B43` / `33E5` line numbers and status | Replay artifact SHA-256 |
+| Redacted recording path | Local start time | Dash SOC | Vehicle state / charging | Ambient | `27C6` / `2AF5` / `2B43` / `33E5` line numbers and status | Replay output |
 |---|---|---|---|---|---|---|
 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
 

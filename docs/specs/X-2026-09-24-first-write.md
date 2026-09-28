@@ -11,7 +11,7 @@ What a test sees when this is done:
 - On a fresh `ConsoleSession` in the app, `send("0100")` rejects with `ELM state unknown; send ATZ or ATI first`. No tx line is recorded and nothing is written. `ATI` is now accepted.
 - A plain capture whose `ATZ` is answered `?` stops after one command with that reason. It no longer writes `ATE0`…`03`.
 - `init()` on a fresh session whose `ATZ` is answered `STOPPED` rejects with `{kind:"init", command:"ATZ"}`. The only write is `ATZ`. A second `init()` waits for the late `?>` and then completes.
-- Every `pnpm replay`, `pnpm -s codes-report`, and profile-scan-replay output is byte-identical to the pre-change tree. The codes-scan E2E over the spike and phone recordings passes unchanged.
+- Every `pnpm replay`, `pnpm -s codes-report`, and profile-scan-replay output is unchanged from the pre-change tree. The codes-scan E2E over the spike and phone recordings passes unchanged.
 - `docs/ELM327.md` §Write safety states the rule and carries the six T0.7 A2 re-review follow-ups (`docs/task-runs/T0.7.md`).
 
 ## Non-goals

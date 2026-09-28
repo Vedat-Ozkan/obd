@@ -16,7 +16,7 @@ Procedure:
 5. Check the hard rules (2, 4, 5, 7, 8).
 6. Check scope: every changed hunk should trace to the spec. Unrelated improvements are a finding (ask for them to be reverted, not praised).
 7. Check simplicity: could this be half the code? Single-use abstractions, speculative options, and error handling for impossible cases are findings.
-8. Check tests: do they exercise the behavior through a fixture, or do they mock the thing under test? A test that mocks the ELM327 response parser to test the parser is a finding. So is a unit test that restates the implementation, that repeats what an E2E replay already catches, or that covers no failure the spec lists; ask for it to be deleted. Regenerate each E2E artifact the spec names and compare it.
+8. Check tests: do they exercise the behavior through a fixture, or do they mock the thing under test? A test that mocks the ELM327 response parser to test the parser is a finding. So is a unit test that restates the implementation, that repeats what an E2E replay already catches, or that covers no failure the spec lists; ask for it to be deleted. Rerun each E2E test the spec names and check its artifact shows what the spec says (no byte or hash comparison).
 
 Output, and nothing else:
 

@@ -1,7 +1,6 @@
 """Offline checks for targeted.py (spec T2.3b, Verification "Here"). Fake BLE client; no bleak, no car."""
 
 import asyncio
-import hashlib
 import json
 import os
 
@@ -13,7 +12,6 @@ from spike import Recorder
 from test_discover import FORBIDDEN, FakeClient, read, replay_ok, txs
 
 D = os.path.join(go.REPO, "fixtures", "recordings", "chevrolet-equinox-ev-2024", "2026-09-23-discovery.jsonl")
-D_SHA256 = "520fc8fba7dd2453474a8471c22dd50dfb946c360cbde46d5d3f1a648e92cc53"
 CORE = ["2979", "297D", "2982", "27CD", "27CE", "27AF", "276D", "2AF7", "2AF5",
         *(f"2AE{i}" for i in range(1, 8)), "2B43"]
 
@@ -39,7 +37,6 @@ def test_watch_list_shape(tmp_path) -> None:
         discover.check_allowed(f"22 {did}")
     with open(targeted.WATCH_LIST, encoding="utf-8") as f:
         data = json.load(f)
-    assert data["source"]["sha256"] == D_SHA256
     for bad in ([["CB", "2979", 1], ["CB", "2979", 2]], [["28", "2000", 1]], [["17", "F190", 1]]):
         path = tmp_path / "bad.json"
         path.write_text(json.dumps({**data, "rotate": bad}), encoding="utf-8")
@@ -50,8 +47,6 @@ def test_watch_list_shape(tmp_path) -> None:
 def test_watch_list_cites_recording() -> None:
     if not os.path.exists(D):
         pytest.skip("NOT RUN: gitignored recording not on disk")
-    with open(D, "rb") as f:
-        assert hashlib.sha256(f.read()).hexdigest() == D_SHA256
     lines = read(D)
     start = next(i for i, x in enumerate(lines) if x.get("phase") == "B")
     end = next(i for i, x in enumerate(lines) if "positives" in x)

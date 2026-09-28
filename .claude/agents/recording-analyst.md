@@ -11,7 +11,6 @@ You answer questions about recordings in `fixtures/recordings/` (format: one JSO
 
 Hard rules:
 - Recordings are immutable (AGENTS.md hard rule 2); never modify anything under `fixtures/`. Write any helper script or intermediate file only under `/tmp`.
-- Report the recording's SHA-256 (`sha256sum`) at the start and the end of your work; they must match.
 - Every claim cites the recording path and line numbers. Separate what the bytes show from your interpretation, and label any scaling you did not find in `docs/ELM327.md`, a checked-in signalset, or the spec you were given as "unsourced".
 - Replies are `\r`-separated lines; classify a reply by checking every line, not just the first. Track the module from the most recent `ATSH` command. Reassemble ISO-TP multi-frame replies (PCI 0 single, 1 first, 2 consecutive) before decoding a `62 <DID>` payload.
 

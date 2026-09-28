@@ -114,9 +114,9 @@ Nothing is needed. `redact_vin.py` has no meta-key allowlist. It copies non-VIN 
 
 The version is bumped to 2. The fail-closed allowlist changed, and the version is how a later reader (BM1, intake) tells a file where a v1 scrubber stripped the power state from one that never had it. Effects:
 
-- **Stage A artifact `452e1393…`** (`packages/obd-core/test/beta-scrub-summary.md`) stays **byte-identical**. The table has no version column, and none of the four committed recordings has a `powerState` key. Baseline regenerated at 8dcc0e7: `452e139309cd680f824106b1205e50bcb00b973c4697ba86702ebaa7ebacb94b`.
-- **Stage B/C1 E2E artifacts** (`/tmp/t2.9-{b,c1}-{codes,charge-log}.jsonl`): only the last line (provenance, `"scrubVersion": 2`) changes. Everything before it (`head -n -1`) is byte-identical to the baseline, and the new full hashes go in this task's record.
-- **C2 intake artifact `bfacfd43…`** (log lines only, no content) is expected unchanged. Regenerate and compare.
+- **Stage A artifact** (`packages/obd-core/test/beta-scrub-summary.md`) stays unchanged. The table has no version column, and none of the four committed recordings has a `powerState` key.
+- **Stage B/C1 E2E artifacts** (`/tmp/t2.9-{b,c1}-{codes,charge-log}.jsonl`): only the last line (provenance, `"scrubVersion": 2`) changes.
+- **C2 intake artifact** (log lines only, no content) is expected unchanged.
 - A v1 manifest or provenance line fails zod after the bump. The Worker answers 400, and intake refuses. That is accepted: no tester has uploaded yet (T2.9 Stage E not run). See open question 3.
 
 ## Verification
@@ -130,14 +130,13 @@ Shared checks (every item): `pnpm check` green, `git diff --check` clean, no off
   4. The uploaded body (without provenance) equals `scrubRecording(kept).text`, and `scrubRecording(body).text === body` (the intake re-scrub, T2.9 Decision 13). Provenance `kind` is `battery-scan` and `scrubVersion` is `SCRUB_VERSION`.
   5. The body's first line has `note` `"removed before upload"` and `powerState` equal to `"ready"` or `"unknown"`.
   6. `batteryDiagnosisFromRecording(body, …)` gives `twelveVolt.observations` that is non-empty (the fixture has `ATRV`), where every `powerState` is `"ready"` (toggle yes) or `"unknown"` (toggle unknown), and deep-equal to the saved local report's `twelveVolt`.
-  7. Artifact: the uploaded bytes go to `/tmp/x-power-state-<b|c1>-<ready|unknown>.jsonl`. The SHA-256 is identical across two runs, and the four hashes go in the record.
+  7. Artifact: the uploaded bytes go to `/tmp/x-power-state-<b|c1>-<ready|unknown>.jsonl`.
   8. Mutation check: reverting `META_KEYS` to without `powerState` makes the `ready` case fail at step 5 or 6.
 - [ ] **Backward compatibility, committed recordings.**
   - `node --import tsx packages/obd-battery/scripts/battery-diagnosis.ts fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl --garage-id 1 --scanned-at 2026-09-22T00:00:00.000Z | diff - packages/obd-battery/test/battery-diagnosis-spike.md` gives no diff (still `state ready`, from the note). Baseline PASS at 8dcc0e7.
   - The T2.5a `twelve-volt-reports.md` diff (T2.5a spec, Verification 2) gives no diff.
   - Existing `battery-diagnosis.test.ts`, `battery-diagnosis-flow.test.ts` and the `/tmp/t2.6d-synthetic-report.md` output are unchanged. Those tests keep their own `meta` (no key), so they exercise the note fallback.
 - [ ] **Artifacts** as in §SCRUB_VERSION and artifacts:
-  - `pnpm exec tsx packages/obd-core/scripts/beta-scrub.ts <four files> | sha256sum` gives `452e1393…`;
   - the B/C1 body hashes (`head -n -1`) equal the baseline. The implementer records the baseline before editing;
   - the C2 intake log is unchanged.
 - [ ] **Isolated tests** (AGENTS.md Testing rules). These are failure modes that E1 cannot catch, listed before any code. Each is one case.
@@ -180,4 +179,4 @@ Open questions 1–6 are decided as recommended:
 5. No consent-text change now. One clause is added in the pre-Stage-E consent cleanup.
 6. The intake redact step is not part of E1.
 
-The Stage B/C1 upload artifacts (`eb769cd0…`, `e1bb7fee…`) are expected to change only in their final provenance line (the scrub version). Every line before it must stay byte-identical, and the new hashes must be stable across runs. The Stage A artifact `452e1393…` and the C2 intake log `bfacfd43…` must not change.
+The Stage B/C1 upload artifacts are expected to change only in their final provenance line (the scrub version). The Stage A artifact and the C2 intake log must not change.

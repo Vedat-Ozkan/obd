@@ -45,13 +45,9 @@ export WRANGLER_SEND_METRICS=false
 export CI=true
 pnpm dlx wrangler@4.142.0 --version
 pnpm vitest run tools/summary-backend/worker.test.ts
-cp /tmp/t2.10c-local-e2e.json /tmp/t2.10c-local-e2e-first.json
-pnpm vitest run tools/summary-backend/worker.test.ts
-diff -u /tmp/t2.10c-local-e2e-first.json /tmp/t2.10c-local-e2e.json
-sha256sum /tmp/t2.10c-local-e2e.json
 pnpm -F obd-assist test
 pnpm check
 git diff --check
 ```
 
-The artifact contains local immutable recording paths/digests, synthetic case categories, checked display, provider call counts and durable integer metadata. It excludes runtime ports, temp paths, IDs, dates, facts and credentials. Independent review must regenerate it. Live phone, ads/SSV, production entitlement and C2 evaluation remain separate gates.
+The artifact contains local immutable recording paths, synthetic case categories, checked display, provider call counts and durable integer metadata. It excludes runtime ports, temp paths, IDs, dates, facts and credentials. Independent review must rerun it and check it. Live phone, ads/SSV, production entitlement and C2 evaluation remain separate gates.

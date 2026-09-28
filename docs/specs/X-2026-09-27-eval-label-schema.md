@@ -62,7 +62,7 @@ No other implementation file may change. The spec itself is authored before impl
 | Generated label uses `method: "synthetic-generator"`, both `capacity_ah` and `capacity_kwh`, `condition: "fault"`, `synthetic: true`, and the `windows`, `weak_group`, and `planted` extensions | `fixtures/synthetic/charge-log-rested.label.json` |
 | Label values and extension objects are deterministically produced by the fixture generator | `packages/obd-battery/scripts/synthetic-charge-log.ts`, `generate()` label object |
 | T2.4 test treats Ah/kWh as generator truth, reads extensions through a test-local TypeScript interface, and does not run a common runtime label validator | `packages/obd-battery/test/charge-log.test.ts` `Label` interface and synthetic charge-log cases |
-| Synthetic fixture/label creation, byte-identical regeneration, and generator-truth intent | `docs/specs/T2.4-charge-logger.md` Files and Verification > Stage A |
+| Synthetic fixture/label creation and generator-truth intent | `docs/specs/T2.4-charge-logger.md` Files and Verification > Stage A |
 | Integrated-current result is BMS-SOC-referenced and not independent; BMS energy/SOC is a comparison rather than a reference | `docs/specs/T2.4-charge-logger.md` Goal and Estimates and error budgets; `docs/DECISIONS.md` ADR-016 |
 | Existing planned common label shape, synthetic/real separation, and limits on health claims | `docs/EVAL.md` Fixtures, Scoring, and What the eval cannot claim |
 | Current fixture inventory and explicit planned/unimplemented common-schema boundary | `fixtures/README.md` Directory and tracked inventory, Protocol replay observation labels, and Future session label schema |
