@@ -60,15 +60,15 @@ function checkClaim(text: string, cited: readonly SummaryFact[], allFactIds: Rea
   }
 }
 
-/** Validate a structured response only against the projection sent to a provider. */
-export function checkSummaryFacts(request: SummaryRequest, response: unknown): StructuredSummary {
-  const parsedRequest = requestSchema.parse(request);
+/** Validate a structured response only against the facts the caller actually supplied. */
+export function checkFacts(supplied: readonly SummaryFact[], response: unknown): StructuredSummary {
+  const parsedFacts = z.array(factSchema).parse(supplied);
   const parsedSummary = summarySchema.parse(response);
   // Boundary validation may trim strings; it must not authorize altered fact spellings.
-  const facts = new Map<string, SummaryFact>(parsedRequest.facts.map((fact, index) => [fact.id, {
-    ...fact, label: request.facts[index].label, value: request.facts[index].value, unit: request.facts[index].unit,
+  const facts = new Map<string, SummaryFact>(parsedFacts.map((fact, index) => [fact.id, {
+    ...fact, label: supplied[index].label, value: supplied[index].value, unit: supplied[index].unit,
   }]));
-  if (facts.size !== parsedRequest.facts.length) throw new Error("summary request has duplicate fact identifiers");
+  if (facts.size !== parsedFacts.length) throw new Error("summary request has duplicate fact identifiers");
   for (const claim of parsedSummary.claims) {
     if (new Set(claim.factIds).size !== claim.factIds.length) throw new Error("summary claim repeats a citation");
     const cited = claim.factIds.map((id) => facts.get(id));
@@ -77,4 +77,11 @@ export function checkSummaryFacts(request: SummaryRequest, response: unknown): S
     checkClaim(claim.text, knownFacts, new Set(facts.keys()));
   }
   return parsedSummary;
+}
+
+/** Validate a structured response only against the projection sent to a provider. */
+export function checkSummaryFacts(request: SummaryRequest, response: unknown): StructuredSummary {
+  requestSchema.parse(request);
+  // Raw facts, not the parsed copy: boundary trimming must not authorize altered spellings.
+  return checkFacts(request.facts, response);
 }
