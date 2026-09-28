@@ -223,3 +223,15 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 **Why.** The owner does not want users to bring API keys. At current listed DeepSeek prices, a short summary may cost a fraction of a cent, but actual token use, ad fill, ad revenue, backend cost and model faithfulness must be measured. Subscription access with a monthly allotment is a possible later product with recurring value; T2.10 does not implement payments. The offline template retains the useful battery evidence when consent, ads, network or the provider is unavailable.
 
 **Amends ADR-006, ADR-007, ADR-009, ADR-012 and ADR-019.** T2.10 moves the thin LLM proxy from Phase 3 into Phase 2 and replaces its Anthropic/BYOK default and Anthropic-specific cache-hit acceptance metric with a DeepSeek candidate and provider-neutral usage evidence. ADR-019's beta upload backend remains separate, with separate consent and credentials. A paid subscription, production pricing and a production cost ceiling remain Phase 3 decisions. No subscription usage, Claude login token, or user API key is used as a product credential.
+
+## ADR-021: Android first, iOS-ready (2026-09-28, Accepted)
+
+**Decision.** Android is the only built and tested target until Phase 3. UI code follows Material 3 and Android Core app quality, and follows Apple's Human Interface Guidelines where the platforms differ. Platform-only APIs stay behind small interfaces: `foregroundService`, and the `SaveTargets`/`StreamTargets` folder picker. The navigation stack is plain state; native-stack navigation for the iOS back-swipe is revisited when iOS work starts.
+
+**Why.** The owner wants iOS later. Keeping the UI cross-platform, and keeping Android-only features behind interfaces, makes iOS a second implementation of a few adapters rather than a rewrite. Known iOS gaps to spike before promising parity:
+- background BLE for multi-hour charge logs;
+- the folder picker (Files or share sheet instead);
+- background relay mode;
+- App Tracking Transparency and a privacy manifest if rewarded ads ship (ADR-020).
+
+**Amends ADR-001.** Build and test stay Android-only; the iOS-readiness rules above apply to new UI work from the X-2026-09-28 redesign on.
