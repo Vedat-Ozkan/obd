@@ -35,7 +35,7 @@ For the later owner phone artifact `/tmp/t2.10d-local-phone.json`, save only con
 
 Cached Wrangler **4.142.0** is required. The test discovers that exact version in the configured pnpm cache and never installs tools. It creates a temporary Worker entry whose fetch is entirely synthetic and cannot reach OpenRouter, running actual D1 for every HTTP replay/race/credit/restart case. Synthetic responses are not hardware or live-provider evidence.
 
-On first use, prepare the pinned tool before running tests. Preparation may install it; test execution may not. Preparation and all gates must use the same `XDG_CACHE_HOME`. CI shares `${{ runner.temp }}/t210-ci-cache` across the job. To reproduce a fresh cache locally, run the following in one shell; the temporary store keeps downloads under the same writable prefix:
+On first use, prepare the pinned tool before running tests. Preparation may install it; test execution may not. Preparation and all gates must use the same `XDG_CACHE_HOME`. CI initializes `$RUNNER_TEMP/t210-ci-cache` through `$GITHUB_ENV` before tool setup. To reproduce a fresh cache locally, run the following in one shell; the temporary store keeps downloads under the same writable prefix:
 
 ```bash
 T210_CI_ROOT=$(mktemp -d /tmp/t210-ci-XXXXXX)

@@ -8,9 +8,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     env:
-      XDG_CACHE_HOME: ${{ runner.temp }}/t210-ci-cache
       WRANGLER_SEND_METRICS: 'false'
     steps:
+      - name: Initialize shared tool cache
+        run: printf 'XDG_CACHE_HOME=%s/t210-ci-cache\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
