@@ -12,9 +12,9 @@ const sequence = ["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "0100"];
 function pathForToday(root: string): string { const date = new Date().toLocaleDateString("en-CA"); const base = `fixtures/recordings/chevrolet-equinox-ev-2024/${date}-relay-smoke`; let n = 0; while (existsSync(resolve(root, `${base}${n === 0 ? "" : `-${String(n)}`}.jsonl`))) n++; return `${base}${n === 0 ? "" : `-${String(n)}`}.jsonl`; }
 // The broker is injectable so the failure path can be tested with a fake phone (server.test.ts).
 export async function main(broker = new RelayBroker()): Promise<void> {
-  const until = Date.now() + 60_000;
+  const until = Date.now() + 300_000;
   while (!broker.isConnected() && Date.now() < until) await new Promise((resolveWait) => setTimeout(resolveWait, 100));
-  if (!broker.isConnected()) { await broker.close(); throw new Error("relay: no authenticated phone after 60 seconds"); }
+  if (!broker.isConnected()) { await broker.close(); throw new Error("relay: no authenticated phone after 5 minutes"); }
   const path = pathForToday(broker.root);
   const live: string[] = [];
   try {
