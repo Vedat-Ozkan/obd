@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from "react";
 import { useColorScheme } from "react-native";
 import { configureFonts, MD3DarkTheme, MD3LightTheme, type MD3Theme } from "react-native-paper";
+import type { Rating } from "obd-battery/rating";
 import type { ThemePreference } from "./text.js";
 
 export type Scheme = "light" | "dark";
-export type Rating = "great" | "good" | "ok" | "poor" | "not-rated";
+export type { Rating };
 export interface Tokens {
   bg: string; surface: string; container: string; onContainer: string; containerMuted: string; track: string;
   text: string; muted: string; outline: string; divider: string; accent: string; onAccent: string;

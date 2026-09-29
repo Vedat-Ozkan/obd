@@ -1,10 +1,10 @@
 import type { BatteryDiagnosisReport, ObservedBatterySignal } from "obd-battery/report";
+import { codesRating, codesRead, distinctCodes, reportRatings, type RatingView } from "obd-battery/rating";
 import { LOW_COUNTER, type CodesReport, type Tri } from "obd-core/report";
-import type { Rating } from "../ui/theme.js";
 
 type Section = "soc" | "cells" | "capacity" | "twelveVolt";
 type Module = CodesReport["modules"][number];
-export interface RatingView { rating: Rating; basis: string }
+export type { RatingView };
 
 /**
  * The SoC hero: the latest EQUINOXEV_SOC (22 2B43) reading with one decimal, as in the approved mockups
@@ -20,8 +20,6 @@ export function findReport(reports: readonly BatteryDiagnosisReport[], key: { sc
   return reports.find((report) => report.scannedAt === key.scannedAt && report.recording === key.recording);
 }
 
-// Spec §Design Rating rules: cells, capacity and 12 V have no threshold yet.
-const NOT_RATED: RatingView = { rating: "not-rated", basis: "No threshold yet" };
 // Report precision, as renderBatteryDiagnosis prints it.
 const num = (value: number) => String(Math.round(value * 10000) / 10000);
 const UNITS: Partial<Record<string, string>> = { percent: "%", volts: "V" };
@@ -54,17 +52,6 @@ const lastTwelveVolt = (report: BatteryDiagnosisReport) => report.twelveVolt.obs
 function codeList(module: Module): string[] {
   return [module.stored, module.pending, module.permanent].flatMap((read) => read.status === "read" ? read.dtcs : []);
 }
-const distinctCodes = (modules: readonly Module[]) => [...new Set(modules.flatMap(codeList))];
-const codesRead = (modules: readonly Module[]) => modules.some((m) => [m.stored, m.pending, m.permanent].some((read) => read.status === "read"));
-
-/** Spec §Decisions 1 (owner, 2026-09-28): the codes rating, in this order of precedence. */
-function codesRating(codes: CodesReport): RatingView {
-  if (distinctCodes(codes.modules).length > 0) return { rating: "poor", basis: "Project policy: a reported code is Poor" };
-  if (codes.recentlyCleared.verdict === "indicated") return { rating: "poor", basis: "Project policy (T0.7): the recently-cleared check says yes" };
-  if (!codesRead(codes.modules)) return { rating: "not-rated", basis: "No module answered a code read" };
-  if (codes.recentlyCleared.verdict === "not-indicated") return { rating: "good", basis: "Project policy: no codes reported, and the recently-cleared check says no" };
-  return { rating: "ok", basis: "Project policy: no codes reported, and whether codes were cleared recently is unknown" };
-}
 
 function codesValue(codes: CodesReport): string {
   const count = distinctCodes(codes.modules).length;
@@ -75,13 +62,14 @@ function codesValue(codes: CodesReport): string {
 /** Report summary (spec §Screens 3): the SoC hero and four rows in fixed order. */
 export function reportSummary(report: BatteryDiagnosisReport): { soc: ReturnType<typeof socHero>; rows: readonly { section: "cells" | "capacity" | "twelveVolt" | "codes"; label: string; value: string; rating: RatingView }[] } {
   const twelve = lastTwelveVolt(report);
+  const ratings = reportRatings(report);
   return {
     soc: socHero(report),
     rows: [
-      { section: "cells", label: "Cell balance", value: report.cellSpread ? `${(report.cellSpread.volts * 1000).toFixed(1)} mV` : "Not read", rating: NOT_RATED },
-      { section: "capacity", label: "Capacity", value: "Not measured", rating: NOT_RATED },
-      { section: "twelveVolt", label: "12 V battery", value: twelve ? `${String(twelve.volts)} V` : "Not recorded", rating: NOT_RATED },
-      { section: "codes", label: "Diagnostic codes", value: codesValue(report.codes), rating: codesRating(report.codes) },
+      { section: "cells", label: "Cell balance", value: report.cellSpread ? `${(report.cellSpread.volts * 1000).toFixed(1)} mV` : "Not read", rating: ratings.cells },
+      { section: "capacity", label: "Capacity", value: "Not measured", rating: ratings.capacity },
+      { section: "twelveVolt", label: "12 V battery", value: twelve ? `${String(twelve.volts)} V` : "Not recorded", rating: ratings.twelveVolt },
+      { section: "codes", label: "Diagnostic codes", value: codesValue(report.codes), rating: ratings.codes },
     ],
   };
 }
@@ -111,12 +99,13 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
       source: soc || hd ? sourceOf([soc, hd].filter((s) => s !== undefined)) : "Not read in this check",
     };
   }
+  const ratings = reportRatings(report);
   if (section === "cells") {
     const cells = cellReply(report);
     const spread = report.cellSpread;
     return {
       hero: spread ? { value: (spread.volts * 1000).toFixed(1), unit: "mV", tag: "community", tagLabel: TAG_LABEL.community } : { value: "Not read", tag: "neutral", tagLabel: "Not read" },
-      rating: NOT_RATED,
+      rating: ratings.cells,
       readings: spread ? [...(cells ? [reading("Lowest cell", cells.min), reading("Average cell", cells.avg), reading("Highest cell", cells.max)] : []), { label: "Spread", value: `${(spread.volts * 1000).toFixed(1)} mV`, tier: spread.tier }] : [],
       meaning: `${report.health.reason} These cell voltages come from a community signal definition, not one verified on this car.`,
       source: spread ? [...new Set([spread.min, spread.max].map((source) => `${source.command} from ECU ${source.ecu}`))].join("; ") : "Not read in this check",
@@ -126,7 +115,7 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
   if (section === "capacity") {
     return {
       hero: { value: "Not measured", tag: "neutral", tagLabel: "Not measured" },
-      rating: NOT_RATED,
+      rating: ratings.capacity,
       readings: [],
       meaning: `${report.capacity.reason} Capacity stays not measured until a completed charge log and a reviewed estimator exist.`,
       source: "Not measured; needs a completed charge log",
@@ -136,7 +125,7 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
   const count = report.twelveVolt.observations.length;
   return {
     hero: twelve ? { value: String(twelve.volts), unit: "V", tag: "neutral", tagLabel: "Not assessed" } : { value: "Not recorded", tag: "neutral", tagLabel: "Not assessed" },
-    rating: NOT_RATED,
+    rating: ratings.twelveVolt,
     readings: twelve ? [
       { label: twelve.source === "adapter-supply" ? "Adapter supply (ATRV)" : `Module supply (0142, ECU ${twelve.ecu ?? ""})`, value: `${String(twelve.volts)} V` },
       { label: "Car power state", value: twelve.powerState },

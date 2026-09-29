@@ -3,7 +3,7 @@ import { INTEGRATED_LABEL, integratedCurrentCapacity } from "obd-battery/capacit
 import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { chargePhases, gateFailures, num, type ChargeLog } from "obd-battery/session";
 import { checkFacts, claimGrammar, renderClaims } from "./check.js";
-import { prepareSummaryRequest, type StructuredSummary, type SummaryFact } from "./summary.js";
+import { reportFacts, type StructuredSummary, type SummaryFact } from "./summary.js";
 
 // Design: docs/specs/T2.11a-assistant-tools-replay.md. Every tool reads the caller's in-memory data; none touches the vehicle.
 
@@ -77,7 +77,7 @@ const prefixed = (sid: string, facts: readonly SummaryFact[]) => facts.map((f) =
 
 function capacityFacts(sid: string, source: AssistantSource): SummaryFact[] {
   if (source.kind === "battery-scan") {
-    return prefixed(sid, prepareSummaryRequest(source.report).facts.filter((f) => f.id === "capacity-status" || f.id === "capacity-reason"));
+    return prefixed(sid, reportFacts(source.report).filter((f) => f.id === "capacity-status" || f.id === "capacity-reason"));
   }
   // A completed charge log: the T2.4 gate passes and the estimator returns a figure.
   const phases = chargePhases(source.log);
@@ -98,7 +98,7 @@ function capacityFacts(sid: string, source: AssistantSource): SummaryFact[] {
 }
 
 function sessionFacts(sid: string, source: AssistantSource): SummaryFact[] {
-  if (source.kind === "battery-scan") return prefixed(sid, prepareSummaryRequest(source.report).facts);
+  if (source.kind === "battery-scan") return prefixed(sid, reportFacts(source.report));
   const failures = gateFailures(chargePhases(source.log));
   return [
     fact(`${sid}/kind`, "Session kind", "charge log", { status: "available" }),
@@ -110,7 +110,7 @@ function sessionFacts(sid: string, source: AssistantSource): SummaryFact[] {
 
 function codeFacts(sid: string, source: AssistantSource): SummaryFact[] {
   if (source.kind === "charge-log") return [fact(`${sid}/codes`, "Diagnostic codes", "not read in a charge log", { status: "missing" })];
-  return prefixed(sid, prepareSummaryRequest(source.report).facts.filter((f) => f.id.startsWith("codes-") || f.id.startsWith("readiness-")));
+  return prefixed(sid, reportFacts(source.report).filter((f) => f.id.startsWith("codes-") || f.id.startsWith("readiness-")));
 }
 
 /** The model's arguments are never echoed: an error carries only a fixed code. */

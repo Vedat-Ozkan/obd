@@ -63,7 +63,7 @@ All new modules are pure `.ts` except the screen, kit and chart `.tsx` files.
 ```ts
 // src/ui/theme.ts
 export type Scheme = "light" | "dark";
-export type Rating = "great" | "good" | "ok" | "poor" | "not-rated";
+export type { Rating } from "obd-battery/rating"; // "great" | "good" | "ok" | "poor" | "not-rated"; defined in packages/obd-battery/src/rating.ts (X-2026-09-29-explanatory-summary Stage 1)
 export interface Tokens {
   bg: string; surface: string; container: string; onContainer: string; containerMuted: string; track: string;
   text: string; muted: string; outline: string; divider: string; accent: string; onAccent: string;
@@ -89,7 +89,7 @@ export type Route =
 export function back(stack: readonly Route[], locked: boolean): readonly Route[] | "blocked" | "exit";
 
 // src/app/reportView.ts (C1 creates socHero; C2 adds the rest)
-export interface RatingView { rating: Rating; basis: string }
+export type { RatingView } from "obd-battery/rating"; // { rating: Rating; basis: string }; the codes rating and reportRatings live there too
 export function socHero(report: BatteryDiagnosisReport): { percent: number; tier: "verified" | "community"; scannedAt: string } | undefined;
 export function reportSummary(report: BatteryDiagnosisReport): { soc: ReturnType<typeof socHero>; rows: readonly { section: "cells" | "capacity" | "twelveVolt" | "codes"; label: string; value: string; rating: RatingView }[] };
 export function sectionDetail(report: BatteryDiagnosisReport, section: "soc" | "cells" | "capacity" | "twelveVolt"): {

@@ -29,8 +29,8 @@ function codeFacts(moduleId: string, kind: string, value: unknown): SummaryFact[
   return state.dtcs.map((dtc) => fact(`codes-${moduleId}-${kind}-${dtc}`, `${kind} diagnostic code`, dtc, { status: "available" }));
 }
 
-/** Produce the only report projection that may be sent to a summary provider. */
-export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRequest {
+/** The report's own facts, without rating facts: what the assistant's tools may return. */
+export function reportFacts(report: BatteryDiagnosisReport): SummaryFact[] {
   const facts: SummaryFact[] = report.signals.map((signal) => fact(`signal-${signal.id}`, signal.name, formatNumber(signal.value), { unit: signal.unit, tier: signal.tier, status: "available" }));
   if (report.cellSpread) facts.push(fact("cell-spread", "Cell spread", formatNumber(report.cellSpread.volts), { unit: "volts", tier: report.cellSpread.tier, status: "available" }));
   else facts.push(fact("cell-spread", "Cell spread", "unavailable", { status: "missing" }));
@@ -56,7 +56,12 @@ export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRe
       fact(`readiness-${moduleId}`, "Readiness status", module.readiness.status, { status: module.readiness.status }),
     );
   });
-  return { version: 1, promptVersion: "t2.10-v1", facts };
+  return facts;
+}
+
+/** Produce the only report projection that may be sent to a summary provider. */
+export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRequest {
+  return { version: 1, promptVersion: "t2.10-v1", facts: reportFacts(report) };
 }
 
 /** Rebuild the local allowlist so server-supplied facts cannot be trusted. */

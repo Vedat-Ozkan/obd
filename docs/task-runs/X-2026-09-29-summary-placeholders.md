@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: closed (desk). Stages 1–4 APPROVE — commits 6f5340c, 2e72c73, 6f107cd, d24b369, Stage 4 below. Owner D1 phone re-run PASS (b6640624).
+- Stage: closed (desk). Stages 1–4 APPROVE — commits 6f5340c, 2e72c73, 6f107cd, d24b369, Stage 4 fc89bd4. Owner D1 phone re-run PASS (b6640624).
 - Spec: `docs/specs/X-2026-09-29-summary-placeholders.md` (Stage 1 failed-check category, 2 placeholders and rendering, 3 summary prompt v4, 4 assistant t2.11-v2).
 - Repairs: 1/2. Escalations: 0.
 - Verdicts: Stage 1 APPROVE after repair 1; Stage 2 APPROVE; Stage 3 APPROVE; Stage 3b APPROVE (2026-09-29); full `pnpm check` reproduced PASS for both.

@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { ScrollView, StyleSheet, View, type DimensionValue, type Text as NativeText, type TextStyle } from "react-native";
 import { Card as PaperCard, Icon, Text as PaperText, TouchableRipple, useTheme } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ratingWord } from "obd-battery/rating";
 import { FONTS, useTokens, type Rating } from "./theme.js";
 
 // Each loaded Manrope weight is its own family (App.tsx useFonts: 500, 600, 700, 800); anything else renders as 500.
@@ -106,16 +107,16 @@ export function Tag({ tone, label }: { tone: "verified" | "community" | "neutral
 }
 
 // §Design Rating chips: the glyph names confirmed in the installed MaterialCommunityIcons map (Stage B record).
-const CHIPS: Record<Rating, { icon: string; word: string }> = {
-  great: { icon: "star-circle", word: "Great" }, good: { icon: "check-circle", word: "Good" }, ok: { icon: "alert-circle-outline", word: "OK" },
-  poor: { icon: "close-circle", word: "Poor" }, "not-rated": { icon: "minus-circle-outline", word: "Not rated" },
+const CHIP_ICONS: Record<Rating, string> = {
+  great: "star-circle", good: "check-circle", ok: "alert-circle-outline", poor: "close-circle", "not-rated": "minus-circle-outline",
 };
 
 /** A rating chip: always an icon and a word, never colour alone. Only the icon wears the status colour; the word wears the text token (text on text tokens). */
 export function Chip({ rating }: { rating: Rating }) {
   const tokens = useTokens();
   const { fg, bg } = tokens.rating[rating];
-  const { icon, word } = CHIPS[rating];
+  const icon = CHIP_ICONS[rating];
+  const word = ratingWord[rating];
   return <View accessible accessibilityLabel={`Rating: ${word}`} style={[styles.chip, { backgroundColor: bg }]}>
     <Icon source={icon} size={16} color={fg} />
     <Text style={[styles.tagText, { color: tokens.text }]}>{word}</Text>
