@@ -982,10 +982,10 @@ it("X-2026-09-28 C3: the console's own charge-log lines keep or finish the timel
     ["Starting the charge log…", undefined],
     ["Stopping the charge log after the current command…", undefined],
     ["Charge log stopped; preparing the beta upload…", 5],
-    [`Charge log stopped: disconnect pressed (partial). Saved ${FILE} to the capture folder. Reconnect for another run.`, 5],
+    [`Charge log stopped: disconnect pressed (partial). Saved ${FILE} to the capture folder.`, 5],
     // A log file that could not be created saved nothing, so it does not reach Saved (runChargeLog's early return).
-    ["Charge log stopped: the log file could not be created: storage full (partial). NOT SAVED: storage full. Reconnect for another run.", undefined],
-    [`Charge log stopped: post-charge rest logged (complete). Saved ${FILE} to the capture folder. Queued for beta upload. Reconnect for another run.`, 5],
+    ["Charge log stopped: the log file could not be created: storage full (partial). NOT SAVED: storage full.", undefined],
+    [`Charge log stopped: post-charge rest logged (complete). Saved ${FILE} to the capture folder. Queued for beta upload.`, 5],
   ];
   expect(lines.map(([line]) => chargeStep(line))).toEqual(lines.map(([, step]) => step));
   expect(CHARGE_STEP_LABELS).toEqual(["Rest 10 min", "Plug in", "Charge", "Rest 30 min", "Saved"]);
@@ -1006,7 +1006,7 @@ it("X-2026-09-28 C3 failure 3: recovery, retry and session-start lines keep the 
 it("X-2026-09-28 C3 failure 4: a charge log that never started is not Saved", () => {
   for (const line of [
     "Charge log not started: no capture folder (picker cancelled).",
-    "Charge log not started: the dongle disconnected. Reconnect and try again.",
-    "Charge log not started: the foreground service failed (denied). Reconnect before another run.",
+    "Charge log not started: the dongle disconnected. Connect and try again.",
+    "Charge log not started: the foreground service failed (denied).",
   ]) expect(chargeStep(line), line).toBeUndefined();
 });

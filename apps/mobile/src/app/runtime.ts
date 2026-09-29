@@ -1,4 +1,4 @@
-import type { BleManager } from "react-native-ble-plx";
+import { BleManager } from "react-native-ble-plx";
 import { Directory, File, FileMode, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import BackgroundService from "react-native-background-actions";
@@ -10,14 +10,15 @@ import appJson from "../../app.json";
 import { createBetaClient } from "../beta/client.js";
 import { createBetaOutbox } from "../beta/outbox.js";
 import { betaPhoneFiles, putFile } from "../beta/phoneStore.js";
-import type { BleConnection } from "../ble/BleTransport.js";
+import { connectVeepeak, type BleConnection } from "../ble/BleTransport.js";
+import { createDongleLink, createDongleMemory } from "../ble/dongleLink.js";
 import type { StreamTargets } from "../chargeLogger.js";
 import { createChargeRunRecord } from "../chargeRun.js";
 import { createBatteryReportHistory } from "../batteryReports.js";
 import { batteryReportsDocumentStore } from "../batteryReportsDocumentStore.js";
 import type { RunFile, SaveTargets } from "../runFiles.js";
 import { garageDocumentStore } from "../garage/documentStore.js";
-import { createGarageFlow } from "../garage/flow.js";
+import { createGarageFlow, type TextStore } from "../garage/flow.js";
 import { parseThemePreference, type ThemePreference } from "../ui/text.js";
 
 // The app's one-per-JS-runtime objects, moved verbatim from App.tsx (X-2026-09-28-app-redesign Stage A).
@@ -114,7 +115,23 @@ AppState.addEventListener("change", shareDeferred);
 const deferShare = (name: string) => { deferredShare = name; shareDeferred(); };
 
 // Decision 20: one record per JS runtime, so a console recreated with the activity still sees and stops the run.
-const chargeRun = createChargeRunRecord<BleConnection, BleManager>();
+const chargeRun = createChargeRunRecord<BleConnection>();
+
+// X-2026-09-28-persistent-dongle: one BleManager and one kept link per JS runtime, never destroyed. `new BleManager()` returns
+// ble-plx's shared instance (react-native-ble-plx 3.5.1 src/BleManager.js sharedInstance), so this is that instance, created on first use.
+let manager: BleManager | undefined;
+const bleManager = (): BleManager => (manager ??= new BleManager());
+const dongleLink = createDongleLink<BleConnection>({
+  connect: (deviceId) => connectVeepeak(bleManager(), deviceId),
+  onDisconnected: (deviceId, listener) => bleManager().onDeviceDisconnected(deviceId, (error) => { listener(error); }),
+});
+// The remembered dongle per garage car: a private file like theme.txt, never uploaded and never part of garage.json.
+const dongleStore: TextStore = {
+  // Async so a sync throw from the file API is a rejection, which the memory treats as "nothing remembered".
+  async read() { const file = new File(Paths.document, "dongles.json"); return file.exists ? file.text() : undefined; },
+  write(text) { new File(Paths.document, "dongles.json").write(text); return Promise.resolve(); },
+};
+const dongleMemory = createDongleMemory(dongleStore);
 
 // T2.9 Stage D: exactly one outbox per JS runtime; its loaded state, single drain and stop count rely on that.
 // EXPO_PUBLIC_BETA_URL is inlined by Metro from the gitignored apps/mobile/.env; unset, queued files wait on the phone.
@@ -156,4 +173,4 @@ const folderLabel = async (): Promise<string | undefined> => {
   return remembered.exists ? new Directory((await remembered.text()).trim()).name : undefined;
 };
 
-export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, deferShare, chargeRun, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
+export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
