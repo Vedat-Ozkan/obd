@@ -45,6 +45,8 @@ export interface AdapterResult {
 }
 export interface AssistantUsageOut {
   model: string; provider: string; promptVersion: "t2.11-v1"; adapterPromptVersion: "t2.11-openrouter-v1";
+  // The completion response's own `provider` (first 64 characters), null when absent or not a string. Evidence only; its spelling is unsourced.
+  returnedProvider: string | null;
   inputTokens: number; cachedInputTokens: number | null; outputTokens: number; reasoningTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number; latencyMs: number;
 }
@@ -154,7 +156,9 @@ async function sha256(raw: string): Promise<string> {
 
 interface Completion {
   actualMicroUsd: number | null; kill: boolean; reason?: SummaryFallback; content?: string;
-  usage?: Omit<AssistantUsageOut, "provider" | "promptVersion" | "adapterPromptVersion">;
+  /** The response's `provider` exactly as received; each caller decides whether it is a gate. */
+  provider?: unknown;
+  usage?: Omit<AssistantUsageOut, "provider" | "returnedProvider" | "promptVersion" | "adapterPromptVersion">;
 }
 const allowedTools: readonly (string | null)[] = assistantReplySchema.properties.tool.enum.filter((name) => name !== null);
 const assistantReply = z.strictObject({
@@ -182,7 +186,7 @@ export function createOpenRouter(options: AdapterOptions) {
     const raw = await readBounded(response, key ? 32768 : 16777216);
     return { raw, parsed: JSON.parse(raw) as unknown };
   }
-  async function preflight(key: string, reservationMicroUsd: number, pin: ModelPin = pins[model]): Promise<ProviderSnapshot> {
+  async function preflight(key: string, reservationMicroUsd: number, pin: ModelPin): Promise<ProviderSnapshot> {
     const now = options.now();
     let cached = snapshots.get(pin.model);
     if (!cached || now - cached.checkedAt >= 900000 || now < cached.checkedAt) {
@@ -243,7 +247,7 @@ export function createOpenRouter(options: AdapterOptions) {
       const reasoningTokens = reasoning === undefined || reasoning === null ? null : integer.max(output).parse(reasoning);
       result.usage = { model: z.enum([pin.model, pin.canonicalSlug]).parse(payload.model), inputTokens: input, outputTokens: output, cachedInputTokens, reasoningTokens, providerCostUsd: cost,
         estimatedUsd: input * (pin.inputTenthMicroUsdPerToken / 1e7) + output * (pin.outputTenthMicroUsdPerToken / 1e7), latencyMs: Math.max(0, options.now() - started) };
-      if (payload.provider !== undefined && payload.provider !== pin.providerName) throw new Error("provider mismatch");
+      result.provider = payload.provider;
       const choices = z.array(record).length(1).parse(payload.choices);
       if (choices[0].finish_reason !== "stop") throw new Error("incomplete completion");
       const message = record.parse(choices[0].message);
@@ -255,15 +259,18 @@ export function createOpenRouter(options: AdapterOptions) {
     }
   }
   async function generate(request: SummaryRequest, prepared: ReturnType<typeof prepareSummary>, key: string): Promise<AdapterResult> {
-    const { content, usage, ...result } = await complete(pins[model], prepared, key);
+    const { content, usage, provider, ...result } = await complete(pins[model], prepared, key);
     const withUsage: AdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v1" } } : {} };
+    // C1 rule, kept on the summary route only: a present provider other than DeepSeek is rejected; an absent one is unknown.
+    if (provider !== undefined && provider !== "DeepSeek") return { ...withUsage, reason: "invalid-response" };
     if (content === undefined) return withUsage;
     try { return { ...withUsage, summary: checkSummaryFacts(request, boundedSummary.parse(JSON.parse(content) as unknown)) }; } catch { return { ...withUsage, reason: "invalid-response" }; }
   }
   async function generateAssistantTurn(m: AssistantModel, turn: AssistantTurnRequest, prepared: ReturnType<typeof prepareAssistantTurn>, key: string): Promise<AssistantAdapterResult> {
     const pin = pins[m];
-    const { content, usage, ...result } = await complete(pin, prepared, key);
-    const withUsage: AssistantAdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: pin.providerName, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1" } } : {} };
+    const { content, usage, provider, ...result } = await complete(pin, prepared, key);
+    const returnedProvider = typeof provider === "string" ? Array.from(provider).slice(0, 64).join("") : null;
+    const withUsage: AssistantAdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: pin.providerName, returnedProvider, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1" } } : {} };
     if (content === undefined) return withUsage;
     try {
       const reply = assistantReply.parse(JSON.parse(content) as unknown);

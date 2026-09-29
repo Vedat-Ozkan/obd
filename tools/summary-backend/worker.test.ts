@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -621,7 +621,7 @@ export default { async fetch(request, env) {
   }
   async function assist(input: unknown) {
     const result = await fetch(`${origin}/v1/assistant/turns`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: typeof input === "string" ? input : JSON.stringify(input), signal: AbortSignal.timeout(30000) });
-    return await result.json() as { kind: string; reason?: string; reply?: { kind: string; tool: string | null }; usage?: { adapterPromptVersion: string; provider: string; providerCostUsd: number | null; inputTokens: number } };
+    return await result.json() as { kind: string; reason?: string; reply?: { kind: string; tool: string | null }; usage?: { adapterPromptVersion: string; provider: string; providerCostUsd: number | null; inputTokens: number; returnedProvider: string | null } };
   }
   const completions = (meta: Meta) => meta.calls.filter((call) => call.url.endsWith("/chat/completions"));
   const lastBody = (meta: Meta) => {
@@ -683,6 +683,20 @@ export default { async fetch(request, env) {
   const withoutUser = { ...hostileSent, messages: [hostileSent.messages[0]] };
   expect(JSON.stringify(withoutUser)).not.toContain("SENTINEL_QUESTION");
   expect((JSON.parse(hostileSent.messages[1].content) as { question: string }).question).toBe(hostileQuestion);
+
+  // Returned provider is evidence on this route, never a gate: it is recorded as returned, and the row settles normally.
+  const otherHost = "Synthetic Other Host";
+  const providerCases: [string, string, unknown, string | null][] = [
+    ["assistant-provider-mismatch-C", "C", otherHost, otherHost], ["assistant-provider-mismatch-D", "D", otherHost, otherHost],
+    ["assistant-provider-absent", "C", undefined, null], ["assistant-provider-not-string", "C", 42, null],
+  ];
+  for (const [name, key, returned, recorded] of providerCases) {
+    const arm = armOf(key);
+    const seen = await acheck(name, { output: { ...assistantEnvelope(arm, answerReply), provider: returned } }, assistantBody(arm, answerTurn), null, 1);
+    expect(seen.result.reply, name).toEqual(answerReply);
+    expect(seen.result.usage, name).toMatchObject({ returnedProvider: recorded, provider: arm.provider });
+    expect(seen.meta.requests, name).toEqual([{ state: "settled", reservation: reservationFor(lastBody(seen.meta).bytes, pins[arm.model]).microUsd, actual: 66, error: null }]);
+  }
 
   // Gates: none of these may reach upstream.
   const factsOf = (step: number, count: number, pad: number) => Array.from({ length: count }, (_, i) => ({ id: `s${String(step)}/f${String(i)}`, label: "Filler label", value: "x".repeat(pad), status: "available" }));
@@ -769,7 +783,6 @@ export default { async fetch(request, env) {
   const cap = await acheck("ledger-D-cap-size", { output: assistantEnvelope(D, toolReply) }, assistantBody(D, capTurn), null, 1);
   expect(lastBody(cap.meta).bytes).toBe(32768);
   expect(cap.meta.requests).toEqual([{ state: "settled", reservation: 224256, actual: 66, error: null }]);
-  for (const arm of armTable) expect(reservationFor(maxAssistantBodyBytes, pins[arm.model]).microUsd, arm.key).toBe(arm.capReservation);
 
   const R_B = reservationFor(bytesOf.B, pins[B.model]);
   const exhausted2 = await acheck("assistant-budget-one-below-reservation", { output: assistantEnvelope(B, answerReply), budget: 1000000 - R_B.microUsd + 1 }, assistantBody(B, answerTurn), "budget-exhausted", 0);
@@ -808,6 +821,8 @@ export default { async fetch(request, env) {
   // Eval dry run: the real CLI against this Worker, with scripted SYNTHETIC replies and usage; metadata from the harness, never OpenRouter.
   const queue = questionSet.questions.flatMap((question) => assistantSaved.questions[question.repliesFrom ?? question.id].flatMap((round, index) => round.reply === undefined ? [] : [{ question: question.question, round: index, reply: round.reply, usage: round.usage }]));
   const providers = Object.fromEntries(armTable.map((arm) => [arm.model, arm.provider]));
+  // The main dry run has arm D's host answer under another name: the artifact must show it, and no row may be rejected for it.
+  const mismatchedProviders = { ...providers, [armOf("D").model]: otherHost };
   const order = ["A", "C", "B", "D"].map(armOf);
   const saveDir = mkdtempSync("/tmp/t2.11b-replies-");
   // Asynchronous, so this process keeps servicing its own sockets to the Worker while the CLI runs.
@@ -829,9 +844,9 @@ export default { async fetch(request, env) {
   interface EvalArtifact {
     header: { codeSha: string; promptVersion: string; adapterPromptVersion: string; questionSet: string; snapshots: Record<string, { fetchedAt: string; catalogSha256: string; endpointsSha256: string; providerName: string; providerTag: string; canonicalSlug: string }> };
     arms: { model: string; spentBeforeMicroUsd: number; spentAfterMicroUsd: number; rows: EvalRow[]; injection: { verdict: string } }[];
-    comparison: { model: string; real: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; synthetic: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; injection: string; reasoningRounds: Rate; cost: { medianUsd: number; maxUsd: number; totalUsd: number; overCheapTarget: number; overThoroughTarget: number }; latency: { medianMs: number; maxMs: number } }[];
+    comparison: { model: string; real: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; synthetic: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; injection: string; reasoningRounds: Rate; returnedProvider: { mismatched: Rate; none: number; distinct: string[] }; cost: { medianUsd: number; maxUsd: number; totalUsd: number; overCheapTarget: number; overThoroughTarget: number }; latency: { medianMs: number; maxMs: number } }[];
   }
-  await control({ scripted: queue, providers, authority: compare });
+  await control({ scripted: queue, providers: mismatchedProviders, authority: compare });
   const stdout = await evalRun("0.05,0.05,0.15,0.25", "/tmp/t2.11b-eval-dry.json", ["--save-replies", saveDir]);
   const dryText = readFileSync("/tmp/t2.11b-eval-dry.json", "utf8");
   const dry = JSON.parse(dryText) as EvalArtifact;
@@ -865,11 +880,18 @@ export default { async fetch(request, env) {
     expect(item.cost.totalUsd).toBeGreaterThan(0);
     expect(item.cost.overCheapTarget).toBe(0);
   }
+  // A returned provider that differs from the pin is shown, per arm, with its denominator; only arm D differs here.
+  for (const [index, item] of dry.comparison.entries()) {
+    const roundCount = dry.arms[index].rows.flatMap((row) => row.rounds ?? []).length;
+    const differs = order[index].key === "D";
+    expect(roundCount).toBeGreaterThan(0);
+    expect(item.returnedProvider, order[index].key).toMatchObject({ mismatched: { n: differs ? roundCount : 0, d: roundCount }, none: 0, distinct: [differs ? otherHost : order[index].provider] });
+  }
   // The recorded-reply files replay through replay-assistant.ts with their own label as the note and reproduce the artifact's verdicts.
   for (const [index, arm] of order.entries()) {
     const file = join(saveDir, `t2.11-live-${arm.model.split("/")[1]}.json`);
-    const savedFile = JSON.parse(readFileSync(file, "utf8")) as { label: string; model: string; canonicalSlug: string; providerTag: string; questions: Record<string, unknown[]> };
-    expect(savedFile).toMatchObject({ model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag });
+    const savedFile = JSON.parse(readFileSync(file, "utf8")) as { label: string; model: string; canonicalSlug: string; providerTag: string; returnedProviders: string[]; questions: Record<string, unknown[]> };
+    expect(savedFile).toMatchObject({ model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag, returnedProviders: [arm.key === "D" ? otherHost : arm.provider] });
     expect(Object.keys(savedFile.questions)).toEqual(questionSet.questions.map((item) => item.id));
     const replayed = JSON.parse(await node(["packages/obd-assist/scripts/replay-assistant.ts", "fixtures/synthetic/t2.11-question-set.json", file])) as { note: string; sections: { real: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[]; synthetic: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[] } };
     expect(replayed.note).toBe(savedFile.label);
@@ -897,7 +919,13 @@ export default { async fetch(request, env) {
     expect(arm.rows.flatMap((item) => item.serverReasons ?? [])).toEqual(["budget-exhausted"]);
     expect(arm.rows.at(-1)?.status).toBe("NOT RUN (budget)");
   }
-  assistantRows.push({ name: "eval-dry-run", source: "synthetic-upstream", arms: dry.arms.map((arm) => ({ model: arm.model, questions: arm.rows.length, spentBeforeMicroUsd: arm.spentBeforeMicroUsd, spentAfterMicroUsd: arm.spentAfterMicroUsd, injection: arm.injection.verdict })), comparison: dry.comparison, capped: capped.arms.map((arm) => arm.rows.map((item) => item.status)) });
+  // A synthetic base pointed at OpenRouter would mislabel a run: the CLI refuses before any request and writes nothing.
+  const refused = "/tmp/t2.11b-eval-dry-refused.json";
+  rmSync(refused, { force: true });
+  await expect(node(["tools/summary-backend/assistant-eval.ts", "--url", "http://127.0.0.1:1", "--questions", "fixtures/synthetic/t2.11-question-set.json", "--models", order[0].model, "--max-spend-usd", "0.05", "--out", refused,
+    "--synthetic-metadata-base", "https://openrouter.ai/api/v1"], { SUMMARY_DEV_TOKEN: token })).rejects.toThrow(/must not point at openrouter\.ai/);
+  expect(existsSync(refused)).toBe(false);
+  assistantRows.push({ name: "eval-dry-run", source: "synthetic-upstream", arms: dry.arms.map((arm) => ({ model: arm.model, questions: arm.rows.length, spentBeforeMicroUsd: arm.spentBeforeMicroUsd, spentAfterMicroUsd: arm.spentAfterMicroUsd, injection: arm.injection.verdict })), comparison: dry.comparison, refusedSyntheticBaseAtOpenRouter: true, capped: capped.arms.map((arm) => arm.rows.map((item) => item.status)) });
   await control({ output });
   await post(validBody());
   await control({ output }, false);

@@ -32,16 +32,19 @@ function parseArgs(args: readonly string[]): Options {
   });
   const capsUsd = need("max-spend-usd").split(",").map(Number);
   if (capsUsd.length !== models.length || capsUsd.some((cap) => !Number.isFinite(cap) || cap <= 0)) throw new Error("--max-spend-usd needs one positive number per model");
-  return { url: need("url").replace(/\/$/, ""), questions: need("questions"), models, capsUsd, out: need("out"), saveReplies: flags.get("save-replies"), syntheticMetadataBase: flags.get("synthetic-metadata-base") };
+  const syntheticMetadataBase = flags.get("synthetic-metadata-base");
+  // A synthetic label on real OpenRouter metadata would mislabel a run, so refuse it before anything is requested.
+  if (syntheticMetadataBase !== undefined && new URL(syntheticMetadataBase).hostname === "openrouter.ai") throw new Error("--synthetic-metadata-base must not point at openrouter.ai");
+  return { url: need("url").replace(/\/$/, ""), questions: need("questions"), models, capsUsd, out: need("out"), saveReplies: flags.get("save-replies"), syntheticMetadataBase };
 }
 
 const token = process.env.SUMMARY_DEV_TOKEN ?? "";
-const usageSchema = z.object({ model: z.string(), inputTokens: z.number(), cachedInputTokens: z.number().nullable(), outputTokens: z.number(), reasoningTokens: z.number().nullable(), providerCostUsd: z.number().nullable(), estimatedUsd: z.number(), latencyMs: z.number() });
+const usageSchema = z.object({ model: z.string(), returnedProvider: z.string().nullable(), inputTokens: z.number(), cachedInputTokens: z.number().nullable(), outputTokens: z.number(), reasoningTokens: z.number().nullable(), providerCostUsd: z.number().nullable(), estimatedUsd: z.number(), latencyMs: z.number() });
 const turnResponse = z.object({ kind: z.enum(["reply", "fallback"]), reply: z.unknown().optional(), reason: z.string().optional(), usage: usageSchema.optional() });
 const statusResponse = z.object({ headroomMicroUsd: z.number() });
 
 interface Round {
-  inputTokens: number | null; cachedInputTokens: number | null; reasoningTokens: number | null; outputTokens: number | null;
+  returnedProvider: string | null; inputTokens: number | null; cachedInputTokens: number | null; reasoningTokens: number | null; outputTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number | null; reservationMicroUsd: number; providerLatencyMs: number | null; serverReason?: string;
 }
 
@@ -69,12 +72,12 @@ function questionClient(url: string, model: AssistantModel) {
         });
         data = turnResponse.parse(await response.json());
       } catch {
-        rounds.push({ inputTokens: null, cachedInputTokens: null, reasoningTokens: null, outputTokens: null, providerCostUsd: null, estimatedUsd: null, reservationMicroUsd, providerLatencyMs: null, serverReason: "transport-error" });
+        rounds.push({ returnedProvider: null, inputTokens: null, cachedInputTokens: null, reasoningTokens: null, outputTokens: null, providerCostUsd: null, estimatedUsd: null, reservationMicroUsd, providerLatencyMs: null, serverReason: "transport-error" });
         saved.push({ reject: "transport-error" });
         throw new Error("transport-error");
       }
       const u = data.usage;
-      rounds.push({ inputTokens: u?.inputTokens ?? null, cachedInputTokens: u?.cachedInputTokens ?? null, reasoningTokens: u?.reasoningTokens ?? null, outputTokens: u?.outputTokens ?? null, providerCostUsd: u?.providerCostUsd ?? null,
+      rounds.push({ returnedProvider: u?.returnedProvider ?? null, inputTokens: u?.inputTokens ?? null, cachedInputTokens: u?.cachedInputTokens ?? null, reasoningTokens: u?.reasoningTokens ?? null, outputTokens: u?.outputTokens ?? null, providerCostUsd: u?.providerCostUsd ?? null,
         estimatedUsd: u?.estimatedUsd ?? null, reservationMicroUsd, providerLatencyMs: u?.latencyMs ?? null, ...data.kind === "fallback" ? { serverReason: data.reason ?? "unknown" } : {} });
       if (data.kind === "fallback" || u === undefined) {
         saved.push({ reject: data.reason ?? "unknown" });
@@ -128,15 +131,20 @@ function group(rows: readonly RunRow[]) {
   };
 }
 
-function comparison(model: string, rows: readonly RunRow[], verdict: string) {
+function comparison(model: AssistantModel, rows: readonly RunRow[], verdict: string) {
   const ran = rows.filter((item) => item.status === "RUN");
   const roundList = ran.flatMap((item) => item.rounds ?? []);
   const costs = ran.flatMap((item) => item.costUsd === null || item.costUsd === undefined ? [] : [item.costUsd]);
   const wall = ran.flatMap((item) => item.wallLatencyMs === undefined ? [] : [item.wallLatencyMs]);
   const provider = ran.flatMap((item) => item.providerLatencyMs === null || item.providerLatencyMs === undefined ? [] : [item.providerLatencyMs]);
+  // Rounds that came back with usage either report a provider or report none; a round with no response says nothing.
+  const answered = roundList.filter((item) => item.inputTokens !== null);
+  const reported = answered.flatMap((item) => item.returnedProvider === null ? [] : [item.returnedProvider]);
   return {
     model, real: group(rows.filter((item) => item.dataTag === "real")), synthetic: group(rows.filter((item) => item.dataTag !== "real")), injection: verdict,
     reasoningRounds: { ...rate(roundList.filter((item) => (item.reasoningTokens ?? 0) > 0).length, roundList.length), unreported: roundList.filter((item) => item.reasoningTokens === null).length },
+    // A difference from the pin's provider_name is a flag for the owner to read, not a rejection: the response spelling is unsourced.
+    returnedProvider: { mismatched: rate(reported.filter((name) => name !== pins[model].providerName).length, reported.length), none: answered.length - reported.length, distinct: [...new Set(reported)] },
     // The spec's owner targets: about US$0.01 per cheap answer and US$0.05 per thorough one.
     cost: { answers: ran.length, unknown: ran.length - costs.length, medianUsd: rounded(median(costs)), maxUsd: costs.length ? Math.max(...costs) : null, totalUsd: rounded(costs.reduce((sum, value) => sum + value, 0)),
       overCheapTarget: costs.filter((value) => value > 0.01).length, overThoroughTarget: costs.filter((value) => value > 0.05).length },
@@ -183,9 +191,17 @@ async function main(args: readonly string[]): Promise<void> {
   const codeSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
   const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim().length > 0;
   const runDate = new Date().toISOString();
+  const metadata = await snapshots(options.models, options.syntheticMetadataBase ?? openRouterBase);
+  // The LIVE label rests on more than the absence of the flag: every arm's OpenRouter snapshot must have been fetched and must contain the pinned host and slug. Otherwise nothing is sent or written.
+  if (!synthetic) {
+    for (const model of options.models) {
+      const snapshot = z.object({ endpointFound: z.boolean(), catalogCanonicalSlug: z.unknown() }).safeParse(metadata[model]);
+      if (!snapshot.success || !snapshot.data.endpointFound || snapshot.data.catalogCanonicalSlug !== pins[model].canonicalSlug) throw new Error(`OpenRouter metadata does not confirm the ${model} pin; the run cannot be labeled LIVE`);
+    }
+  }
   const header = {
     codeSha, codeDirty: dirty, date: runDate, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1", questionSet: options.questions, questionSetLabel: questionSet.label,
-    metadataSource: synthetic ? "synthetic harness metadata (not OpenRouter)" : openRouterBase, snapshots: await snapshots(options.models, options.syntheticMetadataBase ?? openRouterBase),
+    metadataSource: synthetic ? "synthetic harness metadata (not OpenRouter)" : openRouterBase, snapshots: metadata,
   };
   const arms: unknown[] = [];
   const comparisons: ReturnType<typeof comparison>[] = [];
@@ -230,8 +246,9 @@ async function main(args: readonly string[]): Promise<void> {
       mkdirSync(options.saveReplies, { recursive: true });
       repliesFile = join(options.saveReplies, `t2.11-live-${model.split("/")[1]}.json`);
       writeFileSync(repliesFile, `${JSON.stringify({
-        label: synthetic ? DRY_LABEL : LIVE_LABEL, model, canonicalSlug: pin.canonicalSlug, providerTag: pin.providerTag, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1",
-        runDate, codeSha, evalArtifact: basename(options.out), questions: savedQuestions, adversarial: [],
+        label: synthetic ? DRY_LABEL : LIVE_LABEL, model, canonicalSlug: pin.canonicalSlug, providerTag: pin.providerTag,
+        returnedProviders: [...new Set(rows.flatMap((item) => item.rounds ?? []).flatMap((item) => item.returnedProvider === null ? [] : [item.returnedProvider]))],
+        promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1", runDate, codeSha, evalArtifact: basename(options.out), questions: savedQuestions, adversarial: [],
       }, null, 2)}\n`);
     }
     arms.push({ model, pin: { canonicalSlug: pin.canonicalSlug, providerName: pin.providerName, providerTag: pin.providerTag }, maxSpendUsd: options.capsUsd[index], spentBeforeMicroUsd: before, spentAfterMicroUsd: after, stoppedBy, injection: verdict, repliesFile: repliesFile === null ? null : basename(repliesFile), rows });
