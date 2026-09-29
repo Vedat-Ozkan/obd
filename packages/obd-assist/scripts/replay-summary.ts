@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
-import { batteryDiagnosisFromRecording, type BatteryDiagnosisReport } from "obd-battery/report";
+import { batteryDiagnosisFromRecording, renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
+import { checkFacts, renderClaims } from "../src/check.js";
 import { summarize, type LlmClient } from "../src/index.js";
+import { reportFacts } from "../src/summary.js";
 
 export type SavedSummaryCase = { name: string; response?: unknown; providerFailure?: boolean; report?: "synthetic-multi-dtc-no-recording" | "synthetic-negative-signal-no-recording" | "synthetic-zero-signal-no-recording" };
 
@@ -23,7 +25,24 @@ export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSu
   };
 }
 
-export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<{ fixture: string; promptVersion: "t2.10-v1"; cases: { name: string; kind: string; text: string }[] }> {
+type ReplayArtifact = { fixture: string; promptVersion: "t2.10-v2"; cases: { name: string; kind: string; text: string }[] };
+
+/** Saved v1 claim sets, run through the shared claim checker and renderer only (no v2 reply shape, no verdict rule, no rating lines). */
+export function createClaimReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<ReplayArtifact> {
+  const cases = saved.cases.map((item) => {
+    const caseReport = reportForSavedCase(report, item);
+    try {
+      if (item.providerFailure) throw new Error("saved provider failure");
+      const facts = reportFacts(caseReport);
+      return { name: item.name, kind: "llm", text: renderClaims(facts, checkFacts(facts, item.response)) };
+    } catch {
+      return { name: item.name, kind: "template", text: renderBatteryDiagnosis(caseReport) };
+    }
+  });
+  return Promise.resolve({ fixture: report.recording, promptVersion: "t2.10-v2", cases });
+}
+
+export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<ReplayArtifact> {
   const cases = [];
   for (const item of saved.cases) {
     const caseReport = reportForSavedCase(report, item);
@@ -34,18 +53,19 @@ export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport
     const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
     cases.push({ name: item.name, kind: result.kind, text: result.text });
   }
-  return { fixture: report.recording, promptVersion: "t2.10-v1", cases };
+  return { fixture: report.recording, promptVersion: "t2.10-v2", cases };
 }
 
 async function main(args: readonly string[]): Promise<void> {
-  if (args.length !== 2) throw new Error("usage: replay-summary <recording.jsonl> <saved-responses.json>");
-  const [recordingPath, responsePath] = args;
+  const claims = args[0] === "--claims";
+  const [recordingPath, responsePath, ...extra] = claims ? args.slice(1) : args;
+  if (!recordingPath || !responsePath || extra.length > 0) throw new Error("usage: replay-summary [--claims] <recording.jsonl> <saved-responses.json>");
   const imported = importObdbMode22(JSON.parse(readFileSync("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", "utf8")));
   const report = await batteryDiagnosisFromRecording(readFileSync(recordingPath, "latin1"), {
     garageVehicleId: "summary-replay", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-22T00:00:00.000Z", recording: recordingPath, scanStatus: "complete",
   }, imported);
   const saved = JSON.parse(readFileSync(responsePath, "utf8")) as { cases: readonly SavedSummaryCase[] };
-  process.stdout.write(`${JSON.stringify(await createSummaryReplayArtifact(report, saved), null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(await (claims ? createClaimReplayArtifact : createSummaryReplayArtifact)(report, saved), null, 2)}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

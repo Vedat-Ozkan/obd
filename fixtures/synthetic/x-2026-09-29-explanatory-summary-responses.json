@@ -1,0 +1,2290 @@
+{
+  "label": "SYNTHETIC hand-written v2 summary replies; not recorded model output",
+  "cases": [
+    {
+      "name": "explanatory-accepted",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "explanatory-accepted-stored-code",
+      "report": "synthetic-multi-dtc-no-recording",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-contradicts-rating",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "No codes were stored, but the codes look bad.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-unrated-area",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery looks healthy.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-in-takeaway",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "Overall this car looks good.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-matches-rating",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The codes are ok.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-capitalized",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance is GREAT.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "verdict-substring-boundary",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "Take a look at the service records before buying.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rating-fact-cited",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "{label:cells-rating}: {fact:cells-rating}.",
+                "factIds": [
+                  "cells-rating"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rating-basis-cited",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The basis is {fact:codes-rating-basis}.",
+                "factIds": [
+                  "codes-rating-basis"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2-digit-outside",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The adapter supply measured 12.7 V.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2-unknown-placeholder",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "{fact:no-such-fact}.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2-uncited-placeholder",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "{fact:cell-spread}.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-v1-claims",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The adapter supply measured {fact:twelve-volt-0}.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          },
+          {
+            "text": "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.",
+            "factIds": [
+              "capacity-status",
+              "capacity-reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-missing-area",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-wrong-order",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-duplicate-area",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-extra-area",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "extra",
+            "claims": [
+              {
+                "text": "Something else.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-four-claims",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It is one reading.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It changes with charging.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-empty-area",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": []
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-missing-takeaway",
+      "response": {
+        "version": 2,
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-takeaway-array",
+      "response": {
+        "version": 2,
+        "takeaway": [
+          {
+            "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+            "factIds": [
+              "capacity-status"
+            ]
+          }
+        ],
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape-version-1",
+      "response": {
+        "version": 1,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}; it shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading, and the app has no threshold to judge it yet.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              },
+              {
+                "text": "The recently cleared check answered {fact:codes-recently-cleared}, so a buyer could ask whether codes were cleared before the sale.",
+                "factIds": [
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

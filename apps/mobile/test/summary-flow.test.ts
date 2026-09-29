@@ -3,7 +3,9 @@ import { readFileSync as nodeReadFileSync, writeFileSync as nodeWriteFileSync } 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { importObdbMode22 } from "obd-core/vehicles";
 import { batteryDiagnosisFromRecording, renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
+import { ratingWord } from "obd-battery/rating";
 import { prepareSummaryRequest } from "obd-assist";
+import { reportSummary } from "../src/app/reportView.js";
 import { createDevelopmentSummaryAccess, SUMMARY_CONSENT_VERSION } from "../src/summaryAccess.js";
 import { createDevelopmentSummaryFlow, type SummaryView } from "../src/summaryFlow.js";
 
@@ -13,17 +15,34 @@ const bodyText = (init: RequestInit) => { if (typeof init.body !== "string") thr
 
 const root = new URL("../../../", import.meta.url);
 const paths = ["2026-09-22-spike", "2026-09-22-spike-2", "2026-09-24-phone-console"].map((name) => `fixtures/recordings/chevrolet-equinox-ev-2024/${name}.redacted.jsonl`);
-const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/t2.10-summary-responses.json", root), "utf8")) as { cases: { name: string; response: unknown }[] };
+// SYNTHETIC hand-written v2 replies; not recorded model output.
+const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-explanatory-summary-responses.json", root), "utf8")) as { cases: { name: string; response: unknown }[] };
+const savedReply = (name: string): unknown => {
+  const found = responses.cases.find((entry) => entry.name === name);
+  if (!found) throw new Error(`Missing saved reply ${name}`);
+  return found.response;
+};
 const signalset = importObdbMode22(JSON.parse(readFileSync(new URL("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", root), "utf8")));
 const token = "synthetic-development-access-token-not-a-provider-key";
 const url = "http://192.168.1.20:8788";
 const rows: Record<string, unknown>[] = [];
 let reports: BatteryDiagnosisReport[];
 const ids = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
-const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v4", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
+const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v2", adapterPromptVersion: "t2.10-openrouter-v5", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
 const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
-const accepted = { version: 1, claims: [{ text: "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.", factIds: ["capacity-status", "capacity-reason"] }] };
+const accepted = savedReply("explanatory-accepted");
+// Cites only IDs all three recordings have; the full explanatory reply cites SoC and 12 V facts the other reports may lack.
+const commonReply = {
+  version: 2, takeaway: { text: "This check could not measure capacity.", factIds: ["capacity-status"] },
+  areas: [
+    { area: "soc", claims: [{ text: "State of charge is how full the high-voltage battery is.", factIds: ["health-reason"] }] },
+    { area: "cells", claims: [{ text: "{label:cell-spread}: {fact:cell-spread}.", factIds: ["cell-spread"] }] },
+    { area: "capacity", claims: [{ text: "Capacity was not measured: {fact:capacity-reason}", factIds: ["capacity-status", "capacity-reason"] }] },
+    { area: "twelveVolt", claims: [{ text: "The twelve-volt battery status is {fact:twelve-volt-status}.", factIds: ["twelve-volt-status"] }] },
+    { area: "codes", claims: [{ text: "The recently cleared check answered {fact:codes-recently-cleared}.", factIds: ["codes-recently-cleared"] }] },
+  ],
+};
 
 function harness(reply: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = () => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: validUsage })), development = true, statusReply: () => Promise<Response> = () => Promise.resolve(Response.json(validBudget)), nextRequestId?: () => string) {
   const sent: { url: string; init: RequestInit }[] = [];
@@ -61,13 +80,17 @@ afterAll(() => {
 
 describe("recording → public development flow → HTTP access → local checker", () => {
   it.each(paths.map((path, index) => ({ path, index })))("replays $path without transmitting private report identifiers", async ({ path, index }) => {
-    const h = harness();
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: commonReply, usage: validUsage })));
     expect(h.sent).toHaveLength(0);
     h.flow.consent(true);
     expect(h.sent).toHaveLength(0);
     const view = await h.flow.summaryFor(reports[index]);
     expect(view.kind).toBe("llm");
-    expect(view.text).toBe(accepted.claims[0].text);
+    // Five headed sections, each with the app's own rating line; the takeaway and prose come from the reply.
+    expect(view.text.split("\n\n")).toHaveLength(6);
+    for (const title of ["State of charge", "Cell balance", "Capacity", "12 V battery", "Diagnostic codes"]) expect(view.text).toContain(`\n\n${title}\nRating: `);
+    for (const row of reportSummary(reports[index]).rows) expect(view.text).toContain(`\n\n${row.label}\nRating: ${ratingWord[row.rating.rating]}. Basis: ${row.rating.basis}.\n`);
+    expect(view.text).not.toContain("{");
     expect(view.template).toBe(renderBatteryDiagnosis(reports[index]));
     expect(h.sent).toHaveLength(1);
     expect(h.statusSent).toHaveLength(1);
@@ -96,10 +119,8 @@ describe("recording → public development flow → HTTP access → local checke
     h.record("decline / consent without tap / withdrawn auth", view);
   });
 
-  it.each(["wrong-number", "wrong-unit", "missing-citation", "malformed", "prefix-plus-minus", "prefix-less-equal"])("locally rejects synthetic %s HTTP output", async (name) => {
-    const response = responses.cases.find((entry) => entry.name === name);
-    expect(response).toBeDefined();
-    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: response?.response })));
+  it.each(["verdict-contradicts-rating", "verdict-unrated-area", "verdict-in-takeaway", "rating-fact-cited", "rating-basis-cited", "v2-digit-outside", "shape-v1-claims", "shape-missing-area", "shape-version-1"])("locally rejects synthetic %s HTTP output", async (name) => {
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: savedReply(name) })));
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);
     exactTemplate(view);
@@ -108,18 +129,47 @@ describe("recording → public development flow → HTTP access → local checke
 
   it("renders the adapter quantity from the phone's own report, whatever the server sent", async () => {
     // One fixed server reply; only the report it is rendered against differs. The 12.8 report is a synthetic copy, not a recording.
-    const summary = { version: 1, claims: [{ text: "The adapter supply measured {fact:twelve-volt-0}.", factIds: ["twelve-volt-0"] }] };
     const synthetic128: BatteryDiagnosisReport = { ...reports[0], twelveVolt: { ...reports[0].twelveVolt, observations: reports[0].twelveVolt.observations.map((observation, index) => index === 0 ? { ...observation, volts: 12.8 } : observation) } };
     const shown: string[] = [];
     for (const [name, report, source] of [["real spike report", reports[0], paths[0]], ["synthetic copy with 12.8 V", synthetic128, "synthetic"]] as const) {
-      const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary })));
+      const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted })));
       h.flow.consent(true);
       const view = await h.flow.summaryFor(report);
       expect(view.kind).toBe("llm");
-      shown.push(view.text);
+      shown.push(/The adapter supply measured \d+\.\d+ V\./.exec(view.text)?.[0] ?? "");
       h.record(`placeholder rendered against the ${name}`, view, source);
     }
     expect(shown).toEqual(["The adapter supply measured 12.7 V.", "The adapter supply measured 12.8 V."]);
+  });
+
+  it("renders every rating line from the phone's own report, whatever the server or the request handed to the client said", async () => {
+    // One fixed server reply. The stored-code report is a synthetic copy of the spike report, not a recording.
+    const stored: BatteryDiagnosisReport = { ...reports[0], codes: { ...reports[0].codes, modules: reports[0].codes.modules.map((module, index) => index === 0 ? { ...module, stored: { status: "read", dtcs: ["P0133", "P0420"] } } : module) } };
+    const codesLine = (text: string) => text.split("\n").filter((line, index, lines) => lines[index - 1] === "Diagnostic codes")[0];
+    const shown: string[] = [];
+    for (const [name, report, source, mutate] of [["real spike report", reports[0], paths[0], false], ["synthetic stored-code copy", stored, "synthetic", false], ["real spike report, request mutated by the client", reports[0], paths[0], true]] as const) {
+      const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted })));
+      if (mutate) {
+        // A test client that tampers with the request it was handed: the displayed rating must not follow it.
+        const generate = h.access.generate.bind(h.access);
+        h.access.generate = (request, requestId) => {
+          for (const fact of request.facts) if (fact.id === "codes-rating") (fact as { value: string }).value = "Great";
+          return generate(request, requestId);
+        };
+      }
+      h.flow.consent(true);
+      const view = await h.flow.summaryFor(report);
+      expect(view.kind).toBe("llm");
+      // The card's own data: every area except state of charge, which the app does not rate.
+      for (const row of reportSummary(report).rows) expect(view.text, `${name} ${row.label}`).toContain(`\n\n${row.label}\nRating: ${ratingWord[row.rating.rating]}. Basis: ${row.rating.basis}.\n`);
+      shown.push(codesLine(view.text));
+      h.record(`rating lines rendered against the ${name}`, view, source);
+    }
+    expect(shown).toEqual([
+      "Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.",
+      "Rating: Poor. Basis: Project policy: a reported code is Poor.",
+      "Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.",
+    ]);
   });
 
   it.each(["unavailable", "unauthorized", "invalid-request", "consent-required", "no-credit", "budget-exhausted", "already-requested", "provider-error", "invalid-response"])("maps synthetic server %s to a fixed template reason", async (reason) => {
@@ -225,7 +275,7 @@ describe("recording → public development flow → HTTP access → local checke
 describe("recording-backed development evidence capture (synthetic HTTP metadata)", () => {
   it.each(["fallback", "local-rejection"])("retains valid usage on %s without exposing hosted text", async (name) => {
     const usage = { ...validUsage, model: "deepseek/deepseek-v4.1-flash", cachedInputTokens: undefined, reasoningTokens: undefined, providerCostUsd: undefined };
-    const h = harness(() => Promise.resolve(Response.json(name === "fallback" ? { kind: "fallback", reason: "private-evidence-sentinel", usage } : { kind: "llm", summary: { version: 1, claims: [{ text: "The adapter supply measured 99.9 V.", factIds: ["twelve-volt-0"] }] }, usage })));
+    const h = harness(() => Promise.resolve(Response.json(name === "fallback" ? { kind: "fallback", reason: "private-evidence-sentinel", usage } : { kind: "llm", summary: savedReply("v2-digit-outside"), usage })));
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);
     exactTemplate(view);
@@ -261,8 +311,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   });
 
   it("shows no failedCheck when the phone rejects the reply locally", async () => {
-    const response = responses.cases.find((entry) => entry.name === "wrong-number");
-    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: response?.response, failedCheck: "facts" })));
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: savedReply("v2-digit-outside"), failedCheck: "facts" })));
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);
     exactTemplate(view);
@@ -273,7 +322,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   const badFields: [string, unknown][] = [
     ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 1025], ["outputTokens", -1],
     ["cachedInputTokens", 201], ["reasoningTokens", 21], ["providerCostUsd", -0.1], ["providerCostUsd", 1.01], ["estimatedUsd", null], ["estimatedUsd", 1.01],
-    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["model", "private-evidence-sentinel".repeat(1000)],
+    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["model", "private-evidence-sentinel".repeat(1000)],
   ];
   it.each(badFields.map(([field, value], index) => ({ field, value, index })))("drops malformed usage $index $field independently of checked content", async ({ field, value, index }) => {
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: { ...validUsage, [field]: value } })));
@@ -284,6 +333,15 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     expect(view.evidence?.returnedModel).toBeNull();
     expect(JSON.stringify(view)).not.toContain("private-evidence-sentinel");
     h.record(`invalid usage ${String(index)} ${field}`, view);
+  });
+
+  it("shows the template for a v1-shaped server summary, and keeps its usage", async () => {
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: savedReply("shape-v1-claims"), usage: validUsage })));
+    h.flow.consent(true);
+    const view = await h.flow.summaryFor(reports[0]);
+    exactTemplate(view);
+    expect(view.evidence?.usage).toEqual(validUsage);
+    h.record("v1-shaped summary", view);
   });
 
   it("projects only allowlisted metadata and never trusts the server request ID", async () => {

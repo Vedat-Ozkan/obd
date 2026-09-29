@@ -3,12 +3,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
 import { batteryDiagnosisFromRecording, renderBatteryDiagnosis } from "obd-battery/report";
 import { summarize, type LlmClient, type SummaryRequest } from "obd-assist";
-import { createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase } from "../scripts/replay-summary.js";
+import { createClaimReplayArtifact, createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase } from "../scripts/replay-summary.js";
 
 const root = new URL("../../../", import.meta.url);
 const fixturePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
 const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/t2.10-summary-responses.json", root), "utf8")) as { readonly cases: readonly SavedSummaryCase[] };
 const nameResponses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-twelve-volt-name-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
+const explanatory = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-explanatory-summary-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
 const phoneConsolePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
 const signalset = importObdbMode22(JSON.parse(readFileSync(new URL("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", root), "utf8")));
 
@@ -242,19 +243,10 @@ describe("summary recording replay", () => {
   let report: Awaited<ReturnType<typeof replayReport>>;
   beforeAll(async () => { report = await replayReport(); });
 
-  it.each(responses.cases)("saved response $name", async (saved) => {
+  // The v1 claim corpus (150+ grammar cases) runs through the shared claim checker and renderer, not the v2 summary path.
+  it.each(responses.cases)("saved claim set $name", async (saved) => {
     const caseReport = reportForSavedCase(report, saved);
-    let request: SummaryRequest | undefined;
-    const client: LlmClient = {
-      generate(input) {
-        request = input;
-        if (saved.providerFailure) return Promise.reject(new Error("provider detail must never be displayed"));
-        return Promise.resolve(saved.response);
-      },
-    };
-    const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
-    expect(request).toBeDefined();
-    expect(JSON.stringify(request)).not.toMatch(/summary-replay|2026-09-22T00:00:00.000Z|2026-09-22-spike\.redacted|18DAF1|VIN/i);
+    const result = (await createClaimReplayArtifact(report, { cases: [saved] })).cases[0];
     expect(expectedKinds[saved.name]).toBeDefined();
     expect(result.kind).toBe(expectedKinds[saved.name]);
     if (expectedKinds[saved.name] === "llm") {
@@ -277,26 +269,14 @@ describe("summary recording replay", () => {
         expect(lines[2]).toBe(`The adapter supply measured ${round(report.twelveVolt.observations[0].volts)} V.`);
       }
     } else {
-      expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(caseReport), reason: "Summary response could not be verified." });
-      expect(result.text).not.toContain("provider detail");
+      expect(result).toEqual({ name: saved.name, kind: "template", text: renderBatteryDiagnosis(caseReport) });
     }
   });
 
-  it("produces the same canonical artifact as the public replay CLI helper", async () => {
-    const results = [];
-    for (const saved of responses.cases) {
-      const result = await summarize(reportForSavedCase(report, saved), {
-        generate: () => saved.providerFailure ? Promise.reject(new Error("saved failure")) : Promise.resolve(saved.response),
-      }, { model: "saved-response", effort: "none" });
-      results.push({ name: saved.name, kind: result.kind, text: result.text });
-    }
-    const artifact = {
-      fixture: fixturePath,
-      promptVersion: "t2.10-v1",
-      cases: results,
-    };
+  it("writes the claim replay artifact the public CLI helper produces", async () => {
+    const artifact = await createClaimReplayArtifact(report, responses);
     writeFileSync("/tmp/t2.10a-summary-replay.json", `${JSON.stringify(artifact, null, 2)}\n`);
-    expect(await createSummaryReplayArtifact(report, responses)).toEqual(artifact);
+    expect(artifact.fixture).toBe(fixturePath);
     expect(responses.cases.map((saved) => saved.name)).toEqual(Object.keys(expectedKinds));
     expect(new Set(responses.cases.map((saved) => saved.name)).size).toBe(responses.cases.length);
     expect(Object.keys(expectedText).sort()).toEqual(Object.entries(expectedKinds).filter(([, kind]) => kind === "llm").map(([name]) => name).sort());
@@ -336,15 +316,88 @@ describe("12 V name phrases on the phone-console recording (synthetic responses)
   it.each(nameResponses.cases)("saved response $name", async (saved) => {
     const expected = nameExpected[saved.name];
     expect(expected).toBeDefined();
-    const result = await summarize(reportForSavedCase(report, saved), { generate: () => Promise.resolve(saved.response) }, { model: "saved-response", effort: "none" });
+    const result = (await createClaimReplayArtifact(report, { cases: [saved] })).cases[0];
     expect(result.kind).toBe(expected.kind);
     if (expected.kind === "llm") expect(result.text).toBe(expected.text);
-    else expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(reportForSavedCase(report, saved)), reason: "Summary response could not be verified." });
+    else expect(result).toEqual({ name: saved.name, kind: "template", text: renderBatteryDiagnosis(reportForSavedCase(report, saved)) });
   });
 
   it("writes the replay artifact the public CLI helper produces", async () => {
-    const artifact = await createSummaryReplayArtifact(report, nameResponses);
+    const artifact = await createClaimReplayArtifact(report, nameResponses);
     writeFileSync("/tmp/x-twelve-volt-name-summary.json", `${JSON.stringify(artifact, null, 2)}\n`);
     expect(artifact.cases.map((item) => item.name)).toEqual(Object.keys(nameExpected));
+  });
+});
+
+// Summary v2 (X-2026-09-29-explanatory-summary, Stage 2): the SYNTHETIC replies run through `summarize` on the real spike report.
+// The whole displayed text is written out here, not derived from the saved reply.
+const explanatoryText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
+
+State of charge
+Rating: Not rated. Basis: The app does not rate state of charge.
+State of charge is how full the high-voltage battery is, like a fuel gauge. This check read SoC: 69.8039 percent; it shows the charge at the time of the check, not the battery's condition.
+
+Cell balance
+Rating: Not rated. Basis: No threshold yet.
+Cell balance compares the highest and lowest cell voltages; a wide gap can point to a cell group that ages faster. Here the Cell spread is 0.003 volts, a community reading, and the app has no threshold to judge it yet.
+
+Capacity
+Rating: Not rated. Basis: No threshold yet.
+Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: No completed charge log and reviewed capacity estimator are available.
+
+12 V battery
+Rating: Not rated. Basis: No threshold yet.
+The twelve-volt battery powers the car's computers and wakes the high-voltage system. The adapter supply measured 12.7 V. A load test or service check is needed to know the battery's condition.
+
+Diagnostic codes
+Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.
+Diagnostic trouble codes are fault records that the car's control modules store when they detect a problem. The recently cleared check answered unknown, so a buyer could ask whether codes were cleared before the sale.`;
+const explanatoryCodesPoor = explanatoryText.replace(
+  "Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.",
+  "Rating: Poor. Basis: Project policy: a reported code is Poor.");
+const explanatoryKinds: Readonly<Record<string, "llm" | "template">> = {
+  "explanatory-accepted": "llm", "explanatory-accepted-stored-code": "llm",
+  "verdict-contradicts-rating": "template", "verdict-unrated-area": "template", "verdict-in-takeaway": "template",
+  "verdict-matches-rating": "template", "verdict-capitalized": "template",
+  "verdict-substring-boundary": "llm",
+  "rating-fact-cited": "template", "rating-basis-cited": "template",
+  "v2-digit-outside": "template", "v2-unknown-placeholder": "template", "v2-uncited-placeholder": "template",
+  "shape-v1-claims": "template", "shape-missing-area": "template", "shape-wrong-order": "template", "shape-duplicate-area": "template", "shape-extra-area": "template",
+  "shape-four-claims": "template", "shape-empty-area": "template", "shape-missing-takeaway": "template", "shape-takeaway-array": "template", "shape-version-1": "template",
+};
+
+describe("explanatory summary v2 on the spike recording (synthetic replies)", () => {
+  let report: Awaited<ReturnType<typeof replayReport>>;
+  beforeAll(async () => { report = await replayReport(); });
+
+  it("labels the fixture synthetic", () => {
+    expect(explanatory.label).toMatch(/^SYNTHETIC hand-written v2 summary replies; not recorded model output$/);
+  });
+
+  it.each(explanatory.cases)("saved reply $name", async (saved) => {
+    const caseReport = reportForSavedCase(report, saved);
+    let request: SummaryRequest | undefined;
+    const client: LlmClient = { generate(input) { request = input; return Promise.resolve(saved.response); } };
+    const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
+    expect(explanatoryKinds[saved.name]).toBeDefined();
+    expect(result.kind).toBe(explanatoryKinds[saved.name]);
+    // The projection carries the app's rating for every area, after the report's own facts.
+    expect(request?.promptVersion).toBe("t2.10-v2");
+    expect(request?.facts.slice(-10).map((fact) => fact.id)).toEqual(["soc", "cells", "capacity", "twelve-volt", "codes"].flatMap((prefix) => [`${prefix}-rating`, `${prefix}-rating-basis`]));
+    if (result.kind === "template") {
+      expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(caseReport), reason: "Summary response could not be verified." });
+      return;
+    }
+    if (saved.name === "explanatory-accepted") expect(result.text).toBe(explanatoryText);
+    if (saved.name === "explanatory-accepted-stored-code") expect(result.text).toBe(explanatoryCodesPoor);
+    if (saved.name === "verdict-substring-boundary") expect(result.text).toContain(" Take a look at the service records before buying.");
+  });
+
+  it("writes the replay artifact the public CLI helper produces", async () => {
+    const artifact = await createSummaryReplayArtifact(report, explanatory);
+    writeFileSync("/tmp/x-explanatory-spike.json", `${JSON.stringify(artifact, null, 2)}\n`);
+    expect(artifact.promptVersion).toBe("t2.10-v2");
+    expect(explanatory.cases.map((saved) => saved.name)).toEqual(Object.keys(explanatoryKinds));
+    expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual(Object.entries(explanatoryKinds));
   });
 });
