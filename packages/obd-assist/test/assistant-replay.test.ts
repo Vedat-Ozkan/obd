@@ -112,6 +112,8 @@ const expectedAdversarial: Readonly<Record<string, Outcome>> = {
   "invalid-question-paragraph-separator": fallback("invalid-input", [], 0),
   "gate-fail-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
   "no-soc-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
+  // A digit outside a placeholder is rejected even when the placeholder beside it is valid (X-2026-09-29-summary-placeholders).
+  "placeholder-digit-outside": fallback("unverified-answer", ["get_session:s1:ok"]),
 };
 
 describe("assistant replay over recordings and saved synthetic replies", () => {

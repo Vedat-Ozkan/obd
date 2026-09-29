@@ -350,28 +350,30 @@ export default { async fetch(request, env) {
     expect(JSON.stringify(result)).not.toMatch(/SENTINEL_|synthetic-key|synthetic-development-token|18DAF1/);
     expect(JSON.stringify([meta.full, meta.budget]), name).not.toMatch(/SENTINEL_/);
     rows.push({ name, source: "synthetic-upstream", kind: result.kind, reason: result.reason ?? null, ...Object.hasOwn(result, "upstreamStatus") ? { upstreamStatus: result.upstreamStatus } : {}, ...Object.hasOwn(result, "failedCheck") ? { failedCheck: result.failedCheck, settledError: meta.requests.map((row) => row.error) } : {}, displayed: shown.text, completionCalls: completions, metadataCalls: meta.calls.length - completions, budget: { ...meta.budget, inflight: meta.budget.inflight === null ? null : "held" }, requests: meta.requests, usage: result.usage ?? null });
-    return { result, meta };
+    return { result, meta, shown };
   }
   for (const [index, report] of reports.entries()) {
     const facts = prepareSummaryRequest(report).facts;
-    const quantity = facts.find((item) => item.unit && /^[A-Za-z ()-]+$/.test(item.label));
-    const adapter = facts.find((item) => item.label === "adapter-supply 12 V supply" && item.unit === "V");
-    const fact = quantity ?? adapter ?? facts.find((item) => item.id === "capacity-reason");
+    const quantity = facts.find((item) => item.unit);
+    const fact = quantity ?? facts.find((item) => item.id === "capacity-reason");
     if (!fact) throw new Error("Recording has no report evidence");
-    const text = quantity ? `${fact.label}: ${fact.value} ${String(fact.unit)}.` : adapter ? `The adapter supply measured ${fact.value} V.` : "Capacity evidence is missing.";
+    // The reply carries placeholders; the numbers the phone shows come from its own projection (X-2026-09-29-summary-placeholders).
+    const text = quantity ? `{label:${fact.id}}: {fact:${fact.id}}.` : "Capacity evidence is missing.";
     const real = await check(`real-recording-${String(index)}`, { output: envelope({ version: 1, claims: [{ text, factIds: [fact.id] }] }) }, body(prepareSummaryRequest(report)), null, 1, report);
+    expect(real.shown.text, `real-recording-${String(index)} displayed text`).toBe(quantity ? `${fact.label}: ${fact.value} ${String(quantity.unit)}.` : "Capacity evidence is missing.");
     const reserved = reservedOf(real.meta).microUsd;
     expect(reserved).toBeGreaterThanOrEqual(6000); expect(reserved).toBeLessThanOrEqual(8000);
     expect(real.meta.requests).toEqual([{ state: "settled", reservation: reserved, actual: 66, error: null }]);
     expect(real.meta.budget.spent).toBe(66);
   }
-  const savedNames = ["accepted", "wrong-number", "wrong-unit", "missing-citation", "prefix-plus-minus", "prefix-less-equal", "malformed", "canonical-cell-spread", "synthetic-multi-dtc-no-recording"];
+  const savedNames = ["accepted", "wrong-number", "wrong-unit", "missing-citation", "prefix-plus-minus", "prefix-less-equal", "malformed", "canonical-cell-spread", "synthetic-multi-dtc-no-recording", "placeholder-digit-outside", "placeholder-real-values"];
   for (const name of savedNames) {
     const item = saved.cases.find((candidate) => candidate.name === name);
     if (!item) throw new Error(`Missing saved case ${name}`);
     const report = reportForSavedCase(baseReport, item);
-    const accepts = ["accepted", "canonical-cell-spread", "synthetic-multi-dtc-no-recording"].includes(name);
-    const { result } = await check(name, { output: envelope(item.response) }, body(prepareSummaryRequest(report)), accepts ? null : "invalid-response", 1, report);
+    const accepts = ["accepted", "canonical-cell-spread", "synthetic-multi-dtc-no-recording", "placeholder-real-values"].includes(name);
+    const { result, shown } = await check(name, { output: envelope(item.response) }, body(prepareSummaryRequest(report)), accepts ? null : "invalid-response", 1, report);
+    if (name === "placeholder-real-values") expect(shown.text).toBe("SoC: 69.8039 percent.\nCell spread: 0.003 volts, a community reading.\nThe adapter supply measured 12.7 V.\n12 V battery status is not-assessed.");
     // Failure 1 and 2: a reply rejected by the fact check is `facts`; one that fails the reply shape (no citation, wrong version) is `shape`.
     if (!accepts) expect(result.failedCheck, name).toBe(["missing-citation", "malformed"].includes(name) ? "shape" : "facts");
   }

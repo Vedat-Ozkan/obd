@@ -11,58 +11,30 @@ const summarySchema = z.strictObject({
   claims: z.array(z.strictObject({ text: z.string().transform((text) => text.replace(/^ +| +$/g, "")).pipe(z.string().min(1)), factIds: z.array(z.string().trim().min(1)).min(1) })).min(1),
 });
 
-// Exact quantity/DTC grammar: T2.10a-exact-quantity-amendment, rules 2–6.
-const eligibleLabel = (label: string): boolean => /^[A-Za-z ()-]+$/.test(label) && /^[A-Za-z(]/.test(label) && /[A-Za-z)]$/.test(label);
+// The model never writes a value: it names a fact and the app renders it (X-2026-09-29-summary-placeholders).
+// The ID class is printable ASCII without braces, at most the Worker's ID bound of 96.
+const PLACEHOLDER = /\{(fact|label):([!-z|~]{1,96})\}/g;
 
-function acceptedBodies(cited: readonly SummaryFact[]): ReadonlySet<string> {
-  const bodies = new Set<string>();
-  const storedCodes: SummaryFact[] = [];
-  for (const fact of cited) {
-    if (fact.unit && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(fact.value) && /^[A-Za-z%]+(?:\/[A-Za-z%]+)?$/.test(fact.unit)) {
-      const quantity = `${fact.value} ${fact.unit}`;
-      if (eligibleLabel(fact.label)) bodies.add(`${fact.label}: ${quantity}`);
-      if (fact.label === "adapter-supply 12 V supply" && fact.unit === "V") {
-        bodies.add(`The adapter supply measured ${quantity}`);
-        bodies.add(`adapter supply was ${quantity}`);
-      }
-      if (fact.label === "Cell spread" && fact.unit === "volts" && fact.tier === "community") {
-        bodies.add(`The community cell spread measured ${quantity}`);
-      }
-    }
-    // DTC alphabet/encoding: docs/ELM327.md, DTC 2-byte encoding.
-    if (/^[PCBU][0-3][0-9A-F]{3}$/.test(fact.value)) {
-      if (eligibleLabel(fact.label)) bodies.add(`${fact.label}: ${fact.value}`);
-      if (fact.label === "stored diagnostic code") {
-        bodies.add(`Stored diagnostic code ${fact.value} was reported`);
-        bodies.add(`${fact.value} was stored`);
-        storedCodes.push(fact);
-      }
-    }
+function checkClaim(text: string, citedIds: ReadonlySet<string>, allFactIds: ReadonlySet<string>): void {
+  for (const match of text.matchAll(PLACEHOLDER)) {
+    if (!allFactIds.has(match[2])) throw new Error("summary claim names an unknown fact");
+    if (!citedIds.has(match[2])) throw new Error("summary claim names an uncited fact");
   }
-  for (const first of storedCodes) {
-    for (const second of storedCodes) {
-      if (first.id !== second.id && first.value !== second.value) {
-        bodies.add(`Stored diagnostic codes ${first.value} and ${second.value} were reported`);
-      }
-    }
-  }
-  return bodies;
+  const rest = text.replace(PLACEHOLDER, " ");
+  if ([...allFactIds].some((id) => rest.includes(id))) throw new Error("summary claim includes a source identifier");
+  // Every Unicode number, brace, symbol and non-ASCII space fails here; every DTC contains a digit (docs/ELM327.md, DTC 2-byte encoding).
+  if (!/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(rest)) throw new Error("summary claim has a digit, symbol or malformed placeholder outside a placeholder");
 }
 
-// Owner decision 2026-09-29: "12 V" may name the low-voltage system, never state a reading (X-2026-09-29-twelve-volt-name).
-const TWELVE_VOLT_NAMES = /(?<=^|[ (])12 V (battery|observations)(?=$|[ .,;:!?)])/g;
-
-function checkClaim(text: string, cited: readonly SummaryFact[], allFactIds: ReadonlySet<string>): void {
-  if ([...allFactIds].some((id) => text.includes(id))) throw new Error("summary claim includes a source identifier");
-  // Only symbol-free prose gets this route; quantities and codes require full coverage.
-  // A name phrase counts as prose only when it cites a 12 V fact; any digit left over is checked on the original text.
-  const prose = cited.some((fact) => fact.label.includes("12 V")) ? text.replace(TWELVE_VOLT_NAMES, "$1") : text;
-  if (/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(prose)) return;
-  if (/[^\x20-\x7E]/.test(text) || text.includes("  ")) throw new Error("summary claim has unsupported whitespace or characters");
-  const bodies = acceptedBodies(cited);
-  if (!text.endsWith(".") || !text.slice(0, -1).split(/; |, and /).every((body) => bodies.has(body))) {
-    throw new Error("summary claim has an unsupported quantity or DTC body");
-  }
+/** Rendered display text: one line per claim, every placeholder replaced in one pass with the fact's raw spelling. */
+export function renderClaims(facts: readonly SummaryFact[], summary: StructuredSummary): string {
+  const byId = new Map(facts.map((fact) => [fact.id, fact]));
+  return summary.claims.map((claim) => claim.text.replace(PLACEHOLDER, (_match, kind: string, id: string) => {
+    const fact = byId.get(id);
+    if (fact === undefined) throw new Error("summary claim names an unknown fact");
+    if (kind === "label") return fact.label;
+    return fact.unit ? `${fact.value} ${fact.unit}` : fact.value;
+  })).join("\n");
 }
 
 /** Validate a structured response only against the facts the caller actually supplied. */
@@ -76,10 +48,8 @@ export function checkFacts(supplied: readonly SummaryFact[], response: unknown):
   if (facts.size !== parsedFacts.length) throw new Error("summary request has duplicate fact identifiers");
   for (const claim of parsedSummary.claims) {
     if (new Set(claim.factIds).size !== claim.factIds.length) throw new Error("summary claim repeats a citation");
-    const cited = claim.factIds.map((id) => facts.get(id));
-    const knownFacts = cited.filter((fact): fact is SummaryFact => fact !== undefined);
-    if (knownFacts.length !== cited.length) throw new Error("summary claim cites an unknown fact");
-    checkClaim(claim.text, knownFacts, new Set(facts.keys()));
+    if (claim.factIds.some((id) => !facts.has(id))) throw new Error("summary claim cites an unknown fact");
+    checkClaim(claim.text, new Set(claim.factIds), new Set(facts.keys()));
   }
   return parsedSummary;
 }

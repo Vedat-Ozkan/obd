@@ -1,5 +1,5 @@
 {
-  "label": "Synthetic saved structured responses for T2.10a; no provider call.",
+  "label": "Synthetic saved structured responses for T2.10a and X-2026-09-29-summary-placeholders; no provider call.",
   "cases": [
     {
       "name": "accepted",
@@ -7,7 +7,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "The adapter supply measured 12.7 V.",
+            "text": "The adapter supply measured {fact:twelve-volt-0}.",
             "factIds": [
               "twelve-volt-0"
             ]
@@ -20,7 +20,7 @@
             ]
           },
           {
-            "text": "The community cell spread measured 0.003 volts.",
+            "text": "The community cell spread measured {fact:cell-spread}.",
             "factIds": [
               "cell-spread"
             ]
@@ -138,7 +138,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "Stored diagnostic code P0133 was reported.",
+            "text": "Stored diagnostic code {fact:codes-0-stored-P0133} was reported.",
             "factIds": [
               "codes-0-stored-P0133"
             ]
@@ -153,7 +153,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "P0133 was stored, and adapter supply was 12.7 V.",
+            "text": "{fact:codes-0-stored-P0133} was stored, and adapter supply was {fact:twelve-volt-0}.",
             "factIds": [
               "codes-0-stored-P0133",
               "twelve-volt-0"
@@ -172,7 +172,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "Cell spread: 0.003 volts.",
+            "text": "{label:cell-spread}: {fact:cell-spread}.",
             "factIds": [
               "cell-spread"
             ]
@@ -186,7 +186,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "  The adapter supply measured 12.7 V.  ",
+            "text": "  The adapter supply measured {fact:twelve-volt-0}.  ",
             "factIds": [
               "twelve-volt-0"
             ]
@@ -215,7 +215,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "Cell voltage (avg): -3.9297 volts.",
+            "text": "{label:signal-EQUINOXEV_HVBAT_C_V_AVG}: {fact:signal-EQUINOXEV_HVBAT_C_V_AVG}.",
             "factIds": [
               "signal-EQUINOXEV_HVBAT_C_V_AVG"
             ]
@@ -290,7 +290,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "Cell voltage (avg): 0 volts.",
+            "text": "{label:signal-EQUINOXEV_HVBAT_C_V_AVG}: {fact:signal-EQUINOXEV_HVBAT_C_V_AVG}.",
             "factIds": [
               "signal-EQUINOXEV_HVBAT_C_V_AVG"
             ]
@@ -1653,7 +1653,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "  The adapter supply measured 12.7 V.  ",
+            "text": "  The adapter supply measured {fact:twelve-volt-0}.  ",
             "factIds": [
               "twelve-volt-0"
             ]
@@ -1837,7 +1837,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "stored diagnostic code: P0133.",
+            "text": "{label:codes-0-stored-P0133}: {fact:codes-0-stored-P0133}.",
             "factIds": [
               "codes-0-stored-P0133"
             ]
@@ -1852,7 +1852,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "Stored diagnostic codes P0133 and P0420 were reported.",
+            "text": "Stored diagnostic codes {fact:codes-0-stored-P0133} and {fact:codes-0-stored-P0420} were reported.",
             "factIds": [
               "codes-0-stored-P0133",
               "codes-0-stored-P0420"
@@ -1868,7 +1868,7 @@
         "version": 1,
         "claims": [
           {
-            "text": "The adapter supply measured 12.7 V; P0133 was stored.",
+            "text": "The adapter supply measured {fact:twelve-volt-0}; {fact:codes-0-stored-P0133} was stored.",
             "factIds": [
               "twelve-volt-0",
               "codes-0-stored-P0133"
@@ -2348,6 +2348,382 @@
             "text": "12 V battery status was not-assessed.",
             "factIds": [
               "capacity-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-digit-outside",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:twelve-volt-0}: 12.7 V.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-numeral-fullwidth",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, about ３ millivolts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-numeral-arabic-indic",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, about ٣ millivolts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-numeral-superscript",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, about ³ millivolts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-numeral-fraction",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, about ½ millivolts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-numeral-roman",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, about Ⅻ millivolts.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "synthetic-placeholder-dtc-outside-no-recording",
+      "report": "synthetic-multi-dtc-no-recording",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "P0133 was stored ({fact:codes-0-stored-P0133}).",
+            "factIds": [
+              "codes-0-stored-P0133"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-unknown",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:no-such-fact}.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-uncited",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-empty-id",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-unclosed",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:cell-spread",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-no-open-brace",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "fact:cell-spread}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-wrong-kind",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{value:cell-spread}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-capital-kind",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{Fact:cell-spread}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-space-after-colon",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact: cell-spread}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-space-before-kind",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{ fact:cell-spread}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-double-braces",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{{fact:cell-spread}}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-extra-close",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:cell-spread}}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-nested",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:{fact:cell-spread}}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-fullwidth-braces",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "｛fact:cell-spread｝",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-malformed-id-97-characters",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{fact:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-id-in-prose",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "cell-spread is {fact:cell-spread}.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-real-values",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+            "factIds": [
+              "signal-EQUINOXEV_SOC"
+            ]
+          },
+          {
+            "text": "{label:cell-spread}: {fact:cell-spread}, a community reading.",
+            "factIds": [
+              "cell-spread"
+            ]
+          },
+          {
+            "text": "The adapter supply measured {fact:twelve-volt-0}.",
+            "factIds": [
+              "twelve-volt-0"
+            ]
+          },
+          {
+            "text": "{label:twelve-volt-status} is {fact:twelve-volt-status}.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-two-facts",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:signal-EQUINOXEV_HVBAT_C_V_MIN}: {fact:signal-EQUINOXEV_HVBAT_C_V_MIN}; {label:signal-EQUINOXEV_HVBAT_C_V_MAX}: {fact:signal-EQUINOXEV_HVBAT_C_V_MAX}.",
+            "factIds": [
+              "signal-EQUINOXEV_HVBAT_C_V_MIN",
+              "signal-EQUINOXEV_HVBAT_C_V_MAX"
+            ]
+          },
+          {
+            "text": "{fact:cell-spread}, that is {fact:cell-spread}.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-relational-prose",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Cell spread is less than {fact:cell-spread}.",
+            "factIds": [
+              "cell-spread"
             ]
           }
         ]

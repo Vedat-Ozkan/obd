@@ -2,15 +2,15 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: Stage 1 APPROVE (repairs 0/2) — committed; waiting for the owner D1 phone re-run, then Stage 2. Tool: Claude Code, orchestrator `/feature`.
+- Stage: closed — superseded by X-2026-09-29-summary-placeholders Stage 2 (placeholders render every number; the name allowance is deleted). Stage 1 stays in history (ca86868); Stage 2 cancelled.
 - Spec: `docs/specs/X-2026-09-29-twelve-volt-name.md` (size S, Stage 1 summary + phone, Stage 2 assistant).
 - Repairs: 0/2. Escalations: 0.
 - Verdicts: Stage 1 APPROVE (2026-09-29); pnpm check parts all green (owner's wrangler dev running).
 - Decisions in effect: owner 2026-09-29: the number check accepts "12 V" only as part of fixed name phrases (for example "12 V battery", "12 V system"), never as a reading; the prompt tells the model to use those phrases; readings stay exact-match only.
 - Owner authorizations: this fix. No paid call; the owner re-runs the D1 phone gate afterwards.
-- NOT RUN: owner D1 phone re-run; Stage 2.
+- NOT RUN: none for this task; the D1 phone re-run moves to X-2026-09-29-summary-placeholders after its Stage 3.
 - Blocker: none.
-- Next action: owner restarts wrangler dev (v3 prompt), reloads Metro, re-runs the D1 phone gate; then Stage 2.
+- Next action: none.
 
 ## Baseline
 
@@ -34,3 +34,4 @@ Stage 1 APPROVE, 2 minors: (1) the 25 `twelve-volt-name-*` case names lack "synt
 - 2026-09-29 architect (Claude): spec written; optional citation question answered from the owner's diagnostic output (both 12 V claims cited 12 V-labelled facts). Scope per the owner's choice.
 - 2026-09-29 implementer Stage 1 (Claude): done; see Verification evidence.
 - 2026-09-29 reviewer Stage 1 (Claude): APPROVE, 2 minors; reproduced the bare-12 V counterfactual.
+- 2026-09-29 orchestrator: closed as superseded by X-2026-09-29-summary-placeholders (owner chose placeholders after the third D1 attempt fell back).

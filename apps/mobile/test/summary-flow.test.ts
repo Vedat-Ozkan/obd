@@ -106,14 +106,20 @@ describe("recording → public development flow → HTTP access → local checke
     h.record(name, view);
   });
 
-  it("accepts the exact recorded adapter quantity after local checking", async () => {
-    const summary = { version: 1, claims: [{ text: "The adapter supply measured 12.7 V.", factIds: ["twelve-volt-0"] }] };
-    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary })));
-    h.flow.consent(true);
-    const view = await h.flow.summaryFor(reports[0]);
-    expect(view.kind).toBe("llm");
-    expect(view.text).toBe(summary.claims[0].text);
-    h.record("exact recorded adapter quantity", view, paths[0]);
+  it("renders the adapter quantity from the phone's own report, whatever the server sent", async () => {
+    // One fixed server reply; only the report it is rendered against differs. The 12.8 report is a synthetic copy, not a recording.
+    const summary = { version: 1, claims: [{ text: "The adapter supply measured {fact:twelve-volt-0}.", factIds: ["twelve-volt-0"] }] };
+    const synthetic128: BatteryDiagnosisReport = { ...reports[0], twelveVolt: { ...reports[0].twelveVolt, observations: reports[0].twelveVolt.observations.map((observation, index) => index === 0 ? { ...observation, volts: 12.8 } : observation) } };
+    const shown: string[] = [];
+    for (const [name, report, source] of [["real spike report", reports[0], paths[0]], ["synthetic copy with 12.8 V", synthetic128, "synthetic"]] as const) {
+      const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary })));
+      h.flow.consent(true);
+      const view = await h.flow.summaryFor(report);
+      expect(view.kind).toBe("llm");
+      shown.push(view.text);
+      h.record(`placeholder rendered against the ${name}`, view, source);
+    }
+    expect(shown).toEqual(["The adapter supply measured 12.7 V.", "The adapter supply measured 12.8 V."]);
   });
 
   it.each(["unavailable", "unauthorized", "invalid-request", "consent-required", "no-credit", "budget-exhausted", "already-requested", "provider-error", "invalid-response"])("maps synthetic server %s to a fixed template reason", async (reason) => {

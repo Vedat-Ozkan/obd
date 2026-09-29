@@ -2,7 +2,7 @@ import { z } from "zod";
 import { INTEGRATED_LABEL, integratedCurrentCapacity } from "obd-battery/capacity";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { chargePhases, gateFailures, num, type ChargeLog } from "obd-battery/session";
-import { checkFacts } from "./check.js";
+import { checkFacts, renderClaims } from "./check.js";
 import { prepareSummaryRequest, type StructuredSummary, type SummaryFact } from "./summary.js";
 
 // Design: docs/specs/T2.11a-assistant-tools-replay.md. Every tool reads the caller's in-memory data; none touches the vehicle.
@@ -200,7 +200,7 @@ export async function askAssistant(sources: readonly AssistantSource[], question
     if (received === undefined) return fallback("unverified-answer");
     try {
       const answer = checkFacts(received, { version: 1, claims: reply.claims });
-      return { kind: "answer", text: answer.claims.map((claim) => claim.text).join("\n"), answer, steps: [...steps], usage: [...usage] };
+      return { kind: "answer", text: renderClaims(received, answer), answer, steps: [...steps], usage: [...usage] };
     } catch { return fallback("unverified-answer"); }
   }
 }

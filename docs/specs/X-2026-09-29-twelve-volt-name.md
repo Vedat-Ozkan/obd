@@ -1,5 +1,7 @@
 # X-2026-09-29-twelve-volt-name: accept "12 V" as a system name, never as a reading
 
+> Superseded 2026-09-29 by `docs/specs/X-2026-09-29-summary-placeholders.md` (Decision 3): the name reduction is deleted, `12 V` outside a placeholder is a digit and is rejected, the 12 V labels render through `{label:…}`, and this task's Stage 2 (assistant preamble `t2.11-openrouter-v2`) is cancelled and never implemented.
+
 Record: `docs/task-runs/X-2026-09-29-twelve-volt-name.md`. Size S, in two stages (file limit). **Stage 1 goes first** because it unblocks the owner's D1 phone re-run. Stage 2 then brings the assistant prompt in line with the shared checker.
 
 ## Goal

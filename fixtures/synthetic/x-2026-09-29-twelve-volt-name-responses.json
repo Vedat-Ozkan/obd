@@ -1,5 +1,5 @@
 {
-  "label": "SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md; not recorded model output",
+  "label": "SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md, plus placeholder rewrites; not recorded model output",
   "cases": [
     {
       "name": "synthetic-reconstructed-deepseek-twelve-volt-names",
@@ -51,6 +51,60 @@
             "factIds": [
               "twelve-volt",
               "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-rewrite-of-reconstruction",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:twelve-volt}: {fact:twelve-volt}.",
+            "factIds": [
+              "twelve-volt"
+            ]
+          },
+          {
+            "text": "{label:twelve-volt-status} was {fact:twelve-volt-status}.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          },
+          {
+            "text": "Capacity was not measured because no completed charge log and reviewed capacity estimator are available.",
+            "factIds": [
+              "capacity-status",
+              "capacity-reason"
+            ]
+          },
+          {
+            "text": "Battery health was not assessed.",
+            "factIds": [
+              "health-status",
+              "health-reason"
+            ]
+          },
+          {
+            "text": "Cell spread is unavailable.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeholder-fact-absent-from-report",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:twelve-volt-0}: {fact:twelve-volt-0}.",
+            "factIds": [
+              "twelve-volt-0"
             ]
           }
         ]

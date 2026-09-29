@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
 import { batteryDiagnosisFromRecording, renderBatteryDiagnosis } from "obd-battery/report";
-import { summarize, type LlmClient, type StructuredSummary, type SummaryRequest } from "obd-assist";
+import { summarize, type LlmClient, type SummaryRequest } from "obd-assist";
 import { createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase } from "../scripts/replay-summary.js";
 
 const root = new URL("../../../", import.meta.url);
@@ -160,10 +160,10 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "synthetic-dtc-malformed-no-recording": "template",
   "synthetic-dtc-arbitrary-no-recording": "template",
   "synthetic-dtc-modified-quantity-no-recording": "template",
-  "twelve-volt-name-status-prose": "llm",
-  "twelve-volt-name-mid-sentence": "llm",
-  "twelve-volt-name-parenthesis": "llm",
-  "twelve-volt-name-sentence-end": "llm",
+  "twelve-volt-name-status-prose": "template",
+  "twelve-volt-name-mid-sentence": "template",
+  "twelve-volt-name-parenthesis": "template",
+  "twelve-volt-name-sentence-end": "template",
   "twelve-volt-name-bare-reading": "template",
   "twelve-volt-name-transformed-reading": "template",
   "twelve-volt-name-exact-value-wrong-body": "template",
@@ -184,7 +184,54 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "twelve-volt-name-glued-minus": "template",
   "twelve-volt-name-glued-plus": "template",
   "twelve-volt-name-other-digit": "template",
-  "twelve-volt-name-uncited": "template"
+  "twelve-volt-name-uncited": "template",
+  "placeholder-digit-outside": "template",
+  "placeholder-numeral-fullwidth": "template",
+  "placeholder-numeral-arabic-indic": "template",
+  "placeholder-numeral-superscript": "template",
+  "placeholder-numeral-fraction": "template",
+  "placeholder-numeral-roman": "template",
+  "synthetic-placeholder-dtc-outside-no-recording": "template",
+  "placeholder-unknown": "template",
+  "placeholder-uncited": "template",
+  "placeholder-malformed-empty-id": "template",
+  "placeholder-malformed-unclosed": "template",
+  "placeholder-malformed-no-open-brace": "template",
+  "placeholder-malformed-wrong-kind": "template",
+  "placeholder-malformed-capital-kind": "template",
+  "placeholder-malformed-space-after-colon": "template",
+  "placeholder-malformed-space-before-kind": "template",
+  "placeholder-malformed-double-braces": "template",
+  "placeholder-malformed-extra-close": "template",
+  "placeholder-malformed-nested": "template",
+  "placeholder-malformed-fullwidth-braces": "template",
+  "placeholder-malformed-id-97-characters": "template",
+  "placeholder-id-in-prose": "template",
+  "placeholder-real-values": "llm",
+  "placeholder-two-facts": "llm",
+  "placeholder-relational-prose": "llm"
+};
+
+// The displayed text of every accepted case, written out here rather than derived from the saved replies.
+// Migrated cases keep the text they displayed before placeholders (X-2026-09-29-summary-placeholders, Stage 2, item 13).
+const capacityProse = "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.";
+const expectedText: Readonly<Record<string, string>> = {
+  "accepted": `The adapter supply measured 12.7 V.\n${capacityProse}\nThe community cell spread measured 0.003 volts.`,
+  "synthetic-multi-dtc-no-recording": "Stored diagnostic code P0133 was reported.",
+  "synthetic-multi-dtc-with-number-no-recording": "P0133 was stored, and adapter supply was 12.7 V.",
+  "canonical-cell-spread": "Cell spread: 0.003 volts.",
+  "ascii-outer-spaces": "The adapter supply measured 12.7 V.",
+  "ordinary-prose-punctuation": "Capacity is not measured; health is not assessed (missing data), and that's honest!",
+  "synthetic-negative-exact-no-recording": "Cell voltage (avg): -3.9297 volts.",
+  "synthetic-zero-exact-no-recording": "Cell voltage (avg): 0 volts.",
+  "spacing-outer-repeated-space": "The adapter supply measured 12.7 V.",
+  "synthetic-dtc-canonical-no-recording": "stored diagnostic code: P0133.",
+  "synthetic-dtc-grouped-no-recording": "Stored diagnostic codes P0133 and P0420 were reported.",
+  "synthetic-dtc-after-quantity-no-recording": "The adapter supply measured 12.7 V; P0133 was stored.",
+  "placeholder-real-values": "SoC: 69.8039 percent.\nCell spread: 0.003 volts, a community reading.\nThe adapter supply measured 12.7 V.\n12 V battery status is not-assessed.",
+  "placeholder-two-facts": "Cell voltage (min): 3.9287 volts; Cell voltage (max): 3.9317 volts.\n0.003 volts, that is 0.003 volts.",
+  // Boundary, documented and not a defect (Decision 6): relational prose around a rendered exact value is accepted.
+  "placeholder-relational-prose": "Cell spread is less than 0.003 volts.",
 };
 
 
@@ -208,9 +255,7 @@ describe("summary recording replay", () => {
     expect(expectedKinds[saved.name]).toBeDefined();
     expect(result.kind).toBe(expectedKinds[saved.name]);
     if (expectedKinds[saved.name] === "llm") {
-      const summary = saved.response as StructuredSummary;
-      const exactText = summary.claims.map((claim) => claim.text.replace(/^ +| +$/g, "")).join("\n");
-      expect(result.text).toBe(exactText);
+      expect(result.text).toBe(expectedText[saved.name]);
       if (saved.name === "accepted") {
         expect(result.text).toContain("12.7 V");
         expect(result.text).toContain("not measured");
@@ -218,6 +263,16 @@ describe("summary recording replay", () => {
       }
       if (saved.report === "synthetic-multi-dtc-no-recording") expect(result.text).toContain("P0133");
       if (saved.name === "synthetic-multi-dtc-with-number-no-recording") expect(result.text).toContain("12.7 V");
+      // Real numbers, computed from the report object without the projection: the rounding is the only step between them.
+      if (saved.name === "placeholder-real-values") {
+        const soc = report.signals.find((signal) => signal.id === "EQUINOXEV_SOC");
+        if (!soc || !report.cellSpread) throw new Error("spike report lacks the SoC signal or the cell spread");
+        const round = (value: number) => String(Math.round(value * 10000) / 10000);
+        const lines = result.text.split("\n");
+        expect(lines[0]).toBe(`SoC: ${round(soc.value)} ${soc.unit}.`);
+        expect(lines[1]).toBe(`Cell spread: ${round(report.cellSpread.volts)} volts, a community reading.`);
+        expect(lines[2]).toBe(`The adapter supply measured ${round(report.twelveVolt.observations[0].volts)} V.`);
+      }
     } else {
       expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(caseReport), reason: "Summary response could not be verified." });
       expect(result.text).not.toContain("provider detail");
@@ -241,19 +296,23 @@ describe("summary recording replay", () => {
     expect(await createSummaryReplayArtifact(report, responses)).toEqual(artifact);
     expect(responses.cases.map((saved) => saved.name)).toEqual(Object.keys(expectedKinds));
     expect(new Set(responses.cases.map((saved) => saved.name)).size).toBe(responses.cases.length);
+    expect(Object.keys(expectedText).sort()).toEqual(Object.entries(expectedKinds).filter(([, kind]) => kind === "llm").map(([name]) => name).sort());
   });
 });
 
 // SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md; the raw provider reply was never saved.
+// The 12 V name allowance is gone (X-2026-09-29-summary-placeholders): "12 V" outside a placeholder is a digit.
 const nameExpected: Readonly<Record<string, { kind: "llm" | "template"; text?: string }>> = {
-  "synthetic-reconstructed-deepseek-twelve-volt-names": { kind: "llm", text: [
-    "12 V observations were not read.",
+  "synthetic-reconstructed-deepseek-twelve-volt-names": { kind: "template" },
+  "synthetic-reconstructed-false-reading": { kind: "template" },
+  "placeholder-rewrite-of-reconstruction": { kind: "llm", text: [
+    "12 V observations: not read.",
     "12 V battery status was not-assessed.",
     "Capacity was not measured because no completed charge log and reviewed capacity estimator are available.",
     "Battery health was not assessed.",
     "Cell spread is unavailable.",
   ].join("\n") },
-  "synthetic-reconstructed-false-reading": { kind: "template" },
+  "placeholder-fact-absent-from-report": { kind: "template" },
 };
 
 describe("12 V name phrases on the phone-console recording (synthetic responses)", () => {

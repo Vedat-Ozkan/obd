@@ -1,5 +1,5 @@
 import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
-import { checkSummaryFacts } from "./check.js";
+import { checkSummaryFacts, renderClaims } from "./check.js";
 
 export interface SummaryFact {
   id: string;
@@ -66,8 +66,11 @@ export function checkSummary(report: BatteryDiagnosisReport, response: unknown):
 
 export async function summarize(report: BatteryDiagnosisReport, client: LlmClient, options: { model: string; effort: "none" | "low" }): Promise<{ kind: "llm"; text: string; summary: StructuredSummary } | { kind: "template"; text: string; reason: string }> {
   try {
-    const summary = checkSummary(report, await client.generate(prepareSummaryRequest(report), options));
-    return { kind: "llm", text: summary.claims.map((claim) => claim.text).join("\n"), summary };
+    const response = await client.generate(prepareSummaryRequest(report), options);
+    // Rebuilt after the call, never the object handed to the client: the rendered numbers come only from this projection.
+    const local = prepareSummaryRequest(report);
+    const summary = checkSummaryFacts(local, response);
+    return { kind: "llm", text: renderClaims(local.facts, summary), summary };
   } catch {
     return { kind: "template", text: renderBatteryDiagnosis(report), reason: "Summary response could not be verified." };
   }

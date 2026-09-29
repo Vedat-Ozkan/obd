@@ -2,10 +2,10 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: Stage 1 APPROVE (repairs 1/2) — committed; live D1 migration; then Stage 2. Tool: Claude Code, orchestrator `/feature`.
+- Stage: Stage 1 closed (commit 6f5340c, live D1 migrated); Stage 2 APPROVE (repairs 0/2 for this stage) — committed; implementer Stage 3 (in progress). Tool: Claude Code, orchestrator `/feature`.
 - Spec: `docs/specs/X-2026-09-29-summary-placeholders.md` (Stage 1 failed-check category, 2 placeholders and rendering, 3 summary prompt v4, 4 assistant t2.11-v2).
 - Repairs: 1/2. Escalations: 0.
-- Verdicts: Stage 1 APPROVE after repair 1 (2026-09-29); full `pnpm check` reproduced PASS.
+- Verdicts: Stage 1 APPROVE after repair 1; Stage 2 APPROVE (2026-09-29); full `pnpm check` reproduced PASS for both.
 - Decisions in effect (owner, 2026-09-29): (1) the model never writes numeric values; it writes placeholders naming fact IDs and the app renders the exact value and unit from the report; prose stays checked. (2) Record which check failed as a category only (for example `invalid-response:facts`), never reply text.
 - Owner authorizations: this change; 2026-09-29 build all four stages; hedging words around placeholders allowed (left to semantic grading). No paid call; the owner re-runs the D1 phone gate afterwards.
 - NOT RUN: none yet.
@@ -37,3 +37,5 @@ Stage 1 review 1 (fixed in repair 1): (1, major) T2.10d Interfaces `DevelopmentS
 - 2026-09-29 implementer repair 1 (Claude): findings 1, 2, 3, 5, 6 fixed (spec interfaces, test row name, deviation stated in the spec); full `pnpm check` PASS; SENTINEL absent from `/tmp/t2.10d-mobile-flow.json`.
 - 2026-09-29 reviewer Stage 1 (Claude): APPROVE (repairs 1/2).
 - 2026-09-29 orchestrator live migration (Stage 1): before (read-only): two tables, no `_next`; budget (1,5,15467,NULL,0); five 2026-09-29 rows (two `provider-error`, three `invalid-response`). Applied schema.sql with wrangler dev stopped (11 commands succeeded). After (read-only): identical budget and rows; error CHECK now lists the six `invalid-response:<check>` values.
+- 2026-09-29 implementer Stage 2 (Claude): items 1–13 PASS (obd-assist 257, mobile 100 flow, worker 4/4); full `pnpm check` PASS. Counterfactuals (disposable worktree): (a) `check.ts:16` PLACEHOLDER=/(?!)/g → 19 obd-assist failures incl. `placeholder-real-values` and the mobile 12.7/12.8 case; (b) delete `check.ts:21` uncited check → 1 failure `placeholder-uncited`; (c) `check.ts:26` ASCII-only digit test → 10 failures (non-ASCII numeral cases); (d) `check.ts:36` value without unit → 15 failures; (e) `check.ts:33` first cited fact for every placeholder → 4 failures; (f) `summary.ts` raw model text instead of `renderClaims` → 15 failures plus the mobile case. Deviations: `cites-session-never-fetched` not rewritten; `no-soc-charge-log-claims-estimate` rewritten; M pair is one test with two rows; Worker saved-case additions; `checkSummary` still exported; fixture label extended.
+- 2026-09-29 reviewer Stage 2 (Claude): APPROVE; reproduced counterfactuals (b), (c), (e), (f); baseline diffs show only the four planned flips and added cases. Minors for follow-up: no test guards that `summarize` renders from the rebuilt projection rather than the request handed to the client (`summary.ts:70-72`); `checkSummary` is a dead public export (`summary.ts:63`, `index.ts:6`).
