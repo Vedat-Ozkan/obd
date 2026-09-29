@@ -2,13 +2,13 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: closed (desk). APPROVE (repairs 0/2) — commit below. Waiting for the owner's phone re-run.
+- Stage: closed (desk). APPROVE (repairs 0/2) — commit 76c7cd6. Waiting for the owner's phone re-run.
 - Spec: `docs/specs/X-2026-09-29-summary-claim-split.md` (one stage, 10 files; prompt t2.10-v3 / adapter v6; four rolled-up code facts in the summary projection only).
 - Repairs: 0/2. Escalations: 0.
 - Verdicts: APPROVE (2026-09-29); full `pnpm check` reproduced PASS.
 - Decisions in effect (owner, 2026-09-29): the prompt makes each sentence its own claim (up to 3 per area); the projection gains rolled-up code facts so the codes area cites a few facts instead of one per module; claim limits (512 characters, 16 factIds) stay.
 - Owner authorizations: this change; scope is the owner's chosen fix (no separate confirmation). No paid call; the owner re-runs the phone summary afterwards.
-- NOT RUN: owner phone re-run (v3/v6); record displayCategory, output tokens and any doubled value.
+- NOT RUN: none. Owner phone re-run PASS 2026-09-29 (`498a2d47…`, llm, 773 output tokens, no doubled value).
 - Blocker: none.
 - Next action: owner phone re-run. Follow-up (test gap): assert that no `get_session`/`get_codes` trace fact ID matches `/^(codes-(stored|pending|permanent)|readiness)$/` in `assistant-replay.test.ts`.
 

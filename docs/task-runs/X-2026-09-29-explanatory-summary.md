@@ -8,7 +8,7 @@
 - Verdicts: Stages 1, 2 and 3 APPROVE (2026-09-29); full `pnpm check` reproduced PASS.
 - Decisions in effect (owner, 2026-09-29): the summary should explain what each item is, why a used-EV buyer cares, and whether it is good or bad, for people who do not understand the app's screens. Mix approach: general knowledge for what/why/what-next; the good/bad verdict only from the app's own deterministic ratings and their basis, "not rated" otherwise. Format: a one-line overall takeaway, then 2–3 sentences per area (state of charge, cell balance, capacity, 12 V, codes).
 - Owner authorizations: this change; 2026-09-29 answers: build now, thresholds task next; 28-word list accepted. No paid call; the owner re-runs the phone summary afterwards.
-- NOT RUN: owner phone summary run (v5 prompt, 2,048 cap). Expected: displayCategory llm, a takeaway, five sections whose Rating lines match the cards.
+- NOT RUN: none. Owner phone run PASS after the claim-split follow-up (`498a2d47…`, 2026-09-29).
 - Blocker: none. Implementation must follow X-2026-09-29-summary-placeholders Stage 4 (both edit `tools/summary-backend/openrouter.ts`).
 - Next action: owner phone summary run; then open the thresholds task (cell balance, 12 V) and fold in the `codeList` duplicate.
 
