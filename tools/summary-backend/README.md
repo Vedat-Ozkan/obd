@@ -31,9 +31,41 @@ Why it is an upper bound: the pinned tokenizer is byte-level BPE (all 256 byte s
 
 Re-running `schema.sql` (the `d1 execute` command above) migrates an existing local database in place: it rebuilds both tables with the current CHECKs and keeps the budget row and request rows. Stop `wrangler dev` first and never delete `.wrangler` state.
 
-`GET /v1/status` requires the development token and returns only `uses`, `headroomMicroUsd` and `enabled`. No report, key, token, peer IP or retry summary is persisted. A consumed request ID is permanently rejected even with a changed body. An unresolved reservation survives restart and blocks further calls. Do not delete/reset state, change keys or refund ambiguous calls to obtain more credit. Stop and request parent authorization for any repair. Kill switch: disable `SUMMARY_DEV_ENABLED` and revoke the dedicated key.
+`GET /v1/status` requires the development token and returns only `uses`, `headroomMicroUsd` and `enabled` (its `enabled` threshold is the largest summary reservation). No report, key, token, peer IP or retry summary is persisted. A consumed request ID is permanently rejected even with a changed body. An unresolved reservation survives restart and blocks further calls. Do not delete/reset state, change keys or refund ambiguous calls to obtain more credit. Stop and request parent authorization for any repair. Kill switch: disable `SUMMARY_DEV_ENABLED` and revoke the dedicated key.
 
 For the later owner phone artifact `/tmp/t2.10d-local-phone.json`, save only consent version, request ID, returned model, enforced pin/dated snapshot digest/rates, tokens/cost/latency, checked display category and cumulative budget. `SummaryUsage.provider` identifies the configured DeepSeek pin; absent returned-provider evidence is unknown. Do not save key documents, labels, facts, raw responses or errors. Observability and Worker logging stay off.
+
+## Assistant turns and the four-arm comparison (T2.11b)
+
+`POST /v1/assistant/turns` runs one assistant round for the phone or the eval CLI: `{ requestId, model, consentVersion, turn }`. It has the same guard as `/v1/summaries` (default-disabled, exact private host, development token, no forwarding headers) and makes at most one bounded OpenRouter call. The Worker holds no user data and never runs a tool: it checks that the reply names an allowlisted tool, or that an answer passes the same fact check as the summary (`checkFacts`), and returns `{ kind: "reply", reply, usage }` or `{ kind: "fallback", reason }`. Design and sources: `docs/specs/T2.11b-assistant-backend-live-eval.md`.
+
+Four arms are pinned in `openrouter.ts` (`pins`), each to one OpenRouter host with no fallback routing, the same system prompt, strict reply schema, `max_tokens` 1,024 and reasoning off:
+
+| Arm | Model | Host (tag) | Consent version |
+|---|---|---|---|
+| A | `deepseek/deepseek-v4.1-flash` | DeepSeek (`deepseek`) | `t2.11-openrouter-deepseek-v1` |
+| B | `deepseek/deepseek-v4-pro-0813` | DeepSeek (`deepseek`) | `t2.11-openrouter-compare-eval-v1` |
+| C | `xiaomi/mimo-v2.6-pro` | Xiaomi (`xiaomi/fp8`) | `t2.11-openrouter-compare-eval-v1` |
+| D | `moonshotai/kimi-k3` | Moonshot AI (`moonshotai/mxfp4`) | `t2.11-openrouter-compare-eval-v1` |
+
+Arms B to D are refused (`unavailable`) unless `SUMMARY_COMPARE_ENABLED=1` is set in `.dev.vars`; a wrong or missing consent version for the model is `consent-required`. Preflight validates each pin's catalog entry, host tag, rates against the pin's ceilings and required parameters (C and D also need `structured_outputs`; the DeepSeek host does not advertise it, and the paid phone check decides whether it is accepted). A body over 32,768 bytes, more than 4 steps or more than 64 facts per step is `invalid-request`.
+
+**One budget.** Summaries and assistant turns share the one key, its US$1 cap and the one D1 ledger; there is no separate assistant budget or use cap. Each call reserves `reservationFor(its own body bytes, its pin)` (same rules as above, at the pin's ceiling rates; at the 32,768-byte cap: A 22,119, B 101,581, C 35,738, D 224,256 micro-USD, all under the D1 CHECK). A held slot blocks both routes. `GET /v1/status` is unchanged and is the one shared view.
+
+**Comparison runbook (paid; owner-authorized only, after the T2.10 phone check).** With `SUMMARY_COMPARE_ENABLED=1` in the gitignored `.dev.vars` and `wrangler dev --local` running:
+
+```bash
+node --env-file=tools/summary-backend/.dev.vars --import tsx tools/summary-backend/assistant-eval.ts \
+  --url http://<SUMMARY_DEV_HOST>:8788 --questions fixtures/synthetic/t2.11-question-set.json \
+  --models deepseek/deepseek-v4.1-flash,xiaomi/mimo-v2.6-pro,deepseek/deepseek-v4-pro-0813,moonshotai/kimi-k3 \
+  --max-spend-usd 0.05,0.05,0.15,0.25 --out /tmp/t2.11b-live-eval.json --save-replies fixtures/model-output/
+```
+
+The CLI asks the 12 frozen T2.11a questions once per arm, cheapest first, and never retries. Before each question it reads `/v1/status`; when an arm's spend has reached its `--max-spend-usd` value the rest of that arm is `NOT RUN (spend cap)`, and a `budget-exhausted` or `unavailable` answer stops the arm (`NOT RUN (budget)`). The artifact holds per-question rows (trace, verdicts, per-round tokens including reasoning tokens, provider cost, estimate, reservation, latencies), the injection verdict (q10 against q04), a `comparison` block with denominators (real and synthetic reported separately, cost per answer against the US$0.01 and US$0.05 targets, latency) and each arm's shared-budget `spent` before and after. It never writes the token or key. `--save-replies` writes `t2.11-live-<model>.json` only for an arm whose 12 questions all ran (a partial file would break the CI replay), labeled recorded live model output; those files are never hand-edited and are committed only after the owner has read every reply.
+
+Spend plan (an estimate, not a measurement): about US$0.28 for the four arms, planned maximum about US$0.61 (the stop rules plus at most one thorough question of overshoot per arm), leaving at least about US$0.39 of the shared US$1 for the T2.10 phone check and summaries.
+
+The offline dry run (part of `worker.test.ts`) runs this same CLI against the harness with synthetic upstream replies and metadata. The extra flag `--synthetic-metadata-base <url>` marks such a run: metadata comes from that URL and the artifact and saved files are labeled SYNTHETIC. It is never used with the live key. Outputs: `/tmp/t2.11b-eval-dry.json` (all arms), `/tmp/t2.11b-eval-dry-cap.json` (tiny caps) and `/tmp/t2.11b-eval-dry-budget.json` (budget stop).
 
 ## Reproducible software gates
 

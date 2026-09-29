@@ -27,6 +27,8 @@ export interface QuestionSpec {
 export interface QuestionSet { label: string; version: 1; datasets: Record<string, DatasetSpec>; questions: QuestionSpec[] }
 export interface SavedRound { reply?: unknown; reject?: string; usage?: Omit<AssistantUsage, "latencyMs"> }
 export interface SavedResponses {
+  /** Provenance sentence, shown as the artifact note. */
+  label: string;
   questions: Record<string, SavedRound[]>;
   adversarial: { name: string; dataset: string; question: string; rounds: SavedRound[] }[];
 }
@@ -116,7 +118,7 @@ function totals(usage: readonly AssistantUsage[]): UsageTotals {
 
 const factLine = (f: { id: string; value: string; unit?: string; status?: string }) => `${f.id}=${f.value}${f.unit ? ` ${f.unit}` : ""} (${f.status ?? "none"})`;
 
-function row(dataset: string, dataTag: string, question: string, run: Awaited<ReturnType<typeof runSavedCase>>): AssistantReplayRow {
+export function row(dataset: string, dataTag: string, question: string, run: Awaited<ReturnType<typeof runSavedCase>>): AssistantReplayRow {
   const { result } = run;
   const answered = result.kind === "answer";
   return {
@@ -129,7 +131,7 @@ function row(dataset: string, dataTag: string, question: string, run: Awaited<Re
   };
 }
 
-function scoreExpectation(base: AssistantReplayRow, expect: QuestionSpec["expect"], claims: readonly string[]): AssistantReplayRow {
+export function scoreExpectation(base: AssistantReplayRow, expect: QuestionSpec["expect"], claims: readonly string[]): AssistantReplayRow {
   const answered = base.kind === "answer";
   const missingHonest = expect.missing === undefined ? null
     : answered && (expect.missing.fact === undefined || base.citedIds.includes(expect.missing.fact)) && !claims.some((text) => /[0-9]/.test(text));
@@ -169,7 +171,7 @@ export async function createAssistantReplayArtifact(questionSet: QuestionSet, re
   return {
     promptVersion: "t2.11-v1", assistantInstructions, replySchema: assistantReplySchema,
     recordings: [...new Set(Object.values(datasets).flatMap((data) => data.recordings))],
-    note: "Saved replies are labeled synthetic model output: they prove plumbing and checks, not model quality.",
+    note: responses.label,
     sections: { real, synthetic, adversarial },
   };
 }
