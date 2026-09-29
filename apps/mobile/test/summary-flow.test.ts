@@ -56,8 +56,10 @@ function harness(reply: (input: RequestInfo | URL, init?: RequestInit) => Promis
   } });
   access.configure(url, token);
   const flow = createDevelopmentSummaryFlow({ access, nextRequestId: nextRequestId ?? (() => ids(++sequence)), now: () => { clock += 25; return clock; } });
-  const record = (name: string, view: SummaryView, source = "synthetic") => {
-    rows.push({ source, name, state: view.kind, text: view.text, template: view.template, reason: view.reason, evidence: view.evidence, consentVersion: SUMMARY_CONSENT_VERSION, requestCount: sent.length, postCount: sent.length, statusCount: statusSent.length, requestIds: sent.map((entry) => (JSON.parse(bodyText(entry.init)) as { requestId: string }).requestId) });
+  // The card rating and basis the app itself shows for the report, recorded beside each displayed summary so the artifact pairs them.
+  const record = (name: string, view: SummaryView, source = "synthetic", report: BatteryDiagnosisReport = reports[0]) => {
+    const cards = view.kind === "llm" ? reportSummary(report).rows.map((row) => ({ label: row.label, rating: ratingWord[row.rating.rating], basis: row.rating.basis })) : undefined;
+    rows.push({ source, name, state: view.kind, text: view.text, ...cards ? { cards } : {}, template: view.template, reason: view.reason, evidence: view.evidence, consentVersion: SUMMARY_CONSENT_VERSION, requestCount: sent.length, postCount: sent.length, statusCount: statusSent.length, requestIds: sent.map((entry) => (JSON.parse(bodyText(entry.init)) as { requestId: string }).requestId) });
   };
   return { access, flow, sent, statusSent, record };
 }
@@ -101,7 +103,7 @@ describe("recording → public development flow → HTTP access → local checke
     expect(h.sent[0].init).toMatchObject({ method: "POST", redirect: "error", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
     expect(JSON.parse(bodyText(h.sent[0].init))).toEqual({ requestId: ids(1), consentVersion: SUMMARY_CONSENT_VERSION, request: prepareSummaryRequest(reports[index]) });
     for (const secret of ["private-garage-sentinel", path, reports[index].scannedAt, "garageVehicleId", "recording", "catalogId", token]) expect(bodyText(h.sent[0].init)).not.toContain(secret);
-    h.record("checked summary", view, path);
+    h.record("checked summary", view, path, reports[index]);
   });
 
   it("requires separate consent and a tap, then clears auth on withdrawal", async () => {
@@ -137,7 +139,7 @@ describe("recording → public development flow → HTTP access → local checke
       const view = await h.flow.summaryFor(report);
       expect(view.kind).toBe("llm");
       shown.push(/The adapter supply measured \d+\.\d+ V\./.exec(view.text)?.[0] ?? "");
-      h.record(`placeholder rendered against the ${name}`, view, source);
+      h.record(`placeholder rendered against the ${name}`, view, source, report);
     }
     expect(shown).toEqual(["The adapter supply measured 12.7 V.", "The adapter supply measured 12.8 V."]);
   });
@@ -163,7 +165,7 @@ describe("recording → public development flow → HTTP access → local checke
       // The card's own data: every area except state of charge, which the app does not rate.
       for (const row of reportSummary(report).rows) expect(view.text, `${name} ${row.label}`).toContain(`\n\n${row.label}\nRating: ${ratingWord[row.rating.rating]}. Basis: ${row.rating.basis}.\n`);
       shown.push(codesLine(view.text));
-      h.record(`rating lines rendered against the ${name}`, view, source);
+      h.record(`rating lines rendered against the ${name}`, view, source, report);
     }
     expect(shown).toEqual([
       "Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.",
@@ -320,7 +322,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   });
 
   const badFields: [string, unknown][] = [
-    ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 1025], ["outputTokens", -1],
+    ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 2049], ["outputTokens", -1],
     ["cachedInputTokens", 201], ["reasoningTokens", 21], ["providerCostUsd", -0.1], ["providerCostUsd", 1.01], ["estimatedUsd", null], ["estimatedUsd", 1.01],
     ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["model", "private-evidence-sentinel".repeat(1000)],
   ];
@@ -333,6 +335,17 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     expect(view.evidence?.returnedModel).toBeNull();
     expect(JSON.stringify(view)).not.toContain("private-evidence-sentinel");
     h.record(`invalid usage ${String(index)} ${field}`, view);
+  });
+
+  // Stage 3: the summary route's completion cap is 2,048 (openrouter.ts summaryMaxCompletionTokens); 1,024 was the v1 bound.
+  it.each([1025, 1500, 2048])("keeps valid usage with %i output tokens", async (outputTokens) => {
+    const usage = { ...validUsage, outputTokens };
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage })));
+    h.flow.consent(true);
+    const view = await h.flow.summaryFor(reports[0]);
+    expect(view.kind).toBe("llm");
+    expect(view.evidence?.usage).toEqual(usage);
+    h.record(`usage with ${String(outputTokens)} output tokens`, view);
   });
 
   it("shows the template for a v1-shaped server summary, and keeps its usage", async () => {

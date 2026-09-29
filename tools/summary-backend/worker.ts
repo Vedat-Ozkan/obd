@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_TOOL_CALLS, assistantReplySchema, type AssistantTurnRequest } from "../../packages/obd-assist/src/index.js";
-import { consentFor, createOpenRouter, model as summaryModel, maxAssistantBodyBytes, maxSummaryBodyBytes, pins, prepareAssistantTurn, prepareSummary, readBounded, reservationFor, type AdapterOptions, type AdapterResult, type AssistantModel, type FailedCheck, type ModelPin, type SummaryFallback } from "./openrouter.js";
+import { consentFor, createOpenRouter, model as summaryModel, maxAssistantBodyBytes, maxSummaryBodyBytes, pins, prepareAssistantTurn, prepareSummary, readBounded, reservationFor, summaryMaxCompletionTokens, type AdapterOptions, type AdapterResult, type AssistantModel, type FailedCheck, type ModelPin, type SummaryFallback } from "./openrouter.js";
 
 interface D1Result { meta: { changes: number }; results?: unknown[] }
 interface D1Statement {
@@ -143,7 +143,7 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
       const path = new URL(request.url).pathname;
       if (path === "/v1/status" && request.method === "GET") {
         const row = await budget(db);
-        return json({ uses: row.uses, headroomMicroUsd: Math.max(0, 1000000 - row.spent), enabled: !row.disabled && !row.inflight && row.spent + reservationFor(maxSummaryBodyBytes).microUsd <= 1000000 });
+        return json({ uses: row.uses, headroomMicroUsd: Math.max(0, 1000000 - row.spent), enabled: !row.disabled && !row.inflight && row.spent + reservationFor(maxSummaryBodyBytes, pins[summaryModel], summaryMaxCompletionTokens).microUsd <= 1000000 });
       }
       if (path === "/v1/assistant/turns" && request.method === "POST") return await assistantTurn(request, env, db, key);
       if (path !== "/v1/summaries" || request.method !== "POST") return fallback("invalid-request", 400);

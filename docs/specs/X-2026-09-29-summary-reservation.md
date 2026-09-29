@@ -47,7 +47,7 @@ generate(request: SummaryRequest, prepared: ReturnType<typeof prepareSummary>, k
 **Bound (frozen policy).** `bodyBytes` is the UTF-8 byte length of the exact body string sent to `/chat/completions` (`new TextEncoder().encode(body).length`, never `string.length`).
 
 - `inputTokens = min(contextCeiling, 2 × bodyBytes + 4096)`
-- `microUsd = ceil((3 × inputTokens + 12 × maxCompletionTokens) / 10)`, in integer arithmetic, for example `Math.floor((3 * t + 12 * 1024 + 9) / 10)`. Here 3 and 12 are the verified base ceilings of US$0.30/M and US$1.20/M, expressed in tenths of a micro-USD per token. They are declared next to `inputRate`/`outputRate` with a comment that ties them together. Preflight still rejects any endpoint or override rate above those ceilings. Discounted, cached or override rates never lower the reservation.
+- `microUsd = ceil((3 × inputTokens + 12 × the route's completion cap) / 10)`, in integer arithmetic, for example `Math.floor((3 * t + 12 * 1024 + 9) / 10)` for a 1,024-token route (the summary route's cap is 2,048 since X-2026-09-29-explanatory-summary Stage 3, so it uses `12 * 2048`). Here 3 and 12 are the verified base ceilings of US$0.30/M and US$1.20/M, expressed in tenths of a micro-USD per token. They are declared next to `inputRate`/`outputRate` with a comment that ties them together. Preflight still rejects any endpoint or override rate above those ceilings. Discounted, cached or override rates never lower the reservation.
 - At the context clamp, `reservationFor` returns exactly 315,802. No reservation can exceed the legacy value.
 
 Why this is an upper bound (the full source list is in Sources):

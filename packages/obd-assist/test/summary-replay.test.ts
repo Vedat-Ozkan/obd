@@ -383,6 +383,8 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
     expect(result.kind).toBe(explanatoryKinds[saved.name]);
     // The projection carries the app's rating for every area, after the report's own facts.
     expect(request?.promptVersion).toBe("t2.10-v2");
+    // The projection sent out carries no path, scan time, garage id, header or VIN, for real and synthetic-report cases alike.
+    expect(JSON.stringify(request)).not.toMatch(/summary-replay|2026-09-22T00:00:00.000Z|2026-09-22-spike\.redacted|18DAF1|VIN/i);
     expect(request?.facts.slice(-10).map((fact) => fact.id)).toEqual(["soc", "cells", "capacity", "twelve-volt", "codes"].flatMap((prefix) => [`${prefix}-rating`, `${prefix}-rating-basis`]));
     if (result.kind === "template") {
       expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(caseReport), reason: "Summary response could not be verified." });
@@ -391,6 +393,13 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
     if (saved.name === "explanatory-accepted") expect(result.text).toBe(explanatoryText);
     if (saved.name === "explanatory-accepted-stored-code") expect(result.text).toBe(explanatoryCodesPoor);
     if (saved.name === "verdict-substring-boundary") expect(result.text).toContain(" Take a look at the service records before buying.");
+  });
+
+  it("shows the template and no provider detail when the provider fails", async () => {
+    const client: LlmClient = { generate: () => Promise.reject(new Error("provider detail must never be displayed")) };
+    const result = await summarize(report, client, { model: "saved-response", effort: "none" });
+    expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(report), reason: "Summary response could not be verified." });
+    expect(JSON.stringify(result)).not.toContain("provider detail");
   });
 
   it("writes the replay artifact the public CLI helper produces", async () => {
