@@ -18,7 +18,7 @@ const PLACEHOLDER = /\{(fact|label):([!-z|~]{1,96})\}/g;
 /** The prompt text that teaches the placeholder grammar `checkClaim` enforces; prompts import it so they cannot drift from the checker. */
 export const claimGrammar = `Claim text never contains digits, numbers or diagnostic codes. Write every value as a placeholder; the app replaces it with the report's exact text.
 {fact:ID} becomes the fact's exact value, followed by its unit when it has one. {label:ID} becomes the fact's exact label; use it for any label that contains digits.
-ID is a fact ID that the same claim cites in factIds. Placeholders are the only place a fact ID may appear in text. Example text: {label:ID}: {fact:ID}.
+ID is a fact ID that the same claim cites in factIds. Example text: {label:ID}: {fact:ID}.
 Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! ? ' ( ) -. Any other character rejects the whole reply.`;
 
 function checkClaim(text: string, citedIds: ReadonlySet<string>, allFactIds: ReadonlySet<string>): void {
@@ -27,7 +27,7 @@ function checkClaim(text: string, citedIds: ReadonlySet<string>, allFactIds: Rea
     if (!citedIds.has(match[2])) throw new Error("summary claim names an uncited fact");
   }
   const rest = text.replace(PLACEHOLDER, " ");
-  if ([...allFactIds].some((id) => rest.includes(id))) throw new Error("summary claim includes a source identifier");
+  // No fact-ID guard: IDs with a digit, "_" or "/" fail below, and the rest are words like "twelve-volt" that prose needs (Stage 3b).
   // Every Unicode number, brace, symbol and non-ASCII space fails here; every DTC contains a digit (docs/ELM327.md, DTC 2-byte encoding).
   if (!/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(rest)) throw new Error("summary claim has a digit, symbol or malformed placeholder outside a placeholder");
 }

@@ -2728,6 +2728,20 @@
           }
         ]
       }
+    },
+    {
+      "name": "id-underscore-in-prose",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "signal-EQUINOXEV_SOC is {fact:signal-EQUINOXEV_SOC}.",
+            "factIds": [
+              "signal-EQUINOXEV_SOC"
+            ]
+          }
+        ]
+      }
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "label": "SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md, plus placeholder rewrites; not recorded model output",
+  "label": "SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md, plus placeholder rewrites and prose cases; not recorded model output",
   "cases": [
     {
       "name": "synthetic-reconstructed-deepseek-twelve-volt-names",
@@ -105,6 +105,34 @@
             "text": "{label:twelve-volt-0}: {fact:twelve-volt-0}.",
             "factIds": [
               "twelve-volt-0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prose-twelve-volt-battery",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "{label:twelve-volt}: {fact:twelve-volt}; the twelve-volt battery was not checked.",
+            "factIds": [
+              "twelve-volt"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prose-twelve-volt-battery-status",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The twelve-volt battery status is {fact:twelve-volt-status}.",
+            "factIds": [
+              "twelve-volt-status"
             ]
           }
         ]

@@ -206,10 +206,12 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "placeholder-malformed-nested": "template",
   "placeholder-malformed-fullwidth-braces": "template",
   "placeholder-malformed-id-97-characters": "template",
-  "placeholder-id-in-prose": "template",
+  // Boundary, documented (Stage 3b): a report fact ID written as a word in prose displays; IDs with a digit, "_" or "/" still fail the charset.
+  "placeholder-id-in-prose": "llm",
   "placeholder-real-values": "llm",
   "placeholder-two-facts": "llm",
-  "placeholder-relational-prose": "llm"
+  "placeholder-relational-prose": "llm",
+  "id-underscore-in-prose": "template"
 };
 
 // The displayed text of every accepted case, written out here rather than derived from the saved replies.
@@ -232,6 +234,7 @@ const expectedText: Readonly<Record<string, string>> = {
   "placeholder-two-facts": "Cell voltage (min): 3.9287 volts; Cell voltage (max): 3.9317 volts.\n0.003 volts, that is 0.003 volts.",
   // Boundary, documented and not a defect (Decision 6): relational prose around a rendered exact value is accepted.
   "placeholder-relational-prose": "Cell spread is less than 0.003 volts.",
+  "placeholder-id-in-prose": "cell-spread is 0.003 volts.",
 };
 
 
@@ -313,6 +316,9 @@ const nameExpected: Readonly<Record<string, { kind: "llm" | "template"; text?: s
     "Cell spread is unavailable.",
   ].join("\n") },
   "placeholder-fact-absent-from-report": { kind: "template" },
+  // Stage 3b: with no prose fact-ID guard, ordinary twelve-volt wording displays, cited or not.
+  "prose-twelve-volt-battery": { kind: "llm", text: "12 V observations: not read; the twelve-volt battery was not checked." },
+  "prose-twelve-volt-battery-status": { kind: "llm", text: "The twelve-volt battery status is not-assessed." },
 };
 
 describe("12 V name phrases on the phone-console recording (synthetic responses)", () => {
