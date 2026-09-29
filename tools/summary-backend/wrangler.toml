@@ -15,7 +15,6 @@ routes = []
 enabled = false
 [env.local.vars]
 SUMMARY_KEY_LIMIT_USD = "1"
-SUMMARY_MAX_USES = "4"
 SUMMARY_BUDGET_MICRO_USD = "1000000"
 [[env.local.d1_databases]]
 binding = "SUMMARY_DB"

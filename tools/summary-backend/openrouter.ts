@@ -4,11 +4,15 @@ import { checkSummaryFacts, summaryInstructions, type StructuredSummary, type Su
 // Frozen development ceilings: governing T2.10c spec, verified base host rates.
 export const model = "deepseek/deepseek-v4.1-flash";
 export const canonicalSlug = `${model}-20260910`;
-export const reservationMicroUsd = 315802;
 export const contextCeiling = 1048576;
 export const maxCompletionTokens = 1024;
 const inputRate = 0.0000003;
 const outputRate = 0.0000012;
+// The same base ceilings as inputRate/outputRate (US$0.30/M, US$1.20/M) in tenths of a micro-USD per token, for integer reservation math.
+const inputTenthMicroUsd = 3;
+const outputTenthMicroUsd = 12;
+// Defensive cap: a valid 16 KiB input cannot reach it; it keeps reservationFor(maxSummaryBodyBytes) a true upper bound for the status threshold.
+export const maxSummaryBodyBytes = 65536;
 const base = "https://openrouter.ai/api/v1";
 const parameters = ["max_tokens", "response_format", "reasoning"];
 
@@ -44,6 +48,24 @@ Each complete numeric/DTC claim is exactly one eligible body or bodies joined by
 Only outer ASCII spaces may be trimmed. All internal spacing is literal single ASCII spaces. No tabs, newlines, Unicode whitespace or normalization in numeric claims.
 No extra prefix, suffix, sentence or parenthesis, ranges, intervals, inequalities, uncertainty, approximation, exponents, fractions, grouped digits, plus signs, detached signs, Unicode signs, unit conversion or numeric transformations.
 If a label/value/unit is ineligible, use supported digit-free prose with a citation or omit the numeric claim.`;
+
+export interface Reservation { inputTokens: number; microUsd: number }
+/**
+ * Upper bound for one completion whose rendered prompt consists only of text and JSON present in the body.
+ * Tokens <= UTF-8 bytes (byte-level BPE), the rendered prompt re-serializes the schema at most 2x, plus 4096 tokens of margin.
+ * Sources: docs/specs/X-2026-09-29-summary-reservation.md (Sources).
+ */
+export function reservationFor(bodyBytes: number): Reservation {
+  const inputTokens = Math.min(contextCeiling, 2 * bodyBytes + 4096);
+  return { inputTokens, microUsd: Math.floor((inputTenthMicroUsd * inputTokens + outputTenthMicroUsd * maxCompletionTokens + 9) / 10) };
+}
+/** The exact chat/completions body generate() sends, and its reservation. */
+export function prepareSummary(request: SummaryRequest): { body: string; bodyBytes: number; reservation: Reservation } {
+  const body = JSON.stringify({ model, stream: false, max_tokens: maxCompletionTokens, reasoning: { enabled: false }, provider: { order: ["deepseek"], only: ["deepseek"], allow_fallbacks: false, require_parameters: true },
+    response_format: { type: "json_schema", json_schema: { name: "battery_summary", strict: true, schema: outputSchema } }, messages: [{ role: "system", content: adapterInstructions }, { role: "user", content: JSON.stringify(request) }] });
+  const bodyBytes = new TextEncoder().encode(body).length;
+  return { body, bodyBytes, reservation: reservationFor(bodyBytes) };
+}
 
 export const outputSchema = {
   type: "object", additionalProperties: false, required: ["version", "claims"],
@@ -105,7 +127,7 @@ export function createOpenRouter(options: AdapterOptions) {
     const raw = await readBounded(response, key ? 32768 : 16777216);
     return { raw, parsed: JSON.parse(raw) as unknown };
   }
-  async function preflight(key: string): Promise<ProviderSnapshot> {
+  async function preflight(key: string, reservationMicroUsd: number): Promise<ProviderSnapshot> {
     const now = options.now();
     if (!snapshot || now - checkedAt >= 900000 || now < checkedAt) {
       snapshot = undefined;
@@ -137,15 +159,14 @@ export function createOpenRouter(options: AdapterOptions) {
     if (keyData.limit_remaining < reservationMicroUsd / 1000000 || keyData.limit_remaining > keyData.limit || keyData.usage + keyData.limit_remaining > keyData.limit + Number.EPSILON) throw new Error("key headroom");
     return snapshot;
   }
-  async function generate(request: SummaryRequest, key: string): Promise<AdapterResult> {
+  async function generate(request: SummaryRequest, prepared: ReturnType<typeof prepareSummary>, key: string): Promise<AdapterResult> {
     const started = options.now();
     const result: AdapterResult = { actualMicroUsd: null, kill: false };
     let received = false;
     try {
       const response = await options.fetch(`${base}/chat/completions`, {
         method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(20000),
-        body: JSON.stringify({ model, stream: false, max_tokens: maxCompletionTokens, reasoning: { enabled: false }, provider: { order: ["deepseek"], only: ["deepseek"], allow_fallbacks: false, require_parameters: true },
-          response_format: { type: "json_schema", json_schema: { name: "battery_summary", strict: true, schema: outputSchema } }, messages: [{ role: "system", content: adapterInstructions }, { role: "user", content: JSON.stringify(request) }] }),
+        body: prepared.body,
       });
       received = true;
       if (!response.ok) return { ...result, reason: "provider-error" };
@@ -157,7 +178,7 @@ export function createOpenRouter(options: AdapterOptions) {
       const input = integer.parse(u.prompt_tokens); const output = integer.parse(u.completion_tokens);
       const cost = u.cost === undefined || u.cost === null ? null : z.number().nonnegative().parse(u.cost);
       if (cost !== null) result.actualMicroUsd = Math.ceil(cost * 1000000);
-      if (input > contextCeiling || output > maxCompletionTokens || (result.actualMicroUsd !== null && result.actualMicroUsd > reservationMicroUsd)) return { ...result, kill: true, reason: "invalid-response" };
+      if (input > prepared.reservation.inputTokens || output > maxCompletionTokens || (result.actualMicroUsd !== null && result.actualMicroUsd > prepared.reservation.microUsd)) return { ...result, kill: true, reason: "invalid-response" };
       if (u.total_tokens !== undefined && integer.parse(u.total_tokens) !== input + output) throw new Error("usage total");
       const cache = u.prompt_tokens_details === undefined ? null : record.parse(u.prompt_tokens_details).cached_tokens;
       const reasoning = u.completion_tokens_details === undefined ? null : record.parse(u.completion_tokens_details).reasoning_tokens;

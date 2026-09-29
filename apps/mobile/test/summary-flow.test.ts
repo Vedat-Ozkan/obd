@@ -21,7 +21,7 @@ const rows: Record<string, unknown>[] = [];
 let reports: BatteryDiagnosisReport[];
 const ids = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v1", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
-const validBudget = { uses: 1, headroomMicroUsd: 999916, enabled: true };
+const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
 const accepted = { version: 1, claims: [{ text: "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.", factIds: ["capacity-status", "capacity-reason"] }] };
 
@@ -277,7 +277,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
       if (name === "redirect") return new Response(null, { status: 302 });
       if (name === "malformed") return new Response("private-evidence-sentinel");
       if (name === "oversized") return new Response(" ".repeat(32769));
-      return Response.json({ ...validBudget, ...(name === "bad-uses" ? { uses: 5 } : name === "bad-headroom" ? { headroomMicroUsd: -1 } : { enabled: "private-evidence-sentinel" }) });
+      return Response.json({ ...validBudget, ...(name === "bad-uses" ? { uses: -1 } : name === "bad-headroom" ? { headroomMicroUsd: -1 } : { enabled: "private-evidence-sentinel" }) });
     });
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);

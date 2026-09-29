@@ -34,7 +34,7 @@ function projectUsage(value: unknown): DevelopmentUsage | null {
 function projectBudget(value: unknown): DevelopmentBudget | null {
   if (typeof value !== "object" || value === null) return null;
   const b = value as Record<string, unknown>;
-  if (!integer(b.uses, 4) || !integer(b.headroomMicroUsd, 1000000) || typeof b.enabled !== "boolean") return null;
+  if (!integer(b.uses) || !integer(b.headroomMicroUsd, 1000000) || typeof b.enabled !== "boolean") return null;
   return { uses: b.uses, headroomMicroUsd: b.headroomMicroUsd, enabled: b.enabled, chargedOrReservedMicroUsd: 1000000 - b.headroomMicroUsd };
 }
 export class SummaryAccessError extends Error {
