@@ -3,6 +3,7 @@
 -- rebuilt through a _next copy on every run, without an explicit transaction. The order is
 -- self-healing: a run interrupted after a DROP leaves the copied _next table, and the next run's
 -- INSERT OR IGNORE keeps that copy over a freshly inserted default row.
+-- summary_requests.error is NULL, 'invalid-response', 'provider-error', or 'provider-error:NNN' (the upstream HTTP status, 100-599 as three digits).
 CREATE TABLE IF NOT EXISTS summary_budget (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   uses INTEGER NOT NULL CHECK (uses >= 0),
@@ -26,14 +27,14 @@ CREATE TABLE IF NOT EXISTS summary_requests (
   state TEXT NOT NULL CHECK (state IN ('inflight', 'settled')),
   reservation INTEGER NOT NULL CHECK (reservation BETWEEN 1 AND 315802),
   actual INTEGER CHECK (actual >= 0),
-  error TEXT CHECK (error IS NULL OR error IN ('provider-error', 'invalid-response'))
+  error TEXT CHECK (error IS NULL OR error IN ('provider-error', 'invalid-response') OR error GLOB 'provider-error:[1-5][0-9][0-9]')
 );
 CREATE TABLE IF NOT EXISTS summary_requests_next (
   request_id TEXT PRIMARY KEY,
   state TEXT NOT NULL CHECK (state IN ('inflight', 'settled')),
   reservation INTEGER NOT NULL CHECK (reservation BETWEEN 1 AND 315802),
   actual INTEGER CHECK (actual >= 0),
-  error TEXT CHECK (error IS NULL OR error IN ('provider-error', 'invalid-response'))
+  error TEXT CHECK (error IS NULL OR error IN ('provider-error', 'invalid-response') OR error GLOB 'provider-error:[1-5][0-9][0-9]')
 );
 INSERT OR IGNORE INTO summary_requests_next SELECT request_id, state, reservation, actual, error FROM summary_requests;
 DROP TABLE summary_requests;

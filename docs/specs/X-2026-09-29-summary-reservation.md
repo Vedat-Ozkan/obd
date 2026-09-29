@@ -85,6 +85,7 @@ The hosted rendering itself is not documented. The bound is therefore backed by 
 
 - `summary_budget.uses >= 0`
 - `summary_requests.reservation BETWEEN 1 AND 315802`
+- `summary_requests.error` is NULL, `'provider-error'`, `'invalid-response'`, or `'provider-error:NNN'` (`error GLOB 'provider-error:[1-5][0-9][0-9]'`, the upstream HTTP status); see [X-2026-09-29-deepseek-json-mode](X-2026-09-29-deepseek-json-mode.md)
 
 The existing local DB was created with `uses BETWEEN 0 AND 4` and `reservation = 315802`. `CREATE TABLE IF NOT EXISTS` cannot change it, so the file rebuilds both tables every time it runs, with no explicit transaction. Statement order:
 

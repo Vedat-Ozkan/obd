@@ -21,7 +21,7 @@ Both commands use the same default persistent state under `tools/summary-backend
 
 Wrangler locally supplies `cf-connecting-ip`. Only absent or canonical loopback/private IPv4 peers are permitted. Any `cf-ray`, `forwarded` or `x-forwarded-*` header is rejected; permitted peer metadata never replaces host, token or enabled checks. Plain HTTP is only for the owner-controlled laptop/phone development network. If Android blocks it, surface that issue before selecting an existing supported local connection configuration; do not weaken production security or add a native dependency.
 
-Before a live phone tap, the owner/reviewer records the actual free catalog and endpoint URLs, check time and SHA-256 in a sanitized local artifact. Runtime fetch repeats validation (15-minute in-memory metadata cache, no key-limit cache). Endpoint `response_format` and `reasoning` do not establish strict JSON-schema or disabled-reasoning compatibility; the paid phone gate must record actual compatibility. No paid generation occurs in the tests.
+Before a live phone tap, the owner/reviewer records the actual free catalog and endpoint URLs, check time and SHA-256 in a sanitized local artifact. Runtime fetch repeats validation (15-minute in-memory metadata cache, no key-limit cache). Endpoint `response_format` and `reasoning` do not establish that disabled reasoning succeeds; the paid phone gate must record actual compatibility. No paid generation occurs in the tests.
 
 ## Bounds and metadata
 
@@ -35,11 +35,21 @@ Re-running `schema.sql` (the `d1 execute` command above) migrates an existing lo
 
 For the later owner phone artifact `/tmp/t2.10d-local-phone.json`, save only consent version, request ID, returned model, enforced pin/dated snapshot digest/rates, tokens/cost/latency, checked display category and cumulative budget. `SummaryUsage.provider` identifies the configured DeepSeek pin; absent returned-provider evidence is unknown. Do not save key documents, labels, facts, raw responses or errors. Observability and Worker logging stay off.
 
+## JSON mode, reply schema enforced on the server
+
+Every outgoing `/chat/completions` body, the summary and all four assistant arms, sends `response_format: {"type": "json_object"}` and never a `json_schema` (`prepare()` in `openrouter.ts`). The pinned DeepSeek endpoints advertise `response_format` but not `structured_outputs`, which `json_schema` needs, so with `require_parameters: true` a strict-schema request had no eligible endpoint. JSON mode guarantees valid JSON only, not the shape, so the shape is enforced here: the reply is parsed against the bounded summary or assistant reply schema, then checked by `checkSummaryFacts` / `checkFacts`, and the phone checks the summary again. A malformed, wrongly shaped, empty or wrong-number reply is `invalid-response`, settled at its actual cost, and the template is shown. The summary adapter prompt (`t2.10-openrouter-v2`) states the reply shape and bounds, since nothing else tells the model the key names; the assistant prompt (`t2.11-openrouter-v1`) already spells out both reply objects.
+
+**One shared parameter list.** Preflight requires every pin's endpoint to advertise exactly the parameters the body sends: `max_tokens`, `response_format` and `reasoning` (the `parameters` list in `openrouter.ts`). `structured_outputs` is not required on any arm.
+
+**Upstream status.** A `provider-error` after a response arrived stores its upstream HTTP status as a number only: the settled ledger row's `error` is `provider-error:NNN` (for example `provider-error:400`), and the Worker's fallback envelope on both routes carries `upstreamStatus`. An HTTP 200 whose body holds an `error` envelope is recorded as 200; a thrown fetch (network failure or the 20 s timeout) has no status and stores plain `provider-error` with `upstreamStatus: null`. The key exists only for `provider-error`. The upstream body, headers and error fields are never stored, returned or logged. Anything reading the `error` column treats values starting with `provider-error` as that category. The phone does not read the status; the owner reads the ledger. The eval CLI copies it into each round as `upstreamStatus`.
+
+Re-running `schema.sql` migrates in place: the `error` CHECK now also accepts `provider-error:` plus a three-digit status from 100 to 599, existing rows copy unchanged, and a malformed value such as `provider-error:4040` is rejected.
+
 ## Assistant turns and the four-arm comparison (T2.11b)
 
 `POST /v1/assistant/turns` runs one assistant round for the phone or the eval CLI: `{ requestId, model, consentVersion, turn }`. It has the same guard as `/v1/summaries` (default-disabled, exact private host, development token, no forwarding headers) and makes at most one bounded OpenRouter call. The Worker holds no user data and never runs a tool: it checks that the reply names an allowlisted tool, or that an answer passes the same fact check as the summary (`checkFacts`), and returns `{ kind: "reply", reply, usage }` or `{ kind: "fallback", reason }`. Design and sources: `docs/specs/T2.11b-assistant-backend-live-eval.md`.
 
-Four arms are pinned in `openrouter.ts` (`pins`), each to one OpenRouter host with no fallback routing, the same system prompt, strict reply schema, `max_tokens` 1,024 and reasoning off:
+Four arms are pinned in `openrouter.ts` (`pins`), each to one OpenRouter host with no fallback routing, the same system prompt, JSON mode, `max_tokens` 1,024 and reasoning off:
 
 | Arm | Model | Host (tag) | Consent version |
 |---|---|---|---|
@@ -48,7 +58,7 @@ Four arms are pinned in `openrouter.ts` (`pins`), each to one OpenRouter host wi
 | C | `xiaomi/mimo-v2.6-pro` | Xiaomi (`xiaomi/fp8`) | `t2.11-openrouter-compare-eval-v1` |
 | D | `moonshotai/kimi-k3` | Moonshot AI (`moonshotai/mxfp4`) | `t2.11-openrouter-compare-eval-v1` |
 
-Arms B to D are refused (`unavailable`) unless `SUMMARY_COMPARE_ENABLED=1` is set in `.dev.vars`; a wrong or missing consent version for the model is `consent-required`. Preflight validates each pin's catalog entry, host tag, rates against the pin's ceilings and required parameters (C and D also need `structured_outputs`; the DeepSeek host does not advertise it, and the paid phone check decides whether it is accepted). A body over 32,768 bytes, more than 4 steps or more than 64 facts per step is `invalid-request`.
+Arms B to D are refused (`unavailable`) unless `SUMMARY_COMPARE_ENABLED=1` is set in `.dev.vars`; a wrong or missing consent version for the model is `consent-required`. Preflight validates each pin's catalog entry, host tag, rates against the pin's ceilings and the one shared parameter list (above). A body over 32,768 bytes, more than 4 steps or more than 64 facts per step is `invalid-request`.
 
 **One budget.** Summaries and assistant turns share the one key, its US$1 cap and the one D1 ledger; there is no separate assistant budget or use cap. Each call reserves `reservationFor(its own body bytes, its pin)` (same rules as above, at the pin's ceiling rates; at the 32,768-byte cap: A 22,119, B 101,581, C 35,738, D 224,256 micro-USD, all under the D1 CHECK). A held slot blocks both routes. `GET /v1/status` is unchanged and is the one shared view.
 

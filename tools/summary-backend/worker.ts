@@ -43,6 +43,11 @@ const assistantSchema = z.strictObject({
 });
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const fallback = (reason: SummaryFallback, status = 200) => json({ kind: "fallback", reason }, status);
+/** The fallback after a paid call, both routes. `upstreamStatus` is a bare number and exists only for a provider-error; no upstream text is copied. */
+const postCallFallback = (result: { reason?: SummaryFallback; usage?: unknown; upstreamStatus: number | null }) => {
+  const reason = result.reason ?? "invalid-response";
+  return json({ kind: "fallback", reason, ...(result.usage ? { usage: result.usage } : {}), ...(reason === "provider-error" ? { upstreamStatus: result.upstreamStatus } : {}) });
+};
 
 function privateIpv4(host: string): boolean {
   const parts = host.split(".");
@@ -76,13 +81,13 @@ async function reserve(db: SummaryDatabase, requestId: string, reservation: numb
   if (row.disabled || row.inflight) return "unavailable";
   return row.spent + reservation > 1000000 ? "budget-exhausted" : "unavailable";
 }
-async function settle(db: SummaryDatabase, requestId: string, reservation: number, result: Pick<AdapterResult, "actualMicroUsd" | "kill" | "reason">): Promise<void> {
+async function settle(db: SummaryDatabase, requestId: string, reservation: number, result: Pick<AdapterResult, "actualMicroUsd" | "kill" | "reason" | "upstreamStatus">): Promise<void> {
   // The update uses the still-inflight request; a second settlement changes nothing.
   const charged = result.actualMicroUsd ?? reservation;
   const adjusted = result.kill ? Math.max(charged, reservation) : charged;
   const writes = await db.batch([
     db.prepare("UPDATE summary_budget SET spent=spent-?+?, inflight=NULL, disabled=MAX(disabled,?) WHERE id=1 AND inflight=? AND EXISTS (SELECT 1 FROM summary_requests WHERE request_id=? AND state='inflight')").bind(reservation, adjusted, result.kill ? 1 : 0, requestId, requestId),
-    db.prepare("UPDATE summary_requests SET state='settled',actual=?,error=? WHERE request_id=? AND state='inflight' AND changes()=1").bind(result.actualMicroUsd, result.reason ?? null, requestId),
+    db.prepare("UPDATE summary_requests SET state='settled',actual=?,error=? WHERE request_id=? AND state='inflight' AND changes()=1").bind(result.actualMicroUsd, result.reason === "provider-error" && result.upstreamStatus !== null ? `provider-error:${String(result.upstreamStatus)}` : result.reason ?? null, requestId),
   ]);
   if (writes.length !== 2 || !writes.every((entry) => entry.meta.changes === 1)) throw new Error("unsettled request");
 }
@@ -120,7 +125,7 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
     const result = await adapter.generateAssistantTurn(input.model, turn, prepared, key);
     await settle(db, input.requestId, reservation, result);
     if (result.reply) return json({ kind: "reply", reply: result.reply, usage: result.usage });
-    return json({ kind: "fallback", reason: result.reason ?? "invalid-response", ...(result.usage ? { usage: result.usage } : {}) });
+    return postCallFallback(result);
   }
   return { async fetch(request: Request, env: SummaryEnv): Promise<Response> {
     if (!enabled(request, env)) return fallback("unavailable", 503);
@@ -151,7 +156,7 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
       const result = await adapter.generate(input.request, prepared, key);
       await settle(db, input.requestId, reservation, result);
       if (result.summary) return json({ kind: "llm", summary: result.summary, usage: result.usage });
-      return json({ kind: "fallback", reason: result.reason ?? "invalid-response", ...(result.usage ? { usage: result.usage } : {}) });
+      return postCallFallback(result);
     } catch { return fallback("unavailable", 503); }
   } };
 }

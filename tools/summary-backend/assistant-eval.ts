@@ -40,12 +40,14 @@ function parseArgs(args: readonly string[]): Options {
 
 const token = process.env.SUMMARY_DEV_TOKEN ?? "";
 const usageSchema = z.object({ model: z.string(), returnedProvider: z.string().nullable(), inputTokens: z.number(), cachedInputTokens: z.number().nullable(), outputTokens: z.number(), reasoningTokens: z.number().nullable(), providerCostUsd: z.number().nullable(), estimatedUsd: z.number(), latencyMs: z.number() });
-const turnResponse = z.object({ kind: z.enum(["reply", "fallback"]), reply: z.unknown().optional(), reason: z.string().optional(), usage: usageSchema.optional() });
+const turnResponse = z.object({ kind: z.enum(["reply", "fallback"]), reply: z.unknown().optional(), reason: z.string().optional(), upstreamStatus: z.unknown().optional(), usage: usageSchema.optional() });
 const statusResponse = z.object({ headroomMicroUsd: z.number() });
 
 interface Round {
   returnedProvider: string | null; inputTokens: number | null; cachedInputTokens: number | null; reasoningTokens: number | null; outputTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number | null; reservationMicroUsd: number; providerLatencyMs: number | null; serverReason?: string;
+  // The Worker's upstreamStatus for a provider-error round; null for every other round, including transport errors.
+  upstreamStatus: number | null;
 }
 
 async function spentMicroUsd(url: string): Promise<number> {
@@ -72,13 +74,14 @@ function questionClient(url: string, model: AssistantModel) {
         });
         data = turnResponse.parse(await response.json());
       } catch {
-        rounds.push({ returnedProvider: null, inputTokens: null, cachedInputTokens: null, reasoningTokens: null, outputTokens: null, providerCostUsd: null, estimatedUsd: null, reservationMicroUsd, providerLatencyMs: null, serverReason: "transport-error" });
+        rounds.push({ returnedProvider: null, inputTokens: null, cachedInputTokens: null, reasoningTokens: null, outputTokens: null, providerCostUsd: null, estimatedUsd: null, reservationMicroUsd, providerLatencyMs: null, serverReason: "transport-error", upstreamStatus: null });
         saved.push({ reject: "transport-error" });
         throw new Error("transport-error");
       }
       const u = data.usage;
       rounds.push({ returnedProvider: u?.returnedProvider ?? null, inputTokens: u?.inputTokens ?? null, cachedInputTokens: u?.cachedInputTokens ?? null, reasoningTokens: u?.reasoningTokens ?? null, outputTokens: u?.outputTokens ?? null, providerCostUsd: u?.providerCostUsd ?? null,
-        estimatedUsd: u?.estimatedUsd ?? null, reservationMicroUsd, providerLatencyMs: u?.latencyMs ?? null, ...data.kind === "fallback" ? { serverReason: data.reason ?? "unknown" } : {} });
+        estimatedUsd: u?.estimatedUsd ?? null, reservationMicroUsd, providerLatencyMs: u?.latencyMs ?? null,
+        upstreamStatus: typeof data.upstreamStatus === "number" && Number.isInteger(data.upstreamStatus) && data.upstreamStatus >= 100 && data.upstreamStatus <= 599 ? data.upstreamStatus : null, ...data.kind === "fallback" ? { serverReason: data.reason ?? "unknown" } : {} });
       if (data.kind === "fallback" || u === undefined) {
         saved.push({ reject: data.reason ?? "unknown" });
         if (data.reason === "budget-exhausted" || data.reason === "unavailable") stop = true;
@@ -160,7 +163,7 @@ async function snapshots(models: readonly AssistantModel[], base: string) {
   try {
     const raw = await (await fetch(`${base}/models`, { signal: AbortSignal.timeout(60000) })).text();
     catalog = { raw, entries: z.object({ data: z.array(z.record(z.string(), z.unknown())) }).parse(JSON.parse(raw)).data };
-  } catch { /* Evidence only: a missing snapshot is recorded, and never stops the run. */ }
+  } catch { /* A missing snapshot is recorded as such here; main() stops a LIVE run for it before anything is sent. */ }
   for (const model of models) {
     const pin = pins[model];
     try {
