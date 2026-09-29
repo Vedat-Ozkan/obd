@@ -1,130 +1,106 @@
 # obd
 
-> Working title. An open, transparent used-EV battery health check, verified first on GM Ultium vehicles and extended to other makes through beta testers: a pure-TypeScript OBD library, an Android app that logs charges and produces battery and used-EV reports, an opt-in LLM that explains them without inventing numbers, and battery ML with measured uncertainty. Built full-time as a portfolio project using an architect / implementer / reviewer agent workflow, with every claim checked against recordings from real cars.
+> Working title. An independent battery health check for used EVs, verified first on GM Ultium (2024 Chevrolet Equinox EV): an Android app that talks to a $30 Bluetooth OBD dongle, measures what the battery reports, and explains it without inventing numbers. Built full-time as an applied-AI portfolio project with an architect / implementer / reviewer agent workflow, where every claim is checked against recordings from a real car.
 
-**Status:** Phase 0 in progress. Started 2026-09-16. The workspace scaffold, the hello-world HIL service, the spike script, and the reviewed `obd-core` transport code (T0.3) exist; the phone app, battery reports, LLM features, and ML remain planned. Direction revised through ADR-015 on 2026-09-23. See [docs/PLAN.md](docs/PLAN.md).
+**Status (2026-09-29):** Phase 2, battery health. The app runs on the owner's phone against the Equinox: garage, parked battery scan with a saved report, codes report, charge logger, and a relay that lets agents on the desk talk to the car. Current work is the **test-drive check** and the **battery assistant** (details below). Plan and dates: [docs/PLAN.md](docs/PLAN.md). Why things changed: [docs/DECISIONS.md](docs/DECISIONS.md).
 
-## Why this exists
+## What we are building
 
-Consumer OBD apps are a crowded market, and the AI gas-car diagnosis corner is already occupied (OBDAI, MECH AI, Skanyx and others). This project does not compete there. It exists for three reasons:
+Used-EV buyers want to know one thing: is this battery healthy? Dealers won't say, and GM's Ultium cars (Equinox EV, Blazer EV, Silverado EV, Lyriq, Optiq, Prologue) have no consumer tool like LeafSpy is for the Nissan Leaf. This app is that tool, built so the owner and a buyer can both trust what it shows.
 
-1. **A real gap.** Used-EV buyers want an independent battery check, and the off-lease wave is growing. LeafSpy became the canonical Nissan Leaf battery tool as a solo-developer app. No consumer equivalent exists for GM's Ultium platform (Equinox EV, Blazer EV, Silverado EV, Lyriq, Optiq, Prologue). The Ultium tool is the differentiated product; a general hybrid/PHEV/EV battery app on the same core reaches more people but has incumbents. The report is written so a used-EV buyer can show it to a seller, and so it can be used in a paid pre-purchase inspection.
-2. **Applied AI engineering, shown with evidence.** Battery ML with calibrated uncertainty, anomaly detection, on-device inference, and drift monitoring; an opt-in LLM summary and tool-calling assistant guarded by a deterministic faithfulness check and a CI eval suite; an MCP server that lets agents work against a real car under a read-only allowlist; and the agentic build process itself (architect / implementer / reviewer, Claude and Codex). Every claim comes with measurements, including failures.
-3. **Personal use.** An EV whose battery health nobody will tell me about without a dealer visit. Two gas cars remain available as an optional BLE and generic OBD bench.
+It offers three checks, each measuring only what its duration can support (ADR-022):
 
-The longer-term intent is to sell the app at a modest price, as one "used-EV battery health check" listing (an Ultium-specific listing is optional; ADR-014). The template report has no per-use cost; the LLM feature does, so it gets a usage cap. See [docs/DECISIONS.md](docs/DECISIONS.md) ADR-009 through ADR-015.
+| Check | Takes | Measures | Who | State |
+|---|---|---|---|---|
+| **Parked scan** | ~2 min | State of charge, cell-group spread, 12 V, trouble codes, "recently cleared?" heuristic; GM's own capacity figure once verified, labeled as the car's own number | Owners and buyers | Built and run on the Equinox |
+| **Test drive** | 15–20 min of normal driving | Pack resistance from acceleration and regen steps, and cell groups that sag more than the rest under load: a view of power fade and weak cells a parked scan cannot see | Owners and buyers | Capture built (T2.12); first real drive pending; the in-app result is T2.13 |
+| **Overnight charge** | One charge | Independent capacity with an error band | Owners | Logger built; **paused** while the collection method is redesigned |
 
-## What it does, by phase
+Every report shows observed data with its source and signal tier, marks what was not measured, and never certifies health it cannot measure. Capacity reads **NOT MEASURED** until a charge log supports it.
 
-| Phase | Dates | Deliverable | Cars |
-|---|---|---|---|
-| 0 | Sep 16 – Oct 16, 2026 | **Core, BLE, and the codes report.** ELM327 session, standard decoding, the phone app with a debug console, a phone relay that exposes the car to agents through MCP, and a codes / "recently cleared" report every battery report includes. | Equinox EV required; Chrysler 200 and Elantra optional bench. |
-| 2 | Oct 19 – Dec 4, 2026 | **Battery health.** Charge logging, capacity estimate with an error band, cell imbalance, 12 V, battery report, used-EV pre-purchase report, community/verified signal tiers for other hybrids/PHEVs/EVs, beta data export, opt-in LLM summary and assistant. | Equinox EV; beta vehicles |
-| BM1–BM9 | Dec 7 – Jan 29, 2027 | **Measurement-first battery ML and LLM evals (ADR-016).** OCV curve and dataset pipeline; independent capacity estimator with a Bayesian trend; resistance and a circuit model; per-cell-group fault detection with physics-based injected faults; on-device models and drift; LLM eval infrastructure; write-ups; optional open dataset; distillation as a stretch. The LLM only explains results already computed and checked. | Own car, then beta fleet |
-| 3 | After BM6 | Stretch: two store listings, proxy with usage cap, full EV module scan, more Ultium models, iOS. | |
+An optional **AI summary** and a **battery assistant** explain the results in plain language. The analysis itself is deterministic code; the model only explains numbers the code already computed, and a number check rejects any reply containing a value that is not in the report (the app then shows the plain template). Consent comes first, and a minimized, VIN-free projection is sent through OpenRouter.
 
-The gas-car diagnosis engine (old Phase 1) and the LLM fine-tuning track (ML1–ML6) are withdrawn (ADR-012). All dates are provisional. Full task breakdown: [docs/PLAN.md](docs/PLAN.md). ML design: [docs/ML.md](docs/ML.md).
+## Working on now
 
-## Test fleet and hardware
+- **Test-drive capture (T2.12).** One tap while parked, then drive; it stops by itself and needs no screen interaction. The first drive answers whether current and voltage can be read fast enough on the road to measure resistance, and gives a GO / NO-GO for the in-app check (T2.13, which will also get the AI summary).
+- **Battery assistant (T2.11).** Chat about your own checks through tools that fetch data, with every number cited. Chats are saved on the phone and can be picked up a week later. A paid eval compares the pinned DeepSeek V4.1 Flash with three stronger models (DeepSeek V4 Pro, Xiaomi MiMo V2.6 Pro, Moonshot Kimi K3) on number-check pass rate, citations, prompt-injection cases, cost and latency, inside one US$1 budget.
+- **Owner phone and car checks** for the recently landed work: auto-reconnecting dongle and picker, the relay smoke recording, the AI summary's paid phone gate.
 
-| Item | Detail | Notes |
-|---|---|---|
-| 2013 Chrysler 200 | ICE, CAN 11-bit/500k | Optional bench; no required recording or app run |
-| 2019 Hyundai Elantra Preferred | ICE, CAN 11-bit/500k | Optional bench; no required recording or app run |
-| 2024 Chevrolet Equinox EV RS First Edition | Ultium, CAN 29-bit for module diagnostics | Required Phase 0 vehicle; standard Mode 01 coverage minimal; Mode 22 via OBDb signalset |
-| (no hybrid or PHEV owned) | | Non-Ultium vehicles are `community` until a recording from a beta tester, inspection customer (with consent), or borrowed car verifies them |
-| Veepeak OBDCheck BLE | ELM327-compatible, BLE | Do not pair in Android settings; connect from the app. Service `FFF0` |
-| Dev machine | Windows 11 host with WSL2 (mirrored networking) for code; Android phone as the hardware bridge; a laptop for the spike | WSL2 has no Bluetooth and the desktop is out of range of the driveway, so the phone relays commands to WSL2 (ADR-013) |
+## Next
 
-## Architecture in one picture
+The test-drive check in the app (T2.13); beta testers from Ultium owner forums, promoting other Ultium models from `community` to `verified` with their recordings (T2.8, T2.9); a redesigned overnight charge estimate; then the battery ML track (BM1–BM9, [docs/ML.md](docs/ML.md)): measurement-first capacity and resistance with calibrated uncertainty, per-cell-group fault detection evaluated on injected faults, and LLM evals.
+
+## How it fits together
 
 ```
-                   ┌──────────────────────────────────────────────┐
-                   │              obd-core (pure TS)               │
-  BLE (phone) ───▶ │ Transport ─▶ Elm327Session ─▶ decode(PIDs,    │ ──▶ codes report
-  Relay (phone) ─▶ │            (init, queue,      DTCs, VIN,      │
-  Replay (tests) ▶ │             ISO-TP, errors)   vehicle profiles)│ ──▶ charge log
-                   └──────────────────────────────────────────────┘
-                                          │
-                                          ▼
-                   ┌──────────────────────────────────────────────┐
-                   │           obd-battery (pure TS)               │
-                   │ capacity + error band, imbalance, 12 V,       │ ──▶ battery / used-EV report
-                   │ on-device model estimates, templates          │      (template text)
-                   └──────────────────────────────────────────────┘
-                                          │  opt-in
-                                          ▼
-                   ┌──────────────────────────────────────────────┐
-                   │           obd-assist (pure TS)                │
-                   │ summary + tool-calling assistant via LlmClient│ ──▶ explanation / answers
-                   │ faithfulness check → template on failure      │      with cited values
-                   └──────────────────────────────────────────────┘
-        ▲                    ▲                           ▲
-   apps/mobile         tools/relay (MCP)          packages/obd-eval
- (Expo, Android)     agents ↔ phone ↔ car     (fixtures → scores, LLM suite)
+ Veepeak BLE dongle ── phone (Expo app) ── obd-core ── obd-battery ── report screens
+                            │               (ELM327     (reports,      │ opt-in
+                            │                session,    charge log,   ▼
+                            │                decoding,   test drive)  obd-assist ── local summary
+                            │                profiles)                (number check) Worker → OpenRouter
+                            └─ relay mode ── tools/relay (WSL2) ── MCP server for agents (read-only allowlist)
+
+ fixtures/recordings/ ──── replay ──── the same obd-core code in tests and CI
 ```
 
-The same session and decoding code runs against the phone's BLE stack, through the phone relay for agents on the desk, and against recorded transcripts in CI. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`obd-core` is pure TypeScript with injected transports, so the same session and decoding code runs on the phone, through the relay, and against recorded transcripts in CI. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Repository layout (target)
+## Repository layout
 
 ```
-packages/obd-core/       transports, ELM327 session, PID/DTC decoding, vehicle profiles, codes report
-packages/obd-battery/    charge sessions, capacity, imbalance, 12 V, reports, templates, on-device models
-packages/obd-assist/     opt-in LLM summary and assistant, faithfulness check (replaces obd-diagnose)
+packages/obd-core/       transports, ELM327 session, J1979 and Mode 22 decoding, vehicle profiles, codes report
+packages/obd-battery/    battery reports, charge-log and test-drive analysis scripts
+packages/obd-assist/     AI summary and assistant, number check
 packages/obd-eval/       eval harness and scoring
-apps/mobile/             Expo app (Android first); two store listings later from one codebase
+packages/obd-diagnose/   withdrawn gas-car diagnosis (ADR-012)
+apps/mobile/             Expo app, Android first
 tools/relay/             WSL2 relay and car MCP server; the phone connects to it
-tools/hil-bridge/        Python laptop bridge, for the spike and as a fallback
-tools/ml/                planned isolated Python battery modeling (BM1–BM4, BM7)
-fixtures/recordings/     immutable recordings from real cars
-fixtures/synthetic/      hand-written or injected, labeled synthetic fixtures
-docs/                    plan, architecture, feasibility, ELM327 notes, eval, ML, workflow, decisions
-docs/specs/              one spec per task
+tools/summary-backend/   local development Worker for the AI summary (OpenRouter, US$1 budget)
+tools/beta-backend/      Cloudflare Worker for consented beta uploads (ADR-019)
+tools/beta-intake/       owner-side beta intake, re-scrub and deletion
+tools/spike/             laptop capture scripts, VIN redaction
+tools/hil-bridge/        Python laptop bridge (fallback)
+fixtures/recordings/     immutable recordings from real cars (committed copies are VIN-redacted)
+fixtures/synthetic/      hand-written fixtures, labeled synthetic
+docs/                    plan, architecture, ELM327 notes, eval, ML, workflow, decisions
+docs/specs/              one spec per task;  docs/task-runs/  one progress record per task
 ```
 
 ## Development setup (short version)
 
 - **Code** lives in WSL2: Node 22, pnpm, TypeScript. `pnpm install && pnpm check`.
-- **Hardware bridge** is the phone (ADR-013): the app's relay mode connects to `tools/relay` in WSL2, which exposes the car to agents as an MCP server with a read-only allowlist and records every exchange to `fixtures/recordings/`. The Python laptop bridge (`tools/hil-bridge`) is used for the T0.2 spike and as a fallback. Hardware verification is still a deliberate session with the phone in the car; recordings carry the load in between.
-- **App** is an Expo development build (Expo Go has no BLE). Build the dev client with EAS once, then run Metro in WSL2. WSL2 is already in mirrored networking mode, so the phone reaches Metro at the desktop's LAN address; `expo start --tunnel` is the fallback.
-- **LLM (planned, opt-in)** uses a hosted model with your own key in secure storage (BYOK); a paid release adds a thin proxy with a usage cap. Battery modeling tooling (`tools/ml/`) stays separate from the app and relay.
+- **App** is an Expo development build (Expo Go has no BLE); Metro runs in WSL2 with mirrored networking. An EAS `preview` profile builds a standalone APK for use away from the desk.
+- **Car access from the desk** goes through the phone's relay mode to `tools/relay` (ADR-013); `pnpm hil:smoke` checks the path end to end and saves a recording.
+- **AI summary** runs against a local Worker (`tools/summary-backend/README.md`) with a dedicated OpenRouter key capped at US$1; keys never enter the app or the repo.
 
-Full setup and the known WSL2 pitfalls: [docs/FEASIBILITY.md](docs/FEASIBILITY.md#development-environment).
+Setup details and WSL2 pitfalls: [docs/FEASIBILITY.md](docs/FEASIBILITY.md#development-environment).
+
+## Test fleet and hardware
+
+| Item | Detail | Notes |
+|---|---|---|
+| 2024 Chevrolet Equinox EV RS First Edition | Ultium, CAN 29-bit for module diagnostics | The required vehicle; pack current, voltage and energy signals found and checked in recordings (`docs/discovery-2026-09.md`) |
+| 2013 Chrysler 200, 2019 Hyundai Elantra | ICE, CAN 11-bit | Optional bench only (ADR-015) |
+| Veepeak OBDCheck BLE | ELM327-compatible, BLE service `FFF0` | Connect from the app, not Android settings; unplug after use (12 V drain) |
 
 ## How this repo is built
 
-The build process is part of the portfolio. Every non-trivial task goes through three agents defined in `.claude/agents/`:
+The build process is part of the portfolio. Every non-trivial task goes through three agents (`.claude/agents/`, and Codex equivalents in `.codex/`):
 
-- **architect** writes a spec (interfaces, files, sources for every OBD constant, verification plan) and never writes code.
-- **implementer** builds to the spec with E2E tests written first against recordings, runs `pnpm check`, and reports PASS / FAIL / NOT RUN per item.
-- **reviewer** is read-only, reruns the checks itself, rejects any unsourced PID or AT command, and returns APPROVE or REQUEST_CHANGES.
+- **architect** writes a spec with sources for every OBD constant and a verification plan, and never writes code;
+- **implementer** builds to the spec with end-to-end tests over real recordings and reports PASS / FAIL / NOT RUN per item;
+- **reviewer** is read-only, reruns everything itself, rejects unsourced constants, and returns APPROVE or REQUEST_CHANGES (at most two repair rounds).
 
-`/feature T0.4` runs the loop for a task. The rules the agents work under are in [AGENTS.md](AGENTS.md); the reasoning is in [docs/WORKFLOW.md](docs/WORKFLOW.md). The one-line version: agents are cheap, wrong PID tables are expensive, and the phone relay exists so agents test against the real dongle, through an allowlist, instead of guessing.
-
-## Top risks
-
-1. **Equinox EV data access.** Community-verified signals for this car are thin (six signals in OBDb, three of them marked 2025+), with no pack current, energy counter, or temperatures. Mitigated by the T0.2 spike (Gate A) and agent-driven discovery (Gate B, T2.3), with a charger-kWh fallback for capacity.
-2. **Long BLE sessions on Android.** A multi-hour charge log needs a foreground service that survives power management. Tested with a full charge in T2.4.
-3. **Ground truth is small and imperfect.** One owned EV and a few beta vehicles; the reference capacity is itself an estimate. The eval shows every session rather than pretending statistical power.
-4. **Unverified vehicles.** No hybrid or PHEV is owned; their signals stay `community` until a recording verifies them.
-5. **LLM wrong numbers and cost.** Mitigated by a deterministic number check with template fallback, a CI eval suite, and measured cost per report and question before any pricing.
-6. **Time.** Dates are provisional and re-estimated at each gate.
-
-All risks with evidence and mitigations: [docs/FEASIBILITY.md](docs/FEASIBILITY.md).
-
-## Deliberately cut
-
-The gas-car diagnosis engine, drive logger, and induced-fault protocol (ADR-012); LLM fine-tuning for diagnosis and GPU serving experiments (ADR-011, withdrawn; a distillation stretch remains as BM7); synthetic data as real-world ground truth; automatic model routing; an LLM on the device; ads and parts affiliates; pricing or store work before Phase 2 has a report other owners have run; incorporation and liability work; iOS before Phase 3; the Bolt EUV direction (no car).
+`/feature <task>` runs the loop; each task's history is in `docs/task-runs/`. Rules: [AGENTS.md](AGENTS.md). Process: [docs/WORKFLOW.md](docs/WORKFLOW.md). Hardware claims always cite a recording; anything not run on the car says NOT RUN.
 
 ## Safety
 
-- OBD reads are passive. The only write this software ever sends is Mode 04 (clear codes) after an explicit confirmation.
-- No faults are induced on any vehicle. Battery faults exist only as synthetic injections into real logs.
-- Agents reach the car only through the relay's read-only allowlist; UDS writes are rejected in code and Mode 04 needs a tap on the phone.
-- Nothing here touches the EV's high-voltage system. Orange cables are for trained technicians. The diagnostic port on the Equinox EV is a low-voltage read of what the modules report.
-- Reports are observed data, not a certified battery-health rating or a repair instruction, and say so in the app.
+- The app only reads. The single write it can send is Mode 04 (clear codes) after an explicit confirmation; UDS writes are rejected in code.
+- Agents reach the car only through the relay's read-only allowlist, and Mode 04 needs a tap on the phone.
+- The test-drive check needs no interaction after the start tap. Don't touch the phone while driving.
+- Nothing here touches the high-voltage system. Reports are observed data, not a certified battery rating or a repair instruction.
+- The VIN stays on the device; committed recordings mask it (ADR-017).
 
 ## License
 
-Code: MIT for `packages/*` and `tools/*` is the intent (an OBD library nobody else maintains in TypeScript is worth more as reputation than as a secret). The app's license is decided before the first store listing; the code stays public either way and the Play Store build is what is sold (ADR-009). Vehicle signal definitions imported from [OBDb](https://github.com/OBDb) are CC-BY-SA-4.0 and stay under that license with attribution, in their own directory; corrections are contributed upstream (ADR-010).
+Intended: MIT for `packages/*` and `tools/*`; the app's license is decided before the first store listing (ADR-009). Signal definitions imported from [OBDb](https://github.com/OBDb) stay CC-BY-SA-4.0 with attribution in their own directory, and corrections go upstream (ADR-010).
