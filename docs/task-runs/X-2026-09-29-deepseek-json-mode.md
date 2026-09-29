@@ -2,15 +2,15 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: APPROVE (repairs 0/2) — commit below; orchestrator live D1 migration next. Tool: Claude Code, orchestrator `/feature`.
+- Stage: desk closed. APPROVE (repairs 0/2) — commit fb38dc2; live D1 migrated. Tool: Claude Code, orchestrator `/feature`.
 - Spec: `docs/specs/X-2026-09-29-deepseek-json-mode.md` (size M-small, 11 files; status stored as `provider-error:NNN` in the existing `error` column).
 - Repairs: 0/2. Escalations: 0.
 - Verdicts: APPROVE (2026-09-29); reviewer reproduced `pnpm check` PASS.
 - Decisions in effect: owner 2026-09-29: keep the DeepSeek host; replace the strict `json_schema` request with plain JSON mode on DeepSeek-hosted pins; rely on server and phone schema validation plus the number check.
 - Owner authorizations: the fix itself; owner 2026-09-29 confirmed the spec's scope (JSON mode on all four arms and the summary, v2 summary prompt) and answered the open question: yes, record the upstream HTTP status code (number only) for `provider-error`, folded into this task. No lint-config change (owner declined). No paid call authorized by this task; the owner re-runs the T2.10 phone gate afterwards.
-- NOT RUN: live D1 migration (orchestrator, after review); owner D1 phone re-run.
+- NOT RUN: owner D1 phone re-run.
 - Blocker: none (T2.11b Stage 1b committed f241ee3).
-- Next action: reviewer, then the orchestrator's live D1 migration (read-only before/after), then the owner's D1 phone re-run.
+- Next action: owner re-runs the D1 phone gate (restart wrangler dev, reload Metro); the orchestrator records the ledger row and any `provider-error:NNN` in `docs/task-runs/T2.10.md`.
 
 ## Baseline
 
@@ -35,3 +35,4 @@ APPROVE with 4 minors: (1) README:61 "(below)" → "(above)", fixed by the orche
 - 2026-09-29 architect revision (Claude): status code folded in; 0 open questions. Orchestrator adds the T2.11b Stage 1b review minor (stale comment at `assistant-eval.ts:163`) to this implementation, since that file is in Files.
 - 2026-09-29 implementer (Claude): done; see Verification evidence.
 - 2026-09-29 reviewer (Claude): APPROVE, 4 minors (README word fixed by orchestrator; others recorded).
+- 2026-09-29 orchestrator live migration: before (read-only): two tables, no `_next`; budget (1,2,13954,NULL,0); rows 6ec2b0f6… and 8b7ccda7… settled, 6977, actual NULL, `provider-error`; old error CHECK. Applied schema.sql with wrangler dev stopped (11 commands succeeded). After (read-only): identical budget and rows; error CHECK now allows `provider-error:[1-5][0-9][0-9]`.
