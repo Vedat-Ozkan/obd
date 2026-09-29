@@ -8,6 +8,8 @@ import { createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase 
 const root = new URL("../../../", import.meta.url);
 const fixturePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
 const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/t2.10-summary-responses.json", root), "utf8")) as { readonly cases: readonly SavedSummaryCase[] };
+const nameResponses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-twelve-volt-name-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
+const phoneConsolePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
 const signalset = importObdbMode22(JSON.parse(readFileSync(new URL("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", root), "utf8")));
 
 async function replayReport() {
@@ -157,7 +159,32 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "synthetic-dtc-wrong-no-recording": "template",
   "synthetic-dtc-malformed-no-recording": "template",
   "synthetic-dtc-arbitrary-no-recording": "template",
-  "synthetic-dtc-modified-quantity-no-recording": "template"
+  "synthetic-dtc-modified-quantity-no-recording": "template",
+  "twelve-volt-name-status-prose": "llm",
+  "twelve-volt-name-mid-sentence": "llm",
+  "twelve-volt-name-parenthesis": "llm",
+  "twelve-volt-name-sentence-end": "llm",
+  "twelve-volt-name-bare-reading": "template",
+  "twelve-volt-name-transformed-reading": "template",
+  "twelve-volt-name-exact-value-wrong-body": "template",
+  "twelve-volt-name-with-quantity-body": "template",
+  "twelve-volt-name-system": "template",
+  "twelve-volt-name-supply": "template",
+  "twelve-volt-name-plural": "template",
+  "twelve-volt-name-possessive": "template",
+  "twelve-volt-name-hyphenated": "template",
+  "twelve-volt-name-no-space": "template",
+  "twelve-volt-name-lowercase-v": "template",
+  "twelve-volt-name-capital-noun": "template",
+  "twelve-volt-name-nbsp": "template",
+  "twelve-volt-name-double-space": "template",
+  "twelve-volt-name-fullwidth-digits": "template",
+  "twelve-volt-name-glued-digit": "template",
+  "twelve-volt-name-glued-decimal": "template",
+  "twelve-volt-name-glued-minus": "template",
+  "twelve-volt-name-glued-plus": "template",
+  "twelve-volt-name-other-digit": "template",
+  "twelve-volt-name-uncited": "template"
 };
 
 
@@ -214,5 +241,45 @@ describe("summary recording replay", () => {
     expect(await createSummaryReplayArtifact(report, responses)).toEqual(artifact);
     expect(responses.cases.map((saved) => saved.name)).toEqual(Object.keys(expectedKinds));
     expect(new Set(responses.cases.map((saved) => saved.name)).size).toBe(responses.cases.length);
+  });
+});
+
+// SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md; the raw provider reply was never saved.
+const nameExpected: Readonly<Record<string, { kind: "llm" | "template"; text?: string }>> = {
+  "synthetic-reconstructed-deepseek-twelve-volt-names": { kind: "llm", text: [
+    "12 V observations were not read.",
+    "12 V battery status was not-assessed.",
+    "Capacity was not measured because no completed charge log and reviewed capacity estimator are available.",
+    "Battery health was not assessed.",
+    "Cell spread is unavailable.",
+  ].join("\n") },
+  "synthetic-reconstructed-false-reading": { kind: "template" },
+};
+
+describe("12 V name phrases on the phone-console recording (synthetic responses)", () => {
+  let report: Awaited<ReturnType<typeof batteryDiagnosisFromRecording>>;
+  beforeAll(async () => {
+    report = await batteryDiagnosisFromRecording(readFileSync(new URL(phoneConsolePath, root), "latin1"), {
+      garageVehicleId: "summary-replay", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-22T00:00:00.000Z", recording: phoneConsolePath, scanStatus: "complete",
+    }, signalset);
+  });
+
+  it("labels the fixture synthetic", () => {
+    expect(nameResponses.label).toMatch(/^SYNTHETIC reconstruction .*not recorded model output$/);
+  });
+
+  it.each(nameResponses.cases)("saved response $name", async (saved) => {
+    const expected = nameExpected[saved.name];
+    expect(expected).toBeDefined();
+    const result = await summarize(reportForSavedCase(report, saved), { generate: () => Promise.resolve(saved.response) }, { model: "saved-response", effort: "none" });
+    expect(result.kind).toBe(expected.kind);
+    if (expected.kind === "llm") expect(result.text).toBe(expected.text);
+    else expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(reportForSavedCase(report, saved)), reason: "Summary response could not be verified." });
+  });
+
+  it("writes the replay artifact the public CLI helper produces", async () => {
+    const artifact = await createSummaryReplayArtifact(report, nameResponses);
+    writeFileSync("/tmp/x-twelve-volt-name-summary.json", `${JSON.stringify(artifact, null, 2)}\n`);
+    expect(artifact.cases.map((item) => item.name)).toEqual(Object.keys(nameExpected));
   });
 });

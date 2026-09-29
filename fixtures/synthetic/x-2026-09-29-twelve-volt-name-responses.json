@@ -1,0 +1,60 @@
+{
+  "label": "SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md; not recorded model output",
+  "cases": [
+    {
+      "name": "synthetic-reconstructed-deepseek-twelve-volt-names",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V observations were not read.",
+            "factIds": [
+              "twelve-volt"
+            ]
+          },
+          {
+            "text": "12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          },
+          {
+            "text": "Capacity was not measured because no completed charge log and reviewed capacity estimator are available.",
+            "factIds": [
+              "capacity-status",
+              "capacity-reason"
+            ]
+          },
+          {
+            "text": "Battery health was not assessed.",
+            "factIds": [
+              "health-status",
+              "health-reason"
+            ]
+          },
+          {
+            "text": "Cell spread is unavailable.",
+            "factIds": [
+              "cell-spread"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "synthetic-reconstructed-false-reading",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery measured 12 V.",
+            "factIds": [
+              "twelve-volt",
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

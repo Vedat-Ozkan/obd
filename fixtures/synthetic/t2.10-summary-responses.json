@@ -1998,6 +1998,360 @@
         ]
       },
       "report": "synthetic-multi-dtc-no-recording"
+    },
+    {
+      "name": "twelve-volt-name-status-prose",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-mid-sentence",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-parenthesis",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Status (12 V battery) was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-sentence-end",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "Status was not-assessed for the 12 V battery.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-bare-reading",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery measured 12 V.",
+            "factIds": [
+              "twelve-volt-0",
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-transformed-reading",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery reads 12.0 V.",
+            "factIds": [
+              "twelve-volt-0",
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-exact-value-wrong-body",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery reads 12.7 V.",
+            "factIds": [
+              "twelve-volt-0",
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-with-quantity-body",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery was not assessed; adapter supply was 12.7 V.",
+            "factIds": [
+              "twelve-volt-0",
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-system",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V system status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-supply",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V supply status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-plural",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V batteries were not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-possessive",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V battery's status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-hyphenated",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V battery-status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-no-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-lowercase-v",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 v battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-capital-noun",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V Battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-nbsp",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-double-space",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12  V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-fullwidth-digits",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "１２ V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-glued-digit",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "112 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-glued-decimal",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "0.12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-glued-minus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "-12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-glued-plus",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "+12 V battery status was not-assessed.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-other-digit",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "The 12 V battery was checked 2 times.",
+            "factIds": [
+              "twelve-volt-status"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "twelve-volt-name-uncited",
+      "response": {
+        "version": 1,
+        "claims": [
+          {
+            "text": "12 V battery status was not-assessed.",
+            "factIds": [
+              "capacity-status"
+            ]
+          }
+        ]
+      }
     }
   ]
 }

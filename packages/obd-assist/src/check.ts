@@ -49,10 +49,15 @@ function acceptedBodies(cited: readonly SummaryFact[]): ReadonlySet<string> {
   return bodies;
 }
 
+// Owner decision 2026-09-29: "12 V" may name the low-voltage system, never state a reading (X-2026-09-29-twelve-volt-name).
+const TWELVE_VOLT_NAMES = /(?<=^|[ (])12 V (battery|observations)(?=$|[ .,;:!?)])/g;
+
 function checkClaim(text: string, cited: readonly SummaryFact[], allFactIds: ReadonlySet<string>): void {
   if ([...allFactIds].some((id) => text.includes(id))) throw new Error("summary claim includes a source identifier");
   // Only symbol-free prose gets this route; quantities and codes require full coverage.
-  if (/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(text)) return;
+  // A name phrase counts as prose only when it cites a 12 V fact; any digit left over is checked on the original text.
+  const prose = cited.some((fact) => fact.label.includes("12 V")) ? text.replace(TWELVE_VOLT_NAMES, "$1") : text;
+  if (/^[\p{L}\p{M} .,;:!?'()\-]+$/u.test(prose)) return;
   if (/[^\x20-\x7E]/.test(text) || text.includes("  ")) throw new Error("summary claim has unsupported whitespace or characters");
   const bodies = acceptedBodies(cited);
   if (!text.endsWith(".") || !text.slice(0, -1).split(/; |, and /).every((body) => bodies.has(body))) {
