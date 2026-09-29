@@ -95,6 +95,7 @@ class FakeElm implements Transport {
   private answer(command: string): string {
     const s = this.clock();
     const off = this.plan.offAt !== undefined && s >= this.plan.offAt;
+    // Init replies as in fixtures/synthetic/battery-diagnosis-full-scan.jsonl lines 2–40 (as charge-logger.test.ts).
     if (command === "ATZ") return "\r\rELM327 v1.5\r\r>";
     if (command === "ATI") return "ELM327 v1.5\r\r>";
     if (command === "ATDPN") return "A0\r\r>";

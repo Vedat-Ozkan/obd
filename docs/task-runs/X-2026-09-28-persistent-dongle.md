@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-09-28)
 
-- Stage: closed (desk). Stage A APPROVE (repairs 1) — commit d0c71bc; Stage B APPROVE (repairs 2) — commit pending below.
+- Stage: closed (desk). Stage A APPROVE (repairs 1) — commit d0c71bc; Stage B APPROVE (repairs 2) — commit bac7c1f.
 - Spec: `docs/specs/X-2026-09-28-persistent-dongle.md` (two stages, A link/memory/auto-connect, B picker; 0 open questions).
 - Repairs: 2/2 (last allowed). Escalations: 0.
 - Verdicts: Stage A APPROVE; Stage B APPROVE after repair 2 (2026-09-29).
