@@ -15,6 +15,12 @@ const summarySchema = z.strictObject({
 // The ID class is printable ASCII without braces, at most the Worker's ID bound of 96.
 const PLACEHOLDER = /\{(fact|label):([!-z|~]{1,96})\}/g;
 
+/** The prompt text that teaches the placeholder grammar `checkClaim` enforces; prompts import it so they cannot drift from the checker. */
+export const claimGrammar = `Claim text never contains digits, numbers or diagnostic codes. Write every value as a placeholder; the app replaces it with the report's exact text.
+{fact:ID} becomes the fact's exact value, followed by its unit when it has one. {label:ID} becomes the fact's exact label; use it for any label that contains digits.
+ID is a fact ID that the same claim cites in factIds. Placeholders are the only place a fact ID may appear in text. Example text: {label:ID}: {fact:ID}.
+Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! ? ' ( ) -. Any other character rejects the whole reply.`;
+
 function checkClaim(text: string, citedIds: ReadonlySet<string>, allFactIds: ReadonlySet<string>): void {
   for (const match of text.matchAll(PLACEHOLDER)) {
     if (!allFactIds.has(match[2])) throw new Error("summary claim names an unknown fact");

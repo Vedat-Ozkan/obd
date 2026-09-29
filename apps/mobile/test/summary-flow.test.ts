@@ -20,7 +20,7 @@ const url = "http://192.168.1.20:8788";
 const rows: Record<string, unknown>[] = [];
 let reports: BatteryDiagnosisReport[];
 const ids = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
-const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v3", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
+const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v4", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
 const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
 const accepted = { version: 1, claims: [{ text: "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.", factIds: ["capacity-status", "capacity-reason"] }] };
@@ -273,7 +273,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   const badFields: [string, unknown][] = [
     ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 1025], ["outputTokens", -1],
     ["cachedInputTokens", 201], ["reasoningTokens", 21], ["providerCostUsd", -0.1], ["providerCostUsd", 1.01], ["estimatedUsd", null], ["estimatedUsd", 1.01],
-    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["model", "private-evidence-sentinel".repeat(1000)],
+    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["model", "private-evidence-sentinel".repeat(1000)],
   ];
   it.each(badFields.map(([field, value], index) => ({ field, value, index })))("drops malformed usage $index $field independently of checked content", async ({ field, value, index }) => {
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: { ...validUsage, [field]: value } })));
