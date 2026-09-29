@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
 import { describe, expect, it, vi } from "vitest";
 import { fromByteArray, toByteArray } from "base64-js";
-import { connectVeepeak, scanDevices, VEEPEAK_SERVICE_UUID } from "../src/ble/BleTransport.js";
+import { connectVeepeak, orderDevices, scanDevices, VEEPEAK_SERVICE_UUID, type ScannedDevice } from "../src/ble/BleTransport.js";
 
 // Mocked react-native-ble-plx objects only; no Bluetooth hardware is loaded.
 const fff1 = "0000fff1-0000-1000-8000-00805f9b34fb"; const fff2 = "0000fff2-0000-1000-8000-00805f9b34fb";
@@ -46,6 +46,49 @@ describe("scanDevices", () => {
     const onDevice = vi.fn(); const onError = vi.fn(); scanDevices(manager, onDevice, onError);
     callback(new Error("scan failed"), null); await Promise.resolve();
     expect(onError.mock.calls.map((call) => (call[0] as Error).message)).toEqual(["scan failed", "start failed"]); expect(onDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("scanDevices advertised services (X-2026-09-28-persistent-dongle S1)", () => {
+  it("S1: a later advertisement without service UUIDs keeps the earlier serviceUuids", () => {
+    let callback: any; const manager: any = { startDeviceScan: vi.fn(async (_u: unknown, _o: unknown, cb: unknown) => { callback = cb; }), stopDeviceScan: vi.fn(async () => undefined) };
+    const onDevice = vi.fn(); scanDevices(manager, onDevice, vi.fn());
+    callback(null, { id: "a", name: "x", rssi: -50, serviceUUIDs: [VEEPEAK_SERVICE_UUID] });
+    callback(null, { id: "a", name: "x", rssi: -40, serviceUUIDs: null });
+    expect(onDevice.mock.calls.map((call) => call[0])).toEqual([
+      { id: "a", name: "x", rssi: -50, serviceUuids: [VEEPEAK_SERVICE_UUID] }, { id: "a", name: "x", rssi: -40, serviceUuids: [VEEPEAK_SERVICE_UUID] }]);
+  });
+});
+
+// The picker's order (spec §Picker sheet, Order). The FFF0 signal is docs/ELM327.md §BLE specifics; the name pattern is a UI heuristic.
+describe("orderDevices", () => {
+  const ids = (devices: ScannedDevice[]) => devices.map((device) => device.id);
+  it("O1: the remembered device is first, even with an unrelated name and the weakest signal", () => {
+    const result = orderDevices([{ id: "a", name: "OBDII", rssi: -30 }, { id: "mine", name: "Kitchen", rssi: -90 }, { id: "b", name: "ELM327", rssi: -40 }], "mine", false);
+    expect(ids(result.shown)).toEqual(["mine", "a", "b"]);
+  });
+  it("O2: relevant devices come before the rest and each group is by signal, strongest first, a missing signal last", () => {
+    const result = orderDevices([
+      { id: "r1", name: "OBD one", rssi: -80 }, { id: "o1", name: "Speaker", rssi: -20 }, { id: "r2", name: "OBD two", rssi: -60 }, { id: "r3", name: "OBD three" },
+      { id: "o2", name: "Watch", rssi: -70 }, { id: "o3", name: "Tag" },
+    ], undefined, true);
+    expect(ids(result.shown)).toEqual(["r2", "r1", "r3", "o1", "o2", "o3"]);
+  });
+  it("O3: others are hidden and counted while Show all is off, and shown with a zero count when it is on", () => {
+    const list = [{ id: "a", name: "OBD", rssi: -50 }, { id: "b", name: "Speaker" }, { id: "c", name: "Watch" }];
+    expect(orderDevices(list, undefined, false)).toEqual({ shown: [list[0]], hidden: 2 });
+    const all = orderDevices(list, undefined, true); expect(ids(all.shown)).toEqual(["a", "b", "c"]); expect(all.hidden).toBe(0);
+  });
+  it("O4: the name match ignores case", () => {
+    expect(ids(orderDevices([{ id: "a", name: "veepeak" }, { id: "b", name: "Elm327 v2" }, { id: "c", name: "MyObdTool" }], undefined, false).shown).sort()).toEqual(["a", "b", "c"]);
+  });
+  it("O5: an unnamed device advertising FFF0 is relevant, in any letter case", () => {
+    const result = orderDevices([{ id: "a", serviceUuids: [VEEPEAK_SERVICE_UUID.toUpperCase()] }, { id: "b", serviceUuids: [otherService] }], undefined, false);
+    expect(result).toEqual({ shown: [{ id: "a", serviceUuids: [VEEPEAK_SERVICE_UUID.toUpperCase()] }], hidden: 1 });
+  });
+  it("O6: the remembered device is matched by id, not by name", () => {
+    const result = orderDevices([{ id: "twin", name: "Veepeak", rssi: -40 }, { id: "mine", name: "Veepeak", rssi: -80 }], "mine", false);
+    expect(ids(result.shown)).toEqual(["mine", "twin"]);
   });
 });
 

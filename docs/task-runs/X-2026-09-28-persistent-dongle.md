@@ -2,15 +2,15 @@
 
 ## Current state (as of 2026-09-28)
 
-- Stage: Stage A approved and committed; implementer Stage B (in progress). Tool: Claude Code, orchestrator `/feature`.
+- Stage: closed (desk). Stage A APPROVE (repairs 1) — commit d0c71bc; Stage B APPROVE (repairs 2) — commit pending below.
 - Spec: `docs/specs/X-2026-09-28-persistent-dongle.md` (two stages, A link/memory/auto-connect, B picker; 0 open questions).
-- Repairs: 1/2. Escalations: 0.
-- Verdicts: Stage A APPROVE after repair 1 (2026-09-29).
+- Repairs: 2/2 (last allowed). Escalations: 0.
+- Verdicts: Stage A APPROVE; Stage B APPROVE after repair 2 (2026-09-29).
 - Decisions in effect: none yet.
 - Owner authorizations: 2026-09-28 owner confirmed scope, build both stages.
-- NOT RUN: owner phone checks A1–A10 (need phone and car).
+- NOT RUN: owner phone checks A1–A10 and B1–B3; picker sheet rendering on device (need phone and car).
 - Blocker: none.
-- Next action: implementer Stage B, then reviewer.
+- Next action: owner runs A1–A10 and B1–B3 on the phone (current dev client, fingerprint e781dff0…) and records results here.
 
 ## Request
 
@@ -33,6 +33,7 @@ Owner, 2026-09-28: "why do i have to reconnect to the dongle each time? should b
 ## Touched files
 
 Stage A: `apps/mobile/src/ble/dongleLink.ts` (new), `src/chargeRun.ts`, `src/app/runtime.ts`, `src/screens/ConsoleScreen.tsx`, `test/dongle-link.test.ts` (new), `test/charge-run.test.ts`, `test/charge-logger.test.ts`.
+Stage B: `apps/mobile/src/ble/BleTransport.ts`, `src/screens/DonglePicker.tsx` (new), `src/screens/ConsoleScreen.tsx`, `test/BleTransport.test.ts`.
 
 ## Verification evidence
 
@@ -40,7 +41,7 @@ Stage A implementer (2026-09-28): `pnpm check` PASS; Android `expo export` PASS;
 
 ## Review findings
 
-Stage A: both review-1 findings fixed in repair 1; re-review APPROVE, no open findings.
+No open findings. Stage A and Stage B findings were fixed in repairs 1 and 2.
 
 ## Log
 
@@ -51,3 +52,7 @@ Stage A: both review-1 findings fixed in repair 1; re-review APPROVE, no open fi
 - 2026-09-29 reviewer Stage A (Claude): REQUEST_CHANGES, 1 major 1 minor; checks, fingerprint, K1 reproduced PASS.
 - 2026-09-29 implementer repair 1 (Claude): rows and Scan gated by `chargeLogging || bleBusy()`; redundant setConnection dropped; `pnpm check` PASS; fingerprint unchanged.
 - 2026-09-29 reviewer Stage A (Claude): APPROVE (repairs 1/2); render-time gating ruled sufficient.
+- 2026-09-29 implementer Stage B (Claude): S1, O1–O6 PASS; `pnpm check`, expo export, fingerprint, logic freeze PASS; 5 stated deviations for the reviewer.
+- 2026-09-29 reviewer Stage B (Claude): REQUEST_CHANGES, 1 blocking 2 minor.
+- 2026-09-29 implementer repair 2 (Claude): picker stops its scan synchronously before onPick; O2 tie devices dropped; gating why-comment; `pnpm check`, export, fingerprint PASS.
+- 2026-09-29 reviewer Stage B (Claude): APPROVE (repairs 2/2); K1 rerun PASS.

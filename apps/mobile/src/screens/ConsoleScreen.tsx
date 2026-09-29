@@ -4,7 +4,7 @@ import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { Alert, PermissionsAndroid, Platform, ScrollView, Switch, TextInput, View } from "react-native";
 import { Icon, IconButton, TouchableRipple } from "react-native-paper";
 import { readLines } from "../beta/phoneStore.js";
-import { scanDevices, type BleConnection, type ScannedDevice } from "../ble/BleTransport.js";
+import type { BleConnection } from "../ble/BleTransport.js";
 import { runView, type RememberedDongle } from "../ble/dongleLink.js";
 import { runCapture } from "../capture.js";
 import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosisFlow.js";
@@ -18,9 +18,10 @@ import { parseRelayAddress } from "../relay/parseRelayAddress.js";
 import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
-import { batteryHistory, betaOutbox, bleManager, chargeRun, deferShare, dongleLink, dongleMemory, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
+import { batteryHistory, betaOutbox, chargeRun, deferShare, dongleLink, dongleMemory, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
 import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
 import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui/kit.js";
+import { DonglePicker } from "./DonglePicker.js";
 import { useTokens } from "../ui/theme.js";
 
 function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
@@ -36,13 +37,13 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const session = useRef<ConsoleSession | undefined>(undefined);
   // Manual Send uses its own unsaved session: two sessions on one transport would both record every rx.
   const debugSession = useRef<ConsoleSession | undefined>(undefined);
-  const stopScan = useRef<(() => void) | undefined>(undefined);
   const errorSubscription = useRef<(() => void) | undefined>(undefined);
   // The running diagnosis's view of the link: Cancel check and unmount close it, and the link stays open.
   const diagnosisView = useRef<Transport | undefined>(undefined);
   const [permitted, setPermitted] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [devices, setDevices] = useState<ScannedDevice[]>([]);
+  // The picker sheet scans only while open; it opens by itself the first time a car has no remembered dongle.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [status, setStatus] = useState("Requesting Bluetooth permission…");
   // Prefilled so Run capture is one tap (T0.8d Decision 4); the owner can edit it and must never type a VIN.
   const [note, setNote] = useState("Equinox Ready, Park; one-button capture");
@@ -130,7 +131,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     setConnecting(true);
     const shown = device.name ?? device.id;
     try {
-      stopScan.current?.(); stopScan.current = undefined; setStatus(`Connecting to ${shown}…`);
+      setStatus(`Connecting to ${shown}…`);
       const next = await dongleLink.connect(device.id);
       const name = next.deviceName ?? device.name;
       // A failed write is ignored: the link works, the dongle is just not remembered.
@@ -182,24 +183,19 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       }
       if (dongle && dongleLink.held()) { say(`Disconnected. Tap Connect to use ${dongle.name ?? dongle.id} again.`); return; }
       if (dongle) { await connectTo(dongle, "remembered"); return; }
-      say("Bluetooth permission granted. Scan for the Veepeak.");
+      say("Bluetooth permission granted. Choose your OBD dongle.");
+      setPickerOpen(true);
     })();
     return () => {
       mounted.current = false;
       unsubscribeLink(); closeRelay();
-      stopScan.current?.(); errorSubscription.current?.(); errorSubscription.current = undefined;
+      errorSubscription.current?.(); errorSubscription.current = undefined;
       session.current?.close(); debugSession.current?.close(); void diagnosisView.current?.close();
       // The kept link stays open, and so does a running charge log's use of it.
       unmountRun();
     };
   }, []);
 
-  const startScan = () => {
-    setDevices([]); setStatus("Scanning for BLE devices…");
-    const seen = new Map<string, ScannedDevice>();
-    stopScan.current?.();
-    stopScan.current = scanDevices(bleManager(), (device) => { seen.set(device.id, device); setDevices([...seen.values()]); }, (error) => { setStatus(`Scan error: ${error.message}`); });
-  };
   const startRecording = (): ConsoleSession | undefined => {
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox console unavailable for this model year."); return undefined; }
     if (!connection || !note.trim()) { setStatus("Connect and enter a non-empty vehicle-state note before recording."); return undefined; }
@@ -467,9 +463,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         <ListRow icon="bluetooth" title={connection ? connection.deviceName ?? (remembered?.id === connection.deviceId ? remembered.name : undefined) ?? "Unnamed device" : remembered ? remembered.name ?? "Unnamed device" : "No dongle chosen"}
           subtitle={connecting ? "Connecting…" : connection ? "Connected" : "Not connected"} />
         {remembered && !connection ? <Button title="Connect" tonal disabled={!permitted || connecting || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void connectTo(remembered, "remembered")} /> : null}
-        <Button title="Scan" tonal disabled={!permitted || !!connection || connecting || capturing || diagnosing || chargeLogging || bleBusy()} onPress={startScan} />
-        <View>{devices.map((item) => <ListRow key={item.id} icon="bluetooth" title={item.name ?? "Unnamed"} subtitle={`${item.id} · RSSI ${item.rssi === undefined ? "?" : String(item.rssi)}`}
-          disabled={!!connection || connecting || diagnosing || chargeLogging || bleBusy()} onPress={() => void connectTo(item, "picked")} />)}</View>
+        <Button title={remembered ? "Change dongle" : "Choose dongle"} tonal disabled={!permitted || connecting || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => { setPickerOpen(true); }} />
       </View>
       <View style={[styles.row, { minHeight: 60 }]}>
         <View style={styles.rowText}>
@@ -517,6 +511,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         </> : null}
       </Card>
     </>}
+    <DonglePicker visible={pickerOpen} {...(remembered ? { rememberedId: remembered.id } : {})} onDismiss={() => { setPickerOpen(false); }}
+      onPick={(device) => { setPickerOpen(false); closeDebugSession(); void connectTo(device, "picked"); }} />
   </Screen>;
 }
 

@@ -6,7 +6,8 @@ export const VEEPEAK_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
 export const VEEPEAK_CHARACTERISTIC_UUIDS: readonly string[] = ["0000fff1-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb"];
 export const REQUESTED_MTU = 185;
 
-export interface ScannedDevice { id: string; name?: string; rssi?: number }
+// serviceUuids are the advertised ones, kept from an earlier advertisement when a later one omits them.
+export interface ScannedDevice { id: string; name?: string; rssi?: number; serviceUuids?: string[] }
 
 export function scanDevices(manager: BleManager, onDevice: (device: ScannedDevice) => void, onError: (error: Error) => void): () => void {
   const devices = new Map<string, ScannedDevice>();
@@ -17,12 +18,28 @@ export function scanDevices(manager: BleManager, onDevice: (device: ScannedDevic
     const previous = devices.get(device.id);
     const name = device.name ?? previous?.name;
     const rssi = device.rssi ?? previous?.rssi;
-    if (previous && previous.name === name && previous.rssi === rssi) return;
-    const scanned: ScannedDevice = { id: device.id, ...(name === undefined ? {} : { name }), ...(rssi === undefined ? {} : { rssi }) };
+    const serviceUuids = device.serviceUUIDs ?? previous?.serviceUuids;
+    if (previous && previous.name === name && previous.rssi === rssi && (previous.serviceUuids ?? []).join() === (serviceUuids ?? []).join()) return;
+    const scanned: ScannedDevice = { id: device.id, ...(name === undefined ? {} : { name }), ...(rssi === undefined ? {} : { rssi }), ...(serviceUuids === undefined ? {} : { serviceUuids }) };
     devices.set(scanned.id, scanned);
     onDevice(scanned);
   }).catch((error: unknown) => { onError(error instanceof Error ? error : new Error(String(error))); });
   return () => { void manager.stopDeviceScan(); };
+}
+
+// The name pattern is a UI heuristic, not an OBD constant; FFF0 is the adapter signal (docs/ELM327.md §BLE specifics).
+const OBD_NAME = /obd|elm327|veepeak/i;
+const isRelevant = (device: ScannedDevice, rememberedId: string | undefined) =>
+  device.id === rememberedId || (device.serviceUuids ?? []).some((uuid) => normalizeUuid(uuid) === VEEPEAK_SERVICE_UUID) || OBD_NAME.test(device.name ?? "");
+
+/** Picker order: the remembered device, then other relevant devices, then the rest; each by signal, strongest first, a missing signal last, then name, then id. */
+export function orderDevices(devices: readonly ScannedDevice[], rememberedId: string | undefined, showAll: boolean): { shown: ScannedDevice[]; hidden: number } {
+  const rank = (device: ScannedDevice) => device.id === rememberedId ? 0 : isRelevant(device, rememberedId) ? 1 : 2;
+  const sorted = [...devices].sort((a, b) =>
+    rank(a) - rank(b) || (b.rssi ?? -Infinity) - (a.rssi ?? -Infinity) || (a.name ?? "").localeCompare(b.name ?? "") || a.id.localeCompare(b.id));
+  if (showAll) return { shown: sorted, hidden: 0 };
+  const shown = sorted.filter((device) => rank(device) < 2);
+  return { shown, hidden: sorted.length - shown.length };
 }
 
 export interface BleConnection { transport: BleTransport; deviceId: string; deviceName?: string; mtu: number; writeCharacteristicUuid: string; notifyCharacteristicUuid: string }
