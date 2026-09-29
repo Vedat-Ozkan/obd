@@ -235,3 +235,17 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 - App Tracking Transparency and a privacy manifest if rewarded ads ship (ADR-020).
 
 **Amends ADR-001.** Build and test stay Android-only; the iOS-readiness rules above apply to new UI work from the X-2026-09-28 redesign on.
+
+## ADR-022: Three check modes; a test-drive check for resistance; the overnight charge log is paused for redesign (2026-09-28, Accepted)
+
+**Decision.** The battery diagnosis offers three modes, each measuring what its duration can support:
+
+1. **Parked scan** (about 2 min, `mine` and `checked`): SOC, cell spread, 12 V and codes as today (ADR-018), plus the BMS capacity figure `27AF` ÷ SOC once `27AF` is promoted to verified in a checked-in profile. The report labels it "reported by the car's battery system, not independently measured". Capacity stays NOT MEASURED.
+2. **Test-drive check** (new, optional, about 15–20 min of normal driving, `mine` and `checked`): one tap before driving, then no interaction until it stops by itself. It measures effective pack resistance from current steps (acceleration, regen) and flags cell groups that sag further under load than the other 79 (ADR-016 piece 2, BM8; piece 3, BM3). Results carry pack temperature and are compared only within temperature bins.
+3. **Overnight charge log** (optional, owners): the independent capacity estimate (ADR-016 piece 1, BM2). **Paused** until its collection method is redesigned. The one-tap T2.4 logger stays in the app as is.
+
+**Why.** Capacity needs a large, rested SOC change: at 40 % ΔSOC a 1 % SOC error costs about 2.5 % capacity, while a 20-minute drive covers roughly 5–8 %, so the same error costs about 20 % (`docs/ML.md` BM2). A drive also ends with an unrested pack, so the end SOC could only come from the BMS. Resistance is the opposite: every acceleration is a sample, no rest is needed, and it does not borrow GM's model. Buyers of a `checked` car cannot run a multi-hour charge; they can take a test drive. The owner also doubts users will keep a phone and dongle attached through a long charge (2026-09-28).
+
+**Open, for the charge-log redesign.** Owner idea (2026-09-28): connect only at the two ends of an overnight charge. Both ends can be rested (parked before plug-in, hours after the charge ends), which suits OCV-anchored SOC. What is missing is the charge that went in: current integration needs the whole session, `27AF` is the BMS's own estimate (discovery §7.5), and charger-reported kWh (the Gate B fallback) carries charger losses and a wider band. A cumulative charge or energy throughput counter on the BECM would close the gap; none is verified. Decide in a new task before BM1/BM2 depend on it.
+
+**Amends ADR-018** (the parked scan shows the labeled BMS figure; capacity measured only by a charge log remains NOT MEASURED) and the Phase 2 milestone in `docs/PLAN.md` (the charge-log capacity item is paused; T2.12–T2.13 added). **Unchanged:** read-only toward the vehicle (hard rule 5), hard rule 1 sourcing for every DID and scaling, and BM1–BM3 still need charge data.
