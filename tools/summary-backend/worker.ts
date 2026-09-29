@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_TOOL_CALLS, assistantReplySchema, type AssistantTurnRequest } from "../../packages/obd-assist/src/index.js";
-import { consentFor, createOpenRouter, model as summaryModel, maxAssistantBodyBytes, maxSummaryBodyBytes, pins, prepareAssistantTurn, prepareSummary, readBounded, reservationFor, type AdapterOptions, type AdapterResult, type AssistantModel, type ModelPin, type SummaryFallback } from "./openrouter.js";
+import { consentFor, createOpenRouter, model as summaryModel, maxAssistantBodyBytes, maxSummaryBodyBytes, pins, prepareAssistantTurn, prepareSummary, readBounded, reservationFor, type AdapterOptions, type AdapterResult, type AssistantModel, type FailedCheck, type ModelPin, type SummaryFallback } from "./openrouter.js";
 
 interface D1Result { meta: { changes: number }; results?: unknown[] }
 interface D1Statement {
@@ -43,10 +43,10 @@ const assistantSchema = z.strictObject({
 });
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const fallback = (reason: SummaryFallback, status = 200) => json({ kind: "fallback", reason }, status);
-/** The fallback after a paid call, both routes. `upstreamStatus` is a bare number and exists only for a provider-error; no upstream text is copied. */
-const postCallFallback = (result: { reason?: SummaryFallback; usage?: unknown; upstreamStatus: number | null }) => {
+/** The fallback after a paid call, both routes. `upstreamStatus` is a bare number and exists only for a provider-error, `failedCheck` a closed word and only for an invalid-response; no upstream or reply text is copied. */
+const postCallFallback = (result: { reason?: SummaryFallback; usage?: unknown; upstreamStatus: number | null; failedCheck: FailedCheck | null }) => {
   const reason = result.reason ?? "invalid-response";
-  return json({ kind: "fallback", reason, ...(result.usage ? { usage: result.usage } : {}), ...(reason === "provider-error" ? { upstreamStatus: result.upstreamStatus } : {}) });
+  return json({ kind: "fallback", reason, ...(result.usage ? { usage: result.usage } : {}), ...(reason === "provider-error" ? { upstreamStatus: result.upstreamStatus } : {}), ...(reason === "invalid-response" ? { failedCheck: result.failedCheck } : {}) });
 };
 
 function privateIpv4(host: string): boolean {
@@ -81,13 +81,19 @@ async function reserve(db: SummaryDatabase, requestId: string, reservation: numb
   if (row.disabled || row.inflight) return "unavailable";
   return row.spent + reservation > 1000000 ? "budget-exhausted" : "unavailable";
 }
-async function settle(db: SummaryDatabase, requestId: string, reservation: number, result: Pick<AdapterResult, "actualMicroUsd" | "kill" | "reason" | "upstreamStatus">): Promise<void> {
+/** The `error` column: a bare reason, plus the upstream status or the failed check when one is known. */
+function storedError(result: Pick<AdapterResult, "reason" | "upstreamStatus" | "failedCheck">): string | null {
+  if (result.reason === "provider-error" && result.upstreamStatus !== null) return `provider-error:${String(result.upstreamStatus)}`;
+  if (result.reason === "invalid-response" && result.failedCheck !== null) return `invalid-response:${result.failedCheck}`;
+  return result.reason ?? null;
+}
+async function settle(db: SummaryDatabase, requestId: string, reservation: number, result: Pick<AdapterResult, "actualMicroUsd" | "kill" | "reason" | "upstreamStatus" | "failedCheck">): Promise<void> {
   // The update uses the still-inflight request; a second settlement changes nothing.
   const charged = result.actualMicroUsd ?? reservation;
   const adjusted = result.kill ? Math.max(charged, reservation) : charged;
   const writes = await db.batch([
     db.prepare("UPDATE summary_budget SET spent=spent-?+?, inflight=NULL, disabled=MAX(disabled,?) WHERE id=1 AND inflight=? AND EXISTS (SELECT 1 FROM summary_requests WHERE request_id=? AND state='inflight')").bind(reservation, adjusted, result.kill ? 1 : 0, requestId, requestId),
-    db.prepare("UPDATE summary_requests SET state='settled',actual=?,error=? WHERE request_id=? AND state='inflight' AND changes()=1").bind(result.actualMicroUsd, result.reason === "provider-error" && result.upstreamStatus !== null ? `provider-error:${String(result.upstreamStatus)}` : result.reason ?? null, requestId),
+    db.prepare("UPDATE summary_requests SET state='settled',actual=?,error=? WHERE request_id=? AND state='inflight' AND changes()=1").bind(result.actualMicroUsd, storedError(result), requestId),
   ]);
   if (writes.length !== 2 || !writes.every((entry) => entry.meta.changes === 1)) throw new Error("unsettled request");
 }

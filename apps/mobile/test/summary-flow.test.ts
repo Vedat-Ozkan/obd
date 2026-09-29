@@ -73,7 +73,7 @@ describe("recording → public development flow → HTTP access → local checke
     expect(h.statusSent).toHaveLength(1);
     expect(h.statusSent[0]).toMatchObject({ url: `${url}/v1/status`, init: { method: "GET", redirect: "error", headers: { Authorization: `Bearer ${token}` } } });
     expect(h.statusSent[0].init.body).toBeUndefined();
-    expect(view.evidence).toEqual({ version: 1, consentVersion: SUMMARY_CONSENT_VERSION, requestId: ids(1), requestedModel: "deepseek/deepseek-v4.1-flash", returnedModel: validUsage.model, configuredProvider: "DeepSeek", observedProvider: null, routingEvidence: "configured-pin-only", usage: validUsage, phoneLatencyMs: 25, budget: expectedBudget, displayCategory: "llm" });
+    expect(view.evidence).toEqual({ version: 1, consentVersion: SUMMARY_CONSENT_VERSION, requestId: ids(1), requestedModel: "deepseek/deepseek-v4.1-flash", returnedModel: validUsage.model, configuredProvider: "DeepSeek", observedProvider: null, routingEvidence: "configured-pin-only", usage: validUsage, phoneLatencyMs: 25, budget: expectedBudget, displayCategory: "llm", failedCheck: null });
     expect(h.sent[0].url).toBe(`${url}/v1/summaries`);
     expect(h.sent[0].init).toMatchObject({ method: "POST", redirect: "error", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
     expect(JSON.parse(bodyText(h.sent[0].init))).toEqual({ requestId: ids(1), consentVersion: SUMMARY_CONSENT_VERSION, request: prepareSummaryRequest(reports[index]) });
@@ -121,6 +121,8 @@ describe("recording → public development flow → HTTP access → local checke
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);
     exactTemplate(view);
+    // A bare reason (a legacy or pre-call envelope) carries no category.
+    expect(view.evidence?.failedCheck).toBeNull();
     h.record(reason, view);
   });
 
@@ -225,6 +227,41 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     expect(view.evidence?.displayCategory).toBe("template");
     expect(JSON.stringify(view)).not.toContain("private-evidence-sentinel");
     h.record(`usage ${name}`, view);
+  });
+
+  // Failure 8: the phone shows a failed-check category only when the server envelope is an invalid-response naming one of the six.
+  it.each([
+    ["invalid-response", "facts", "facts"], ["invalid-response", "envelope", "envelope"], ["invalid-response", "bounds", "bounds"], ["invalid-response", "provider", "provider"], ["invalid-response", "json", "json"], ["invalid-response", "shape", "shape"],
+    ["invalid-response", "SENTINEL reply", null], ["invalid-response", "FACTS", null], ["invalid-response", "facts ", null], ["invalid-response", 7, null], ["invalid-response", null, null], ["provider-error", "facts", null], ["no-credit", "facts", null],
+  ] as [string, unknown, string | null][])("shows failedCheck for server %s with %j as %j", async (reason, failedCheck, shown) => {
+    const h = harness(() => Promise.resolve(Response.json({ kind: "fallback", reason, failedCheck, usage: validUsage })));
+    h.flow.consent(true);
+    const view = await h.flow.summaryFor(reports[0]);
+    exactTemplate(view);
+    expect(view.evidence?.failedCheck).toBe(shown);
+    expect(view.evidence?.usage).toEqual(validUsage);
+    expect(JSON.stringify(view)).not.toContain("SENTINEL");
+    // The artifact row must not carry the sentinel value itself.
+    h.record(`failedCheck ${reason} ${failedCheck === "SENTINEL reply" ? "reply-like text" : JSON.stringify(failedCheck)}`, view);
+  });
+
+  it("shows no failedCheck for an llm result, even when the server sends one", async () => {
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, failedCheck: "facts", usage: validUsage })));
+    h.flow.consent(true);
+    const view = await h.flow.summaryFor(reports[0]);
+    expect(view.kind).toBe("llm");
+    expect(view.evidence?.failedCheck).toBeNull();
+    h.record("llm ignores failedCheck", view);
+  });
+
+  it("shows no failedCheck when the phone rejects the reply locally", async () => {
+    const response = responses.cases.find((entry) => entry.name === "wrong-number");
+    const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: response?.response, failedCheck: "facts" })));
+    h.flow.consent(true);
+    const view = await h.flow.summaryFor(reports[0]);
+    exactTemplate(view);
+    expect(view.evidence?.failedCheck).toBeNull();
+    h.record("local rejection has no category", view);
   });
 
   const badFields: [string, unknown][] = [

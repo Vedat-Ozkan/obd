@@ -40,7 +40,7 @@ function parseArgs(args: readonly string[]): Options {
 
 const token = process.env.SUMMARY_DEV_TOKEN ?? "";
 const usageSchema = z.object({ model: z.string(), returnedProvider: z.string().nullable(), inputTokens: z.number(), cachedInputTokens: z.number().nullable(), outputTokens: z.number(), reasoningTokens: z.number().nullable(), providerCostUsd: z.number().nullable(), estimatedUsd: z.number(), latencyMs: z.number() });
-const turnResponse = z.object({ kind: z.enum(["reply", "fallback"]), reply: z.unknown().optional(), reason: z.string().optional(), upstreamStatus: z.unknown().optional(), usage: usageSchema.optional() });
+const turnResponse = z.object({ kind: z.enum(["reply", "fallback"]), reply: z.unknown().optional(), reason: z.string().optional(), upstreamStatus: z.unknown().optional(), failedCheck: z.unknown().optional(), usage: usageSchema.optional() });
 const statusResponse = z.object({ headroomMicroUsd: z.number() });
 
 interface Round {
@@ -49,6 +49,9 @@ interface Round {
   // The Worker's upstreamStatus for a provider-error round; null for every other round, including transport errors.
   upstreamStatus: number | null;
 }
+
+// Closed copy of the Worker's FailedCheck: anything else is dropped, so a stray value never reaches the artifact.
+const failedChecks: readonly unknown[] = ["envelope", "bounds", "provider", "json", "shape", "facts"];
 
 async function spentMicroUsd(url: string): Promise<number> {
   const response = await fetch(`${url}/v1/status`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
@@ -81,7 +84,7 @@ function questionClient(url: string, model: AssistantModel) {
       const u = data.usage;
       rounds.push({ returnedProvider: u?.returnedProvider ?? null, inputTokens: u?.inputTokens ?? null, cachedInputTokens: u?.cachedInputTokens ?? null, reasoningTokens: u?.reasoningTokens ?? null, outputTokens: u?.outputTokens ?? null, providerCostUsd: u?.providerCostUsd ?? null,
         estimatedUsd: u?.estimatedUsd ?? null, reservationMicroUsd, providerLatencyMs: u?.latencyMs ?? null,
-        upstreamStatus: typeof data.upstreamStatus === "number" && Number.isInteger(data.upstreamStatus) && data.upstreamStatus >= 100 && data.upstreamStatus <= 599 ? data.upstreamStatus : null, ...data.kind === "fallback" ? { serverReason: data.reason ?? "unknown" } : {} });
+        upstreamStatus: typeof data.upstreamStatus === "number" && Number.isInteger(data.upstreamStatus) && data.upstreamStatus >= 100 && data.upstreamStatus <= 599 ? data.upstreamStatus : null, ...data.kind === "fallback" ? { serverReason: data.reason === "invalid-response" && failedChecks.includes(data.failedCheck) ? `invalid-response:${String(data.failedCheck)}` : data.reason ?? "unknown" } : {} });
       if (data.kind === "fallback" || u === undefined) {
         saved.push({ reject: data.reason ?? "unknown" });
         if (data.reason === "budget-exhausted" || data.reason === "unavailable") stop = true;

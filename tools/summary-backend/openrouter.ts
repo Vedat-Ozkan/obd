@@ -41,10 +41,14 @@ export interface ProviderSnapshot {
   contextCeiling: number; maxCompletionTokens: number; inputUsdPerToken: number; outputUsdPerToken: number;
   supportedParameters: string[]; catalogSha256: string; endpointsSha256: string;
 }
+/** Which check rejected an invalid-response, as one word: never the reply text. */
+export type FailedCheck = "envelope" | "bounds" | "provider" | "json" | "shape" | "facts";
 export interface AdapterResult {
   summary?: StructuredSummary; reason?: SummaryFallback; usage?: SummaryUsage; actualMicroUsd: number | null; kill: boolean;
   // The upstream HTTP status of a provider-error, as a number only; null when none is known and for every other outcome.
   upstreamStatus: number | null;
+  // Non-null only with reason "invalid-response".
+  failedCheck: FailedCheck | null;
 }
 export interface AssistantUsageOut {
   model: string; provider: string; promptVersion: "t2.11-v1"; adapterPromptVersion: "t2.11-openrouter-v1";
@@ -155,6 +159,7 @@ interface Completion {
   actualMicroUsd: number | null; kill: boolean; reason?: SummaryFallback; content?: string;
   /** Set only with a provider-error that came from a received response; never the body, headers or error fields. */
   upstreamStatus: number | null;
+  failedCheck: FailedCheck | null;
   /** The response's `provider` exactly as received; each caller decides whether it is a gate. */
   provider?: unknown;
   usage?: Omit<AssistantUsageOut, "provider" | "returnedProvider" | "promptVersion" | "adapterPromptVersion">;
@@ -221,7 +226,7 @@ export function createOpenRouter(options: AdapterOptions) {
   /** One bounded, non-streaming call. Everything the summary and the assistant share lives here; callers only check the content. */
   async function complete(pin: ModelPin, prepared: Prepared, key: string): Promise<Completion> {
     const started = options.now();
-    const result: Completion = { actualMicroUsd: null, kill: false, upstreamStatus: null };
+    const result: Completion = { actualMicroUsd: null, kill: false, upstreamStatus: null, failedCheck: null };
     let received = false;
     try {
       const response = await options.fetch(`${base}/chat/completions`, {
@@ -233,14 +238,14 @@ export function createOpenRouter(options: AdapterOptions) {
       const status = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599 ? response.status : null;
       if (!response.ok) return { ...result, reason: "provider-error", upstreamStatus: status };
       let raw: unknown;
-      try { raw = JSON.parse(await readBounded(response, 32768)) as unknown; } catch { return { ...result, reason: "invalid-response" }; }
+      try { raw = JSON.parse(await readBounded(response, 32768)) as unknown; } catch { return { ...result, reason: "invalid-response", failedCheck: "envelope" }; }
       const payload = record.parse(raw);
       if (payload.error !== undefined) return { ...result, reason: "provider-error", upstreamStatus: status };
       const u = record.parse(payload.usage);
       const input = integer.parse(u.prompt_tokens); const output = integer.parse(u.completion_tokens);
       const cost = u.cost === undefined || u.cost === null ? null : z.number().nonnegative().parse(u.cost);
       if (cost !== null) result.actualMicroUsd = Math.ceil(cost * 1000000);
-      if (input > prepared.reservation.inputTokens || output > maxCompletionTokens || (result.actualMicroUsd !== null && result.actualMicroUsd > prepared.reservation.microUsd)) return { ...result, kill: true, reason: "invalid-response" };
+      if (input > prepared.reservation.inputTokens || output > maxCompletionTokens || (result.actualMicroUsd !== null && result.actualMicroUsd > prepared.reservation.microUsd)) return { ...result, kill: true, reason: "invalid-response", failedCheck: "bounds" };
       if (u.total_tokens !== undefined && integer.parse(u.total_tokens) !== input + output) throw new Error("usage total");
       const cache = u.prompt_tokens_details === undefined ? null : record.parse(u.prompt_tokens_details).cached_tokens;
       const reasoning = u.completion_tokens_details === undefined ? null : record.parse(u.completion_tokens_details).reasoning_tokens;
@@ -256,16 +261,21 @@ export function createOpenRouter(options: AdapterOptions) {
       result.content = z.string().min(1).parse(message.content);
       return result;
     } catch {
-      return { ...result, reason: received ? "invalid-response" : "provider-error" };
+      return received ? { ...result, reason: "invalid-response", failedCheck: "envelope" } : { ...result, reason: "provider-error" };
     }
   }
   async function generate(request: SummaryRequest, prepared: ReturnType<typeof prepareSummary>, key: string): Promise<AdapterResult> {
     const { content, usage, provider, ...result } = await complete(pins[model], prepared, key);
     const withUsage: AdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: "DeepSeek", promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v3" } } : {} };
     // C1 rule, kept on the summary route only: a present provider other than DeepSeek is rejected; an absent one is unknown.
-    if (provider !== undefined && provider !== "DeepSeek") return { ...withUsage, reason: "invalid-response" };
+    // A failure that complete() already named keeps its category; only a fresh rejection is named here.
+    if (provider !== undefined && provider !== "DeepSeek") return { ...withUsage, reason: "invalid-response", failedCheck: withUsage.failedCheck ?? "provider" };
     if (content === undefined) return withUsage;
-    try { return { ...withUsage, summary: checkSummaryFacts(request, boundedSummary.parse(JSON.parse(content) as unknown)) }; } catch { return { ...withUsage, reason: "invalid-response" }; }
+    let parsed: unknown;
+    try { parsed = JSON.parse(content); } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "json" }; }
+    let claims: z.infer<typeof boundedSummary>;
+    try { claims = boundedSummary.parse(parsed); } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "shape" }; }
+    try { return { ...withUsage, summary: checkSummaryFacts(request, claims) }; } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "facts" }; }
   }
   async function generateAssistantTurn(m: AssistantModel, turn: AssistantTurnRequest, prepared: ReturnType<typeof prepareAssistantTurn>, key: string): Promise<AssistantAdapterResult> {
     const pin = pins[m];
@@ -273,16 +283,19 @@ export function createOpenRouter(options: AdapterOptions) {
     const returnedProvider = typeof provider === "string" ? Array.from(provider).slice(0, 64).join("") : null;
     const withUsage: AssistantAdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: pin.providerName, returnedProvider, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1" } } : {} };
     if (content === undefined) return withUsage;
+    let parsed: unknown;
+    try { parsed = JSON.parse(content); } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "json" }; }
+    let reply: z.infer<typeof assistantReply>;
     try {
-      const reply = assistantReply.parse(JSON.parse(content) as unknown);
+      reply = assistantReply.parse(parsed);
       // The server never executes a tool: it only lets an allowlisted request or a checked answer through.
       if (reply.kind === "tool" && (reply.tool === null || !allowedTools.includes(reply.tool) || reply.claims !== null)) throw new Error("tool reply");
-      if (reply.kind === "answer") {
-        if (reply.tool !== null || reply.sessionId !== null || reply.claims === null) throw new Error("answer reply");
-        checkFacts(turnFacts(turn), { version: 1, claims: reply.claims });
-      }
-      return { ...withUsage, reply };
-    } catch { return { ...withUsage, reason: "invalid-response" }; }
+      if (reply.kind === "answer" && (reply.tool !== null || reply.sessionId !== null || reply.claims === null)) throw new Error("answer reply");
+    } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "shape" }; }
+    if (reply.kind === "answer" && reply.claims !== null) {
+      try { checkFacts(turnFacts(turn), { version: 1, claims: reply.claims }); } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "facts" }; }
+    }
+    return { ...withUsage, reply };
   }
   return { preflight, generate, generateAssistantTurn };
 }

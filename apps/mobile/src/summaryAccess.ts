@@ -13,7 +13,11 @@ export interface DevelopmentUsage {
   providerCostUsd: number | null; estimatedUsd: number; latencyMs: number;
 }
 export interface DevelopmentBudget { uses: number; headroomMicroUsd: number; enabled: boolean; chargedOrReservedMicroUsd: number }
-export interface SummaryAccessResult { kind: "llm" | "fallback"; summary?: unknown; usage: DevelopmentUsage | null }
+// Closed copy of the Worker's FailedCheck (tools/summary-backend/openrouter.ts); the phone cannot import tools/.
+export const SERVER_FAILED_CHECKS = ["envelope", "bounds", "provider", "json", "shape", "facts"] as const;
+export type ServerFailedCheck = (typeof SERVER_FAILED_CHECKS)[number];
+// failedCheck is non-null only for a fallback envelope with reason "invalid-response" and a value in the set.
+export interface SummaryAccessResult { kind: "llm" | "fallback"; summary?: unknown; usage: DevelopmentUsage | null; failedCheck: ServerFailedCheck | null }
 export interface SummaryAccess {
   generate(request: SummaryRequest, requestId: string): Promise<SummaryAccessResult>;
   status(): Promise<DevelopmentBudget | null>;
@@ -30,6 +34,9 @@ function projectUsage(value: unknown): DevelopmentUsage | null {
   const providerCostUsd = u.providerCostUsd ?? null;
   if ((cachedInputTokens !== null && !integer(cachedInputTokens, u.inputTokens)) || (reasoningTokens !== null && !integer(reasoningTokens, u.outputTokens)) || (providerCostUsd !== null && !cost(providerCostUsd))) return null;
   return { model: u.model, provider: u.provider, promptVersion: u.promptVersion, adapterPromptVersion: u.adapterPromptVersion, inputTokens: u.inputTokens, cachedInputTokens, outputTokens: u.outputTokens, reasoningTokens, providerCostUsd, estimatedUsd: u.estimatedUsd, latencyMs: u.latencyMs };
+}
+function projectFailedCheck(value: unknown): ServerFailedCheck | null {
+  return SERVER_FAILED_CHECKS.find((name) => name === value) ?? null;
 }
 function projectBudget(value: unknown): DevelopmentBudget | null {
   if (typeof value !== "object" || value === null) return null;
@@ -99,9 +106,9 @@ export function createDevelopmentSummaryAccess(options: { development: boolean; 
       if (typeof parsed !== "object" || parsed === null || !("kind" in parsed)) throw new Error("Summary response could not be verified.");
       const envelope = parsed as Record<string, unknown>;
       const usage = projectUsage(envelope.usage);
-      if (envelope.kind === "fallback") return { kind: "fallback", usage };
+      if (envelope.kind === "fallback") return { kind: "fallback", usage, failedCheck: envelope.reason === "invalid-response" ? projectFailedCheck(envelope.failedCheck) : null };
       if (envelope.kind !== "llm" || !("summary" in envelope)) throw new Error("Summary response could not be verified.");
-      return { kind: "llm", summary: envelope.summary, usage };
+      return { kind: "llm", summary: envelope.summary, usage, failedCheck: null };
     },
     async status(): Promise<DevelopmentBudget | null> {
       if (!options.development || !origin || !token) return null;
