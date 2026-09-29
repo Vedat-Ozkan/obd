@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { z } from "zod";
 import { afterReply, beforeWrite, normalize, UNKNOWN_STATE, type HeaderState } from "../../packages/obd-core/src/elm/guard.js";
 import { parseElmResponse } from "../../packages/obd-core/src/elm/reader.js";
+import { pythonJson } from "../../packages/obd-core/src/recording/provenance.js";
 import { authorizeRelayCommand, type RelayCommand, type RelayCommandChannel, type RelayCommandExchange } from "../../packages/obd-core/src/transport/relay.js";
 
 const vehicle = "chevrolet-equinox-ev-2024" as const;
@@ -148,8 +149,9 @@ export class RelayBroker implements RelayCommandChannel {
   private async endRecording(note: string): Promise<void> { const recording = this.recording; if (recording === undefined) return; this.recording = undefined; await this.append(recording, { dir: "meta", note }); await recording.chain; }
   private async record(dir: "tx" | "rx", data: string): Promise<void> { const recording = this.recording; if (recording !== undefined) await this.append(recording, { dir, data }); }
   private async recordMeta(meta: Record<string, unknown>): Promise<void> { const recording = this.recording; if (recording !== undefined) await this.append(recording, { dir: "meta", ...meta }); }
+  // json.dumps form, ASCII only: tools/spike/redact_vin.py _check refuses anything else (ADR-017).
   private async append(recording: Recording, line: Record<string, unknown>, initial = false): Promise<void> {
-    recording.chain = recording.chain.then(async () => { const elapsedMs = Number((process.hrtime.bigint() - recording.startedAt) / 1_000_000n); const t = initial ? 0 : Math.max(recording.lastT, Math.round(elapsedMs) / 1000); recording.lastT = t; await appendFile(recording.path, JSON.stringify({ t, ...line }) + "\n", "latin1"); recording.lines++; });
+    recording.chain = recording.chain.then(async () => { const elapsedMs = Number((process.hrtime.bigint() - recording.startedAt) / 1_000_000n); const t = initial ? 0 : Math.max(recording.lastT, Math.round(elapsedMs) / 1000); recording.lastT = t; await appendFile(recording.path, pythonJson({ t, ...line }) + "\n", "utf8"); recording.lines++; });
     return recording.chain;
   }
   private async validatePath(input: string): Promise<string> {

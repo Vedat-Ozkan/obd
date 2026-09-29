@@ -124,7 +124,7 @@ Recording format (`fixtures/recordings/<car>/<date>-<slug>.jsonl`), one JSON obj
 {"t": 1.100, "dir": "meta", "car": "chrysler-200-2013", "dongle": "veepeak-obdcheck-ble", "note": "cold, ignition on engine off"}
 ```
 
-`t` is seconds since recording start. `ReplayTransport` feeds `rx` lines back in order and asserts each `tx` matches what the session sends; a mismatch fails the test, which is the point. Recordings are never edited by hand (AGENTS.md rule 2).
+Files are UTF-8 in Python `json.dumps` form (ASCII, `\u00XX` escapes for `data` characters above U+007E, `", "` and `": "` separators), the only form `tools/spike/redact_vin.py` accepts; `data` is ISO-8859-1-decoded bytes. `t` is seconds since recording start. `ReplayTransport` feeds `rx` lines back in order and asserts each `tx` matches what the session sends; a mismatch fails the test, which is the point. Recordings are never edited by hand (AGENTS.md rule 2).
 
 ### `packages/obd-battery` (pure TypeScript)
 

@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readdir, readFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import WebSocket from "ws";
 import { describe, expect, it, vi } from "vitest";
+import { replayRecording } from "../../packages/obd-core/scripts/replay.js";
 import { RelayTransport, type RelayCommandChannel } from "../../packages/obd-core/src/transport/relay.js";
 import { parseRecording } from "../../packages/obd-core/src/recording/format.js";
 import { ReplayTransport } from "../../packages/obd-core/src/transport/replay.js";
@@ -342,6 +344,32 @@ describe("authenticated fake phone, recording, and MCP", () => {
       expect(lines.at(-1)).toMatchObject({ dir: "meta", note: "phone relay: disconnected" });
     } finally { stdout.mockRestore(); await close(broker); }
   });
+  // Redactor form: tools/spike/redact_vin.py _check. JUNK is synthetic (0xFC as seen after ATZ on 2026-09-28; one byte per escape class).
+  it("hil:smoke writes a relay recording redact_vin.py accepts, junk bytes included", async () => {
+    const { broker, phone, root } = await fixture(false); const dir = join(root, "fixtures/recordings/chevrolet-equinox-ev-2024");
+    const JUNK = "\x00\x7F\x80\x9F\xFC\xFF";
+    let artifact = "";
+    const written: string[] = []; const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+    try {
+      const run = hilSmoke(broker); const replies = [JUNK + banner, "OK\r\r>", "OK\r\r>", "OK\r\r>", "OK\r\r>", "OK\r\r>", raw];
+      for (const [i, reply] of replies.entries()) { await commands(phone, i + 1); phone.started(); phone.result(reply); }
+      await run;
+      const [file] = await readdir(dir); const rawPath = join(dir, file);
+      expect(written.join("")).toContain("Replay matched live response."); expect(written.join("")).toContain(`fixtures/recordings/chevrolet-equinox-ev-2024/${file}`);
+      const bytes = readFileSync(rawPath); expect(bytes.every((byte) => byte < 0x80)).toBe(true);
+      const atz = (path: string) => parseRecording(readFileSync(path, "latin1")).filter((line) => line.dir === "rx")[0];
+      expect(atz(rawPath)).toMatchObject({ data: JUNK + banner });
+      const done = spawnSync("uv", ["run", "tools/spike/redact_vin.py", rawPath], { cwd: resolve(import.meta.dirname, "../.."), encoding: "utf8" });
+      expect(done.status, `redact_vin.py exit ${String(done.status)}: ${done.stderr}`).toBe(0);
+      const redactedPath = rawPath.replace(/\.jsonl$/, ".redacted.jsonl");
+      expect(done.stdout).toContain(redactedPath); expect(done.stdout).toContain("no VIN found");
+      const redacted = parseRecording(readFileSync(redactedPath, "latin1"));
+      expect(atz(redactedPath)).toMatchObject({ data: JUNK + banner }); expect(redacted.at(-1)).toMatchObject({ dir: "meta", redacted: "vin-serial" });
+      const output = await replayRecording(redacted); expect(output).toContain("L14 0100 -> data");
+      // Artifact: the redacted ATZ rx line and the replay output, for the reviewer and the task-run record.
+      const atzLine = readFileSync(redactedPath, "latin1").split("\n").find((line) => line.includes('"rx"')); artifact = `redacted ATZ rx line:\n${atzLine ?? ""}\nreplay output:\n${output.join("\n")}`;
+    } finally { stdout.mockRestore(); if (artifact) console.info(artifact); await close(broker); }
+  }, 60_000);
 });
 
 describe("shared write guard at the broker (amendment 2026-09-24)", () => {

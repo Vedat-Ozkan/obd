@@ -34,7 +34,7 @@ export const betaManifestSchema = z.strictObject({
 export type BetaManifest = z.infer<typeof betaManifestSchema>;
 
 // Python json.dumps form (", " and ": ", \u escapes above 0x7E): tools/spike/redact_vin.py _check.
-function pythonJson(value: unknown): string {
+export function pythonJson(value: unknown): string {
   if (typeof value === "object" && value !== null) {
     return `{${Object.entries(value).map(([k, v]) => `${pyString(k)}: ${pythonJson(v)}`).join(", ")}}`;
   }
