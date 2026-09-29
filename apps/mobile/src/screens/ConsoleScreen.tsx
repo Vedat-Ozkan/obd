@@ -9,6 +9,7 @@ import { runView, type RememberedDongle } from "../ble/dongleLink.js";
 import { runCapture } from "../capture.js";
 import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosisFlow.js";
 import { runChargeLog } from "../chargeLogger.js";
+import { runDriveCapture } from "../driveCapture.js";
 import { keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
@@ -18,7 +19,7 @@ import { parseRelayAddress } from "../relay/parseRelayAddress.js";
 import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
-import { batteryHistory, betaOutbox, chargeRun, deferShare, dongleLink, dongleMemory, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
+import { batteryHistory, betaOutbox, chargeRun, deferShare, dongleLink, dongleMemory, driveTargets, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
 import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
 import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui/kit.js";
 import { DonglePicker } from "./DonglePicker.js";
@@ -358,6 +359,64 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       await release(`Charge log not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}).`);
     }
   };
+  // docs/specs/T2.12-test-drive-capture.md: the same start steps, gate and release as chargeLog(); one tap while parked, then it stops and saves by itself.
+  const testDrive = async () => {
+    const active = dongleLink.current();
+    if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
+    closeDebugSession();
+    const notStarted = (line: string) => { chargeStarting.current = false; setStatus(line); };
+    chargeStarting.current = true; setStatus("Starting the test drive…");
+    if (Platform.OS === "android" && Platform.Version >= 33) await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
+    // Resolved now, so no picker opens at the end of the drive.
+    try { await phoneTargets.folder(); }
+    catch (error) {
+      notStarted(`Test drive not started: no capture folder (${error instanceof Error ? error.message : String(error)}).`);
+      return;
+    }
+    if (!mounted.current) { chargeStarting.current = false; return; }
+    if (dongleLink.current() !== active) {
+      notStarted("Test drive not started: the dongle disconnected. Connect and try again.");
+      return;
+    }
+    const run = chargeRun.begin(active, "Starting the test drive…", "drive");
+    chargeStarting.current = false;
+    // The link stays open when the run ends by itself; Disconnect during the run closes and holds it once the recording is saved.
+    const release = async (line: string) => {
+      if (run.stop) await dongleLink.disconnect();
+      chargeRun.end(line);
+    };
+    const driveRecording = new RecordingBuffer();
+    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.12 test drive: ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    let connected = false;
+    let notified = 0;
+    const task = async () => {
+      const result = await runDriveCapture({
+        connect: async () => {
+          if (!connected) { connected = true; return runView(active.transport); }
+          return runView((await dongleLink.reconnect()).transport);
+        },
+        recording: driveRecording,
+        signals: equinoxSignals,
+        now: () => Date.now() / 1000,
+        sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+        onStatus: (line) => {
+          chargeRun.status(line);
+          if (Date.now() - notified < NOTIFICATION_INTERVAL_MS) return;
+          void foregroundService.update(line).then(() => { notified = Date.now(); }, () => undefined);
+        },
+        stream: driveTargets,
+        stopRequested: () => run.stop,
+      });
+      // Nothing is queued for beta and no share sheet opens; a failed copy names the private file in the final line.
+      try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}`); }
+      finally { await foregroundService.stop(); }
+    };
+    try {
+      await foregroundService.start(task, "Test drive running", "Starting the test drive.");
+    } catch (error) {
+      await release(`Test drive not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}).`);
+    }
+  };
   // docs/specs/T0.6b-android-relay-mode.md: one alert per Mode 04 request; Cancel, back and a tap outside all deny.
   const confirmMode04 = () => new Promise<boolean>((resolve) => {
     Alert.alert("Clear trouble codes?", "The relay asks to clear diagnostic trouble codes. This also clears freeze-frame data. Confirm this one operation only.", [
@@ -418,7 +477,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   };
 
   const saved = chargeStep(status) === 5;
-  const title = chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : "Battery check";
+  const driving = chargeLogging && chargeRun.current()?.kind === "drive";
+  const title = driving ? "Test drive" : chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : "Battery check";
   const marks = stepMarks(reached, saved);
   const MARK = {
     done: { icon: "check-circle", color: tokens.accent, word: "Done" }, logged: { icon: "check-circle", color: tokens.accent, word: "Logged" },
@@ -428,7 +488,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const pane = [consoleStyle, { backgroundColor: tokens.surface, borderColor: tokens.outline }];
   const disconnect = <Button title="Disconnect" tonal disabled={!chargeLogging && (!connection || pending || diagnosing || capturing)} onPress={() => {
     // During a charge log, Disconnect only asks the run to stop; the run saves the partial log, then closes and holds the link.
-    if (chargeRun.current()) { chargeRun.requestStop("Stopping the charge log after the current command…"); return; }
+    if (chargeRun.current()) { chargeRun.requestStop(driving ? "Stopping the test drive after the current command…" : "Stopping the charge log after the current command…"); return; }
     teardown("Disconnected by user."); void dongleLink.disconnect();
   }} />;
 
@@ -443,7 +503,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       <Text style={[styles.rowLabel, { color: tokens.onContainer }]}>{status}</Text>
       <Text style={[styles.caption, { color: tokens.containerMuted }]}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
     </View>
-    {chargeLogging || saved ? <Card>
+    {(chargeLogging && !driving) || saved ? <Card>
       <SectionLabel>Charge log steps</SectionLabel>
       {CHARGE_STEP_LABELS.map((label, i) => {
         const view = stepView(i + 1);
@@ -455,7 +515,9 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       })}
     </Card> : null}
     {chargeLogging ? <>
-      <Card><Text>The charge log stops and saves by itself. Disconnect stops it early; what was logged so far is kept.</Text></Card>
+      <Card><Text>{driving
+        ? "Recording a test drive. It stops and saves by itself after 20 minutes, or a minute after you switch the car off. Do not touch the phone while driving. Disconnect stops it early; what was recorded is kept."
+        : "The charge log stops and saves by itself. Disconnect stops it early; what was logged so far is kept."}</Text></Card>
       {disconnect}
     </> : <>
       <View style={{ gap: 8 }}>
@@ -495,6 +557,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
+          <Button title="Record test drive" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive()} />
+          <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive 15–20 min.</Text>
           {captureStep ? <Text>{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
           <TextInput style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />

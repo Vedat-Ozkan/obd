@@ -2,7 +2,7 @@
 // Android can recreate the activity mid-run while JS keeps running, so a console recreated with it still sees and stops the run.
 // docs/specs/X-2026-09-28-persistent-dongle.md supersedes the manager part of Decision 20: the BLE manager and link now live for
 // the whole app session (runtime.ts), so this record owns and destroys neither.
-export interface ChargeRun<C> { readonly connection: C; stop: boolean; status: string }
+export interface ChargeRun<C> { readonly connection: C; readonly kind: "charge" | "drive"; stop: boolean; status: string }
 export type ChargeRunListener = (status: string, running: boolean) => void;
 
 export function createChargeRunRecord<C>() {
@@ -17,9 +17,10 @@ export function createChargeRunRecord<C>() {
   };
   return {
     current: () => run,
-    begin(connection: C, line: string): ChargeRun<C> {
+    // docs/specs/T2.12-test-drive-capture.md: a test drive shares this record, so it keeps the BLE gate, the Back lock and the final line.
+    begin(connection: C, line: string, kind: "charge" | "drive" = "charge"): ChargeRun<C> {
       if (run) throw new Error("A charge log is already running.");
-      run = { connection, stop: false, status: line }; notify(line);
+      run = { connection, kind, stop: false, status: line }; notify(line);
       return run;
     },
     status,

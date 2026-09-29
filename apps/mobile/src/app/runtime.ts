@@ -52,6 +52,17 @@ const NOTIFICATION_INTERVAL_MS = 30_000; // spec T2.4 B2: the notification text 
 const CAPTURES = "captures"; // T0.9b: the private copy directory under Paths.document
 const COPY_CHUNK_BYTES = 1 << 20; // a charge log is tens of MB; never read it into one string
 
+// captures/<date>-<stem>[-N].jsonl in app storage, never overwriting; returns its name. Throws on failure.
+function createCapture(stem: string): string {
+  const dir = new Directory(Paths.document, CAPTURES);
+  dir.create({ intermediates: true, idempotent: true });
+  const base = `${localDate()}-${stem}`;
+  let suffix = 1; let kept = new File(dir, `${base}.jsonl`);
+  while (kept.exists) { suffix++; kept = new File(dir, `${base}-${String(suffix)}.jsonl`); }
+  kept.create(); // throws if the file exists; never overwrite a capture
+  return kept.name;
+}
+
 // docs/specs/T0.9b-one-and-done-captures.md: a private copy under captures/, then the SAF folder picked once, else the share sheet.
 // T2.4 B2 adds the charge log's streaming save (StreamTargets): append to the private file, then a chunked copy to the folder.
 const phoneTargets: SaveTargets & StreamTargets = {
@@ -78,15 +89,7 @@ const phoneTargets: SaveTargets & StreamTargets = {
     try { const remembered = captureFolderFile(); if (remembered.exists) remembered.delete(); } catch { /* see above */ }
   },
   share: (name, file) => Sharing.shareAsync(new File(Paths.document, CAPTURES, name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
-  create() {
-    const dir = new Directory(Paths.document, CAPTURES);
-    dir.create({ intermediates: true, idempotent: true });
-    const stem = `${localDate()}-charge-log`;
-    let suffix = 1; let kept = new File(dir, `${stem}.jsonl`);
-    while (kept.exists) { suffix++; kept = new File(dir, `${stem}-${String(suffix)}.jsonl`); }
-    kept.create(); // throws if the file exists; never overwrite a capture
-    return kept.name;
-  },
+  create: () => createCapture("charge-log"),
   append(name, text) { new File(Paths.document, CAPTURES, name).write(text, { append: true }); },
   async copyToFolder(name) {
     const remembered = captureFolderFile();
@@ -100,6 +103,9 @@ const phoneTargets: SaveTargets & StreamTargets = {
     } finally { source.close(); }
   },
 };
+
+// docs/specs/T2.12-test-drive-capture.md: the test drive saves like the charge log, under its own file stem.
+const driveTargets: StreamTargets = { create: () => createCapture("test-drive"), append: (name, text) => { phoneTargets.append(name, text); }, copyToFolder: (name) => phoneTargets.copyToFolder(name) };
 
 // A charge log whose folder copy failed offers its private copy once, the next time the app is in the foreground.
 // share() only reads the file's name, MIME type and slug (the dialog title for a JSONL recording); content is unused.
@@ -152,7 +158,7 @@ const queueForBeta = async (...args: Parameters<typeof betaOutbox.queue>) => {
 
 // ADR-021: the Android foreground service behind a small interface; the arguments are the T2.4 B2 ones, unchanged.
 const foregroundService = {
-  start: (task: () => Promise<void>): Promise<void> => BackgroundService.start(task, { taskName: "charge-log", taskTitle: "Charge log running", taskDesc: "Starting the charge log.", taskIcon: { name: "ic_launcher", type: "mipmap" }, foregroundServiceType: ["connectedDevice"] }),
+  start: (task: () => Promise<void>, title = "Charge log running", desc = "Starting the charge log."): Promise<void> => BackgroundService.start(task, { taskName: "charge-log", taskTitle: title, taskDesc: desc, taskIcon: { name: "ic_launcher", type: "mipmap" }, foregroundServiceType: ["connectedDevice"] }),
   update: (text: string): Promise<void> => BackgroundService.updateNotification({ taskDesc: text }),
   stop: (): Promise<void> => BackgroundService.stop(),
 };
@@ -173,4 +179,4 @@ const folderLabel = async (): Promise<string | undefined> => {
   return remembered.exists ? new Directory((await remembered.text()).trim()).name : undefined;
 };
 
-export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
+export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, driveTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };

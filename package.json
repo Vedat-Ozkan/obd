@@ -16,6 +16,7 @@
     "replay": "tsx packages/obd-core/scripts/replay.ts",
     "codes-report": "tsx packages/obd-core/scripts/codes-report.ts",
     "charge-log": "tsx packages/obd-battery/scripts/charge-log.ts",
+    "drive-capture": "tsx packages/obd-battery/scripts/drive-capture.ts",
     "relay": "tsx tools/relay/server.ts",
     "hil:smoke": "tsx tools/relay/hil-smoke.ts",
     "beta:intake": "tsx --env-file=.env tools/beta-intake/intake.ts"

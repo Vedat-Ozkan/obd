@@ -57,19 +57,19 @@ type SessionReason = "start" | "lv-reset" | "timeout" | "disconnect" | "elm-erro
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 /** A final error reply, after core's own retry (spec §Sources: CAN ERROR once inside Elm327Session, LV RESET re-init). */
-class ReplyError extends Error {
+export class ReplyError extends Error {
   constructor(readonly response: Extract<ElmResponse, { kind: "error" }>, command: string) {
     super(`${response.error.line} at ${command}`);
   }
 }
 
-class StopRequested extends Error {}
+export class StopRequested extends Error {}
 
 /** transport.write rejected: the link is gone (Decision 16: only these, not any error, are a disconnect). */
-class LinkError extends Error {}
+export class LinkError extends Error {}
 
 /** Each Mode 22 reply goes to the builder; an error reply ends the cycle; a stop request ends it before the next command. */
-class CycleSession extends Elm327Session {
+export class CycleSession extends Elm327Session {
   private target = "";
   constructor(transport: Transport, private readonly deps: ChargeLogDeps, private readonly builder: ChargeLogBuilder, private readonly lastTx: () => number) {
     super(transport);
@@ -88,7 +88,7 @@ class CycleSession extends Elm327Session {
 }
 
 /** Only ELM replies, session errors and link errors start a new session; any other error stops the run (Decision 16). */
-function reasonFor(error: ReplyError | ElmSessionError | LinkError): Exclude<SessionReason, "start"> {
+export function reasonFor(error: ReplyError | ElmSessionError | LinkError): Exclude<SessionReason, "start"> {
   const response = error instanceof ReplyError || error instanceof ElmSessionError ? error.response : undefined;
   if (response?.kind === "error" && response.error.kind === "lv-reset") return "lv-reset";
   if (error instanceof ElmSessionError && error.kind === "timeout") return "timeout";
@@ -96,7 +96,7 @@ function reasonFor(error: ReplyError | ElmSessionError | LinkError): Exclude<Ses
   return "disconnect";
 }
 
-const clock = (seconds: number) => `${String(Math.floor(seconds / 60))}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+export const clock = (seconds: number) => `${String(Math.floor(seconds / 60))}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 /** Never rejects. Ends with a final flush, the copy to the folder, and a last meta line naming the stop reason. */
 export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult> {
