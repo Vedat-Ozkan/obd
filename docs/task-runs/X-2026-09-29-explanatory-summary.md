@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: closed (desk). Stages 1–3 APPROVE — commits 9d61518, 9e09c19, Stage 3 below. Waiting for the owner's phone summary run.
+- Stage: closed (desk). Stages 1–3 APPROVE — commits 9d61518, 9e09c19, Stage 3 57ff2bf. Waiting for the owner's phone summary run.
 - Spec: `docs/specs/X-2026-09-29-explanatory-summary.md` (Stage 1 shared ratings + reportFacts split; Stage 2 summary v2, adapter v5, judging-word rule; Stage 3 summary output cap 2,048).
 - Repairs: 0/2. Escalations: 0.
 - Verdicts: Stages 1, 2 and 3 APPROVE (2026-09-29); full `pnpm check` reproduced PASS.

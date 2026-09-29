@@ -1,0 +1,675 @@
+{
+  "label": "SYNTHETIC hand-written v3 summary replies, including a reconstruction of the diagnosed reply shape; not recorded model output",
+  "cases": [
+    {
+      "name": "claim-split-accepted",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently cleared check answered {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "claim-split-accepted-stored-code",
+      "report": "synthetic-multi-dtc-no-recording",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently cleared check answered {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "claim-split-common",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This check could not measure capacity.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is.",
+                "factIds": [
+                  "health-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "{label:cell-spread}: {fact:cell-spread}.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-status",
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery status is {fact:twelve-volt-status}.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently cleared check answered {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "synthetic-reconstructed-single-claim-areas",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge. This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}. It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages in the pack. A wide gap between them can point to a cell group that ages faster than the rest. Here the {label:cell-spread} is {fact:cell-spread}, a community reading. The app has no threshold to judge this yet, so a buyer should ask for a service check that looks at each cell group. Cells that drift apart over time can limit how much of the pack the car is able to use, which is why the gap is worth tracking across several checks rather than reading once.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0} at {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "SENTINEL_REPLY_TEXT Diagnostic trouble codes are fault records that the control modules store when they detect a problem. Stored, pending and permanent codes and readiness were read for four modules, and the recently cleared check answered {fact:codes-recently-cleared}. A buyer should ask whether codes were cleared before the sale, because clearing removes the record but not the cause. The readiness monitors say whether the car has finished its own self checks since the last reset, which matters before an inspection.",
+                "factIds": [
+                  "codes-recently-cleared",
+                  "codes-0-stored",
+                  "codes-0-pending",
+                  "codes-0-permanent",
+                  "codes-1-stored",
+                  "codes-1-pending",
+                  "codes-1-permanent",
+                  "codes-2-stored",
+                  "codes-2-pending",
+                  "codes-2-permanent",
+                  "codes-3-stored",
+                  "codes-3-pending",
+                  "codes-3-permanent",
+                  "readiness-0",
+                  "readiness-1",
+                  "readiness-2",
+                  "readiness-3"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2-era-module-citation",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-0-stored}: {fact:codes-0-stored}.",
+                "factIds": [
+                  "codes-0-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently cleared check answered {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "repeated-fact-in-claim",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "Capacity is how much energy the battery can still hold, which sets the car's real driving range.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured: {fact:capacity-reason}",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The adapter supply measured {fact:twelve-volt-0} at {fact:twelve-volt-0}.",
+                "factIds": [
+                  "twelve-volt-0"
+                ]
+              },
+              {
+                "text": "A load test or service check is needed to know the battery's condition.",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently cleared check answered {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

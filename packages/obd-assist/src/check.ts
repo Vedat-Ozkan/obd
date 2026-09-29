@@ -5,7 +5,7 @@ const factSchema = z.strictObject({
   id: z.string().trim().min(1), label: z.string().trim().min(1), value: z.string().trim().min(1),
   unit: z.string().trim().min(1).optional(), tier: z.enum(["verified", "community"]).optional(), status: z.string().trim().min(1).optional(),
 });
-const requestSchema = z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v2"), facts: z.array(factSchema) });
+const requestSchema = z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v3"), facts: z.array(factSchema) });
 const claimSchema = z.strictObject({ text: z.string().transform((text) => text.replace(/^ +| +$/g, "")).pipe(z.string().min(1)), factIds: z.array(z.string().trim().min(1)).min(1) });
 const summarySchema = z.strictObject({ version: z.literal(1), claims: z.array(claimSchema).min(1) });
 const areaSchema = <A extends SummaryArea>(area: A) => z.strictObject({ area: z.literal(area), claims: z.array(claimSchema).min(1).max(3) });

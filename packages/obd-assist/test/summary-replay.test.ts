@@ -10,6 +10,7 @@ const fixturePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-sp
 const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/t2.10-summary-responses.json", root), "utf8")) as { readonly cases: readonly SavedSummaryCase[] };
 const nameResponses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-twelve-volt-name-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
 const explanatory = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-explanatory-summary-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
+const claimSplit = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-summary-claim-split-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
 const phoneConsolePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
 const signalset = importObdbMode22(JSON.parse(readFileSync(new URL("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", root), "utf8")));
 
@@ -382,7 +383,7 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
     expect(explanatoryKinds[saved.name]).toBeDefined();
     expect(result.kind).toBe(explanatoryKinds[saved.name]);
     // The projection carries the app's rating for every area, after the report's own facts.
-    expect(request?.promptVersion).toBe("t2.10-v2");
+    expect(request?.promptVersion).toBe("t2.10-v3");
     // The projection sent out carries no path, scan time, garage id, header or VIN, for real and synthetic-report cases alike.
     expect(JSON.stringify(request)).not.toMatch(/summary-replay|2026-09-22T00:00:00.000Z|2026-09-22-spike\.redacted|18DAF1|VIN/i);
     expect(request?.facts.slice(-10).map((fact) => fact.id)).toEqual(["soc", "cells", "capacity", "twelve-volt", "codes"].flatMap((prefix) => [`${prefix}-rating`, `${prefix}-rating-basis`]));
@@ -405,8 +406,83 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
   it("writes the replay artifact the public CLI helper produces", async () => {
     const artifact = await createSummaryReplayArtifact(report, explanatory);
     writeFileSync("/tmp/x-explanatory-spike.json", `${JSON.stringify(artifact, null, 2)}\n`);
-    expect(artifact.promptVersion).toBe("t2.10-v2");
+    expect(artifact.promptVersion).toBe("t2.10-v3");
     expect(explanatory.cases.map((saved) => saved.name)).toEqual(Object.keys(explanatoryKinds));
     expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual(Object.entries(explanatoryKinds));
+  });
+});
+
+// Summary v3 (X-2026-09-29-summary-claim-split): one sentence per claim, and four code roll-ups instead of per-module facts.
+// The whole displayed text is written out here, not derived from the saved reply. Every reply is SYNTHETIC.
+const splitCodesLine = "Stored diagnostic codes: none (5 of 5 modules read). Pending diagnostic codes: none (5 of 5 modules read); Permanent diagnostic codes: none (3 of 5 modules read). Readiness status: 5 of 5 modules read; the recently cleared check answered unknown.";
+const splitText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
+
+State of charge
+Rating: Not rated. Basis: The app does not rate state of charge.
+State of charge is how full the high-voltage battery is, like a fuel gauge. This check read SoC: 69.8039 percent. It shows the charge at the time of the check, not the battery's condition.
+
+Cell balance
+Rating: Not rated. Basis: No threshold yet.
+Cell balance compares the highest and lowest cell voltages. A wide gap can point to a cell group that ages faster. Here the Cell spread is 0.003 volts, a community reading.
+
+Capacity
+Rating: Not rated. Basis: No threshold yet.
+Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: No completed charge log and reviewed capacity estimator are available.
+
+12 V battery
+Rating: Not rated. Basis: No threshold yet.
+The twelve-volt battery powers the car's computers and wakes the high-voltage system. The adapter supply measured 12.7 V. A load test or service check is needed to know the battery's condition.
+
+Diagnostic codes
+Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.
+${splitCodesLine}`;
+const splitTextStored = splitText
+  .replace("Rating: OK. Basis: Project policy: no codes reported, and whether codes were cleared recently is unknown.", "Rating: Poor. Basis: Project policy: a reported code is Poor.")
+  .replace("Stored diagnostic codes: none (5 of 5 modules read).", "Stored diagnostic codes: P0133, P0420 (5 of 5 modules read).");
+const splitKinds: Readonly<Record<string, "llm" | "template">> = {
+  "claim-split-accepted": "llm", "claim-split-accepted-stored-code": "llm", "claim-split-common": "llm",
+  "synthetic-reconstructed-single-claim-areas": "template", "v2-era-module-citation": "template",
+  // Boundary, documented (Decision A3), not a defect: a repeated {fact:ID} displays its correct value twice.
+  "repeated-fact-in-claim": "llm",
+};
+
+describe("claim-split summary v3 on the spike recording (synthetic replies)", () => {
+  let report: Awaited<ReturnType<typeof replayReport>>;
+  beforeAll(async () => { report = await replayReport(); });
+
+  it("labels the fixture synthetic", () => {
+    expect(claimSplit.label).toBe("SYNTHETIC hand-written v3 summary replies, including a reconstruction of the diagnosed reply shape; not recorded model output");
+  });
+
+  it("projects four code roll-ups and no per-module code or readiness fact", async () => {
+    let request: SummaryRequest | undefined;
+    await summarize(report, { generate(input) { request = input; return Promise.resolve(undefined); } }, { model: "saved-response", effort: "none" });
+    const ids = request?.facts.map((fact) => fact.id) ?? [];
+    expect(ids.filter((id) => /^(codes|readiness)-\d/.test(id))).toEqual([]);
+    expect(ids.slice(ids.indexOf("codes-recently-cleared"), -10)).toEqual(["codes-recently-cleared", "codes-stored", "codes-pending", "codes-permanent", "readiness"]);
+    expect(ids).toHaveLength(28);
+  });
+
+  it.each(claimSplit.cases)("saved reply $name", async (saved) => {
+    const caseReport = reportForSavedCase(report, saved);
+    const client: LlmClient = { generate() { return Promise.resolve(saved.response); } };
+    const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
+    expect(splitKinds[saved.name]).toBeDefined();
+    expect(result.kind).toBe(splitKinds[saved.name]);
+    if (result.kind === "template") {
+      expect(result).toEqual({ kind: "template", text: renderBatteryDiagnosis(caseReport), reason: "Summary response could not be verified." });
+      return;
+    }
+    if (saved.name === "claim-split-accepted") expect(result.text).toBe(splitText);
+    if (saved.name === "claim-split-accepted-stored-code") expect(result.text).toBe(splitTextStored);
+    if (saved.name === "claim-split-common") expect(result.text.split("\n").at(-1)).toBe(splitCodesLine);
+    if (saved.name === "repeated-fact-in-claim") expect(result.text).toContain("The adapter supply measured 12.7 V at 12.7 V.");
+  });
+
+  it("writes the replay artifact the public CLI helper produces", async () => {
+    const artifact = await createSummaryReplayArtifact(report, claimSplit);
+    writeFileSync("/tmp/x-claim-split-spike-test.json", `${JSON.stringify(artifact, null, 2)}\n`);
+    expect(artifact.promptVersion).toBe("t2.10-v3");
+    expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual(Object.entries(splitKinds));
   });
 });

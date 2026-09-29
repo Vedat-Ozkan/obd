@@ -25,7 +25,7 @@ export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSu
   };
 }
 
-type ReplayArtifact = { fixture: string; promptVersion: "t2.10-v2"; cases: { name: string; kind: string; text: string }[] };
+type ReplayArtifact = { fixture: string; promptVersion: "t2.10-v3"; cases: { name: string; kind: string; text: string }[] };
 
 /** Saved v1 claim sets, run through the shared claim checker and renderer only (no v2 reply shape, no verdict rule, no rating lines). */
 export function createClaimReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<ReplayArtifact> {
@@ -39,7 +39,7 @@ export function createClaimReplayArtifact(report: BatteryDiagnosisReport, saved:
       return { name: item.name, kind: "template", text: renderBatteryDiagnosis(caseReport) };
     }
   });
-  return Promise.resolve({ fixture: report.recording, promptVersion: "t2.10-v2", cases });
+  return Promise.resolve({ fixture: report.recording, promptVersion: "t2.10-v3", cases });
 }
 
 export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<ReplayArtifact> {
@@ -53,7 +53,7 @@ export async function createSummaryReplayArtifact(report: BatteryDiagnosisReport
     const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
     cases.push({ name: item.name, kind: result.kind, text: result.text });
   }
-  return { fixture: report.recording, promptVersion: "t2.10-v2", cases };
+  return { fixture: report.recording, promptVersion: "t2.10-v3", cases };
 }
 
 async function main(args: readonly string[]): Promise<void> {

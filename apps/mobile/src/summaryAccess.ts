@@ -8,7 +8,7 @@ export const SUMMARY_DISCLOSURE = "Send minimized, VIN-free battery report facts
 export const SUMMARY_MODEL = "deepseek/deepseek-v4.1-flash";
 export interface DevelopmentUsage {
   model: typeof SUMMARY_MODEL | "deepseek/deepseek-v4.1-flash-20260910";
-  provider: "DeepSeek"; promptVersion: "t2.10-v2"; adapterPromptVersion: "t2.10-openrouter-v5";
+  provider: "DeepSeek"; promptVersion: "t2.10-v3"; adapterPromptVersion: "t2.10-openrouter-v6";
   inputTokens: number; cachedInputTokens: number | null; outputTokens: number; reasoningTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number; latencyMs: number;
 }
@@ -29,7 +29,7 @@ const cost = (value: unknown): value is number => typeof value === "number" && N
 function projectUsage(value: unknown): DevelopmentUsage | null {
   if (typeof value !== "object" || value === null) return null;
   const u = value as Record<string, unknown>;
-  if ((u.model !== SUMMARY_MODEL && u.model !== "deepseek/deepseek-v4.1-flash-20260910") || u.provider !== "DeepSeek" || u.promptVersion !== "t2.10-v2" || u.adapterPromptVersion !== "t2.10-openrouter-v5" || !integer(u.inputTokens, 1048576) || !integer(u.outputTokens, 2048) || !integer(u.latencyMs) || !cost(u.estimatedUsd)) return null;
+  if ((u.model !== SUMMARY_MODEL && u.model !== "deepseek/deepseek-v4.1-flash-20260910") || u.provider !== "DeepSeek" || u.promptVersion !== "t2.10-v3" || u.adapterPromptVersion !== "t2.10-openrouter-v6" || !integer(u.inputTokens, 1048576) || !integer(u.outputTokens, 2048) || !integer(u.latencyMs) || !cost(u.estimatedUsd)) return null;
   const cachedInputTokens = u.cachedInputTokens ?? null;
   const reasoningTokens = u.reasoningTokens ?? null;
   const providerCostUsd = u.providerCostUsd ?? null;

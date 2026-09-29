@@ -10,7 +10,7 @@ export interface SummaryFact {
   tier?: "verified" | "community";
   status?: string;
 }
-export interface SummaryRequest { version: 1; promptVersion: "t2.10-v2"; facts: readonly SummaryFact[] }
+export interface SummaryRequest { version: 1; promptVersion: "t2.10-v3"; facts: readonly SummaryFact[] }
 export interface SummaryClaim { text: string; factIds: readonly string[] }
 export interface StructuredSummary { version: 1; claims: readonly SummaryClaim[] }
 export type SummaryArea = ReportArea;
@@ -19,9 +19,10 @@ export interface LlmClient {
   generate(request: SummaryRequest, options: { model: string; effort: "none" | "low" }): Promise<unknown>;
 }
 
-export const summaryInstructions = `Summary prompt version: t2.10-v2. Explain this battery check to a used-EV buyer who has not used the app.
-Write one takeaway sentence about the whole check. Then, for each area in order (soc: state of charge; cells: cell balance; capacity: battery capacity; twelveVolt: the twelve-volt battery; codes: diagnostic trouble codes), write two or three sentences: what it is, why a used-EV buyer cares, and what this check shows or what would be needed to know more.
+export const summaryInstructions = `Summary prompt version: t2.10-v3. Explain this battery check to a used-EV buyer who has not used the app.
+Write one takeaway sentence about the whole check. Then, for each area in order (soc: state of charge; cells: cell balance; capacity: battery capacity; twelveVolt: the twelve-volt battery; codes: diagnostic trouble codes), write two or three claims, each one sentence: what it is, why a used-EV buyer cares, and what this check shows or what would be needed to know more. Never put two sentences in one claim.
 General knowledge may explain what an item is, why it matters and what to check next. Anything about this car must come from the supplied facts. Keep community and missing-data labels.
+{label:ID} names an item and {fact:ID} is its value; write each {fact:ID} at most once in a claim.
 The app prints each area's own rating and its basis above your sentences. Never judge this car yourself: claim text never contains these words, in any capitalization: ${verdictWords.join(", ")}. Never cite a fact whose ID ends in -rating or -rating-basis; the reason facts say what is missing.`;
 
 const formatNumber = (value: number): string => String(Math.round(value * 10000) / 10000);
@@ -65,6 +66,22 @@ export function reportFacts(report: BatteryDiagnosisReport): SummaryFact[] {
   return facts;
 }
 
+/** Four roll-ups over the modules, so the codes area cites a few facts instead of one per module. Each value states how many modules were read, so "none" never hides a module that was not. */
+function codeRollups(report: BatteryDiagnosisReport): SummaryFact[] {
+  const modules = report.codes.modules;
+  const rolled = (kind: "stored" | "pending" | "permanent", label: string) => {
+    // A missing entry counts as not read, as in codeFacts.
+    const reads = modules.flatMap((module) => { const read = module[kind] as BatteryDiagnosisReport["codes"]["modules"][number][typeof kind] | undefined; return read?.status === "read" ? [read.dtcs] : []; });
+    const codes = [...new Set(reads.flat())];
+    return fact(`codes-${kind}`, label, `${reads.length === 0 ? "not read" : codes.length ? codes.join(", ") : "none"} (${String(reads.length)} of ${String(modules.length)} modules read)`, { status: reads.length === 0 ? "not-read" : "available" });
+  };
+  const readiness = modules.filter((module) => (module.readiness as typeof module.readiness | undefined)?.status === "read").length;
+  return [
+    rolled("stored", "Stored diagnostic codes"), rolled("pending", "Pending diagnostic codes"), rolled("permanent", "Permanent diagnostic codes"),
+    fact("readiness", "Readiness status", `${String(readiness)} of ${String(modules.length)} modules read`, { status: readiness === 0 ? "not-read" : "available" }),
+  ];
+}
+
 /** Produce the only report projection that may be sent to a summary provider: the report's facts, then the app's rating for each area as context the model may not cite. */
 export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRequest {
   const ratings = reportRatings(report);
@@ -72,7 +89,7 @@ export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRe
     fact(`${prefix}-rating`, `${title} rating`, ratingWord[ratings[area].rating], { status: ratings[area].rating }),
     fact(`${prefix}-rating-basis`, `${title} rating basis`, ratings[area].basis, { status: "available" }),
   ]);
-  return { version: 1, promptVersion: "t2.10-v2", facts: [...reportFacts(report), ...ratingFacts] };
+  return { version: 1, promptVersion: "t2.10-v3", facts: [...reportFacts(report).filter((item) => !/^(codes|readiness)-\d/.test(item.id)), ...codeRollups(report), ...ratingFacts] };
 }
 
 /** Rebuild the local allowlist so server-supplied facts cannot be trusted. */
