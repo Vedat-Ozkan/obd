@@ -2,15 +2,15 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: APPROVE (repairs 1/2) — commit below; orchestrator live D1 migration next. Tool: Claude Code, orchestrator `/feature`.
+- Stage: closed (desk). APPROVE (repairs 1/2) — commit cec53bf; live D1 migrated. Tool: Claude Code, orchestrator `/feature`.
 - Spec: `docs/specs/X-2026-09-29-summary-reservation.md` (size M).
 - Repairs: 1/2. Escalations: 0.
 - Verdicts: APPROVE after repair 1 (2026-09-29).
 - Decisions in effect (owner, 2026-09-29): Q1 (c) no use count, the US$1 budget alone limits calls. Migration of the live local D1 state: owner authorizes the orchestrator to apply the reviewed schema after review, with a read-only before/after SELECT.
 - Owner authorizations: 2026-09-29 owner asked for this task ("do 1-4 in any order you want ... adjust reserve to the real size").
-- NOT RUN: live local D1 migration (orchestrator, after review); paid phone gate (T2.10d).
+- NOT RUN: paid phone gate (T2.10d).
 - Blocker: none.
-- Next action: re-review, then the orchestrator migrates the live local D1 state (owner-authorized) with a read-only before/after SELECT.
+- Next action: none for this task; the paid phone gate belongs to T2.10d.
 
 ## Baseline
 
@@ -37,3 +37,4 @@ No open findings. Re-review minors: T2.10d:63 and T2.10c:51 wording judged consi
 - 2026-09-29 reviewer (Claude): REQUEST_CHANGES, 1 blocking 3 minor.
 - 2026-09-29 implementer repair 1 (Claude): T2.10c governing lines rewritten to the final rule (50, 54, 129, 137, 188); crash-held reapply compares `requests`; worker tests and `pnpm check` PASS. Left: T2.10d:63 "consumes another bounded use" (ambiguous).
 - 2026-09-29 reviewer (Claude): APPROVE (repairs 1/2).
+- 2026-09-29 orchestrator live migration (owner-authorized): before (read-only): tables summary_budget, summary_requests only, no `_next` table; budget (1,0,0,NULL,0); 0 requests; old CHECK `uses BETWEEN 0 AND 4`. Applied `schema.sql` with wrangler dev stopped: 11 commands succeeded. After (read-only): same two tables; budget (1,0,0,NULL,0); 0 requests; CHECKs `uses >= 0`, `reservation BETWEEN 1 AND 315802`.
