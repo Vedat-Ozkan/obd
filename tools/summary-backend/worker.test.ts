@@ -766,6 +766,11 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   expect(shared.messages.map((message) => message.role)).toEqual(["system", "user"]);
   expect(shared.messages[0].content).toMatch(/^Adapter prompt version: t2\.11-openrouter-v1\./);
   expect(shared.messages[0].content).toContain(assistantInstructions);
+  // The sent prompt teaches the checker's grammar (Stage 4): one shared text, no old exact-quantity wording, no fact IDs barred from text.
+  expect(shared.messages[0].content).toContain("Assistant prompt version: t2.11-v2");
+  expect(shared.messages[0].content).toContain(claimGrammar);
+  expect(shared.messages[0].content.endsWith(claimGrammar)).toBe(true);
+  for (const stale of ["Label: value unit", "never in text", "t2.11-v1", "The adapter supply measured value V"]) expect(shared.messages[0].content, stale).not.toContain(stale);
   expect(JSON.parse(shared.messages[1].content)).toEqual(answerTurn);
   expect(Object.keys(shared).filter((key) => ["plugins", "web_search_options", "tools"].includes(key))).toEqual([]);
   rows.push({ name: "assistant-shared-body", source: "synthetic", body: { ...shared, messages: [{ role: "system", content: "[t2.11-openrouter-v1 preamble + assistantInstructions omitted]" }, { role: "user", content: "[serialized turn omitted]" }] } });
@@ -818,7 +823,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   // Gates: none of these may reach upstream.
   const factsOf = (step: number, count: number, pad: number) => Array.from({ length: count }, (_, i) => ({ id: `s${String(step)}/f${String(i)}`, label: "Filler label", value: "x".repeat(pad), status: "available" }));
   const stepOf = (step: number, count: number, pad: number) => ({ call: { tool: "get_session", sessionId: "s1" }, result: { ok: true, facts: factsOf(step, count, pad) } });
-  const turnOf = (steps: unknown[]) => ({ version: 1, promptVersion: "t2.11-v1", question: "Filler?", steps });
+  const turnOf = (steps: unknown[]) => ({ version: 1, promptVersion: "t2.11-v2", question: "Filler?", steps });
   const A = armOf("A"); const B = armOf("B");
   await acheck("gate-summary-consent-on-assistant-route", {}, assistantBody(A, listTurn, { consentVersion: consent }), "consent-required", 0);
   await acheck("gate-summary-consent-on-compare-arm", {}, assistantBody(B, listTurn, { consentVersion: consent }), "consent-required", 0);
@@ -828,6 +833,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   await acheck("gate-compare-flag-not-one", { authority: { SUMMARY_COMPARE_ENABLED: "true" } }, assistantBody(B, listTurn), "unavailable", 0);
   await acheck("gate-arm-A-without-flag", { authority: {}, output: assistantEnvelope(A, toolReply) }, assistantBody(A, listTurn), null, 1);
   await acheck("gate-unpinned-model", {}, { ...assistantBody(A, listTurn), model: "openai/gpt-6-sol" }, "invalid-request", 0);
+  await acheck("gate-old-prompt-version", {}, assistantBody(A, { ...listTurn, promptVersion: "t2.11-v1" }), "invalid-request", 0);
   await acheck("gate-unknown-field", {}, { ...assistantBody(A, listTurn), tools: [] }, "invalid-request", 0);
   await acheck("gate-unknown-turn-field", {}, assistantBody(A, { ...listTurn, notes: "x" }), "invalid-request", 0);
   await acheck("gate-raw-over-32KiB", {}, " ".repeat(32769), "invalid-request", 0);
@@ -970,7 +976,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   const dryText = readFileSync("/tmp/t2.11b-eval-dry.json", "utf8");
   const dry = JSON.parse(dryText) as EvalArtifact;
   expect(stdout + dryText).not.toMatch(new RegExp(`${token}|synthetic-key|SENTINEL_`));
-  expect(dry.header).toMatchObject({ promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1", questionSet: "fixtures/synthetic/t2.11-question-set.json" });
+  expect(dry.header).toMatchObject({ promptVersion: "t2.11-v2", adapterPromptVersion: "t2.11-openrouter-v1", questionSet: "fixtures/synthetic/t2.11-question-set.json" });
   expect(dry.header.codeSha).toMatch(/^[0-9a-f]{40}$/);
   expect(dry.arms.map((arm) => arm.model)).toEqual(order.map((arm) => arm.model));
   for (const [index, arm] of dry.arms.entries()) {
@@ -1010,8 +1016,8 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   // The recorded-reply files replay through replay-assistant.ts with their own label as the note and reproduce the artifact's verdicts.
   for (const [index, arm] of order.entries()) {
     const file = join(saveDir, `t2.11-live-${arm.model.split("/")[1]}.json`);
-    const savedFile = JSON.parse(readFileSync(file, "utf8")) as { label: string; model: string; canonicalSlug: string; providerTag: string; returnedProviders: string[]; questions: Record<string, unknown[]> };
-    expect(savedFile).toMatchObject({ model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag, returnedProviders: [arm.key === "D" ? otherHost : arm.provider] });
+    const savedFile = JSON.parse(readFileSync(file, "utf8")) as { label: string; promptVersion: string; model: string; canonicalSlug: string; providerTag: string; returnedProviders: string[]; questions: Record<string, unknown[]> };
+    expect(savedFile).toMatchObject({ promptVersion: "t2.11-v2", model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag, returnedProviders: [arm.key === "D" ? otherHost : arm.provider] });
     expect(Object.keys(savedFile.questions)).toEqual(questionSet.questions.map((item) => item.id));
     const replayed = JSON.parse(await node(["packages/obd-assist/scripts/replay-assistant.ts", "fixtures/synthetic/t2.11-question-set.json", file])) as { note: string; sections: { real: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[]; synthetic: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[] } };
     expect(replayed.note).toBe(savedFile.label);
@@ -1115,7 +1121,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   const artifact = `${JSON.stringify({
     fixtures: fixtures.map((fixture) => ({ path: fixture, source: "real-recording" })),
     promptVersion: "t2.10-v1", adapterPromptVersion: "t2.10-openrouter-v4", reservationPolicy: { inputTokens: "min(1048576, 2*bodyBytes+4096)", outputTokens: 1024, inputTenthMicroUsdPerToken: 3, outputTenthMicroUsdPerToken: 12, useCap: null }, cases: rows,
-    assistant: { adapterPromptVersion: "t2.11-openrouter-v1", promptVersion: "t2.11-v1", pins: armTable.map((arm) => ({ model: arm.model, providerTag: arm.tag, ceilingTenthMicroUsdPerToken: arm.ceiling, reservationAtCapMicroUsd: arm.capReservation })), cases: assistantRows },
+    assistant: { adapterPromptVersion: "t2.11-openrouter-v1", promptVersion: "t2.11-v2", pins: armTable.map((arm) => ({ model: arm.model, providerTag: arm.tag, ceilingTenthMicroUsdPerToken: arm.ceiling, reservationAtCapMicroUsd: arm.capReservation })), cases: assistantRows },
   }, null, 2)}\n`;
   // Failure 14: no upstream body, error code, metadata or header value reaches the artifact.
   expect(artifact).not.toMatch(/SENTINEL_/);

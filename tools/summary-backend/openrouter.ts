@@ -51,7 +51,7 @@ export interface AdapterResult {
   failedCheck: FailedCheck | null;
 }
 export interface AssistantUsageOut {
-  model: string; provider: string; promptVersion: "t2.11-v1"; adapterPromptVersion: "t2.11-openrouter-v1";
+  model: string; provider: string; promptVersion: "t2.11-v2"; adapterPromptVersion: "t2.11-openrouter-v1";
   // The completion response's own `provider` (first 64 characters), null when absent or not a string. Evidence only; its spelling is unsourced.
   returnedProvider: string | null;
   inputTokens: number; cachedInputTokens: number | null; outputTokens: number; reasoningTokens: number | null;
@@ -269,7 +269,7 @@ export function createOpenRouter(options: AdapterOptions) {
     const pin = pins[m];
     const { content, usage, provider, ...result } = await complete(pin, prepared, key);
     const returnedProvider = typeof provider === "string" ? Array.from(provider).slice(0, 64).join("") : null;
-    const withUsage: AssistantAdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: pin.providerName, returnedProvider, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1" } } : {} };
+    const withUsage: AssistantAdapterResult = { ...result, ...usage ? { usage: { ...usage, provider: pin.providerName, returnedProvider, promptVersion: "t2.11-v2", adapterPromptVersion: "t2.11-openrouter-v1" } } : {} };
     if (content === undefined) return withUsage;
     let parsed: unknown;
     try { parsed = JSON.parse(content); } catch { return { ...withUsage, reason: "invalid-response", failedCheck: "json" }; }

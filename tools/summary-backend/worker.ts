@@ -36,7 +36,7 @@ const maxRawAssistantBytes = 32768;
 const models = Object.keys(pins) as AssistantModel[];
 const assistantSchema = z.strictObject({
   requestId, model: z.enum(models), consentVersion: z.string(),
-  turn: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.11-v1"), question: nonblank(500), steps: z.array(z.strictObject({
+  turn: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.11-v2"), question: nonblank(500), steps: z.array(z.strictObject({
     call: z.strictObject({ tool: z.enum(tools), sessionId: z.string().max(3).nullable() }),
     result: z.strictObject({ ok: z.boolean(), facts }),
   })).max(MAX_TOOL_CALLS) }),

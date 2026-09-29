@@ -43,7 +43,7 @@ export interface AssistantReplayRow {
   injection?: { requestsEqualCleanRun: boolean; textAndTraceEqualCleanRun: boolean; sentinelAbsentFromRequests: boolean };
 }
 export interface AssistantReplayArtifact {
-  promptVersion: "t2.11-v1"; assistantInstructions: string; replySchema: object; recordings: string[];
+  promptVersion: "t2.11-v2"; assistantInstructions: string; replySchema: object; recordings: string[];
   note: string; sections: { real: AssistantReplayRow[]; synthetic: AssistantReplayRow[]; adversarial: AssistantReplayRow[] };
 }
 
@@ -131,10 +131,11 @@ export function row(dataset: string, dataTag: string, question: string, run: Awa
   };
 }
 
-export function scoreExpectation(base: AssistantReplayRow, expect: QuestionSpec["expect"], claims: readonly string[]): AssistantReplayRow {
+// Tests base.text, the rendered text the user sees: a raw claim would count the digit inside a placeholder ID such as {label:s2/cell-spread}.
+export function scoreExpectation(base: AssistantReplayRow, expect: QuestionSpec["expect"]): AssistantReplayRow {
   const answered = base.kind === "answer";
   const missingHonest = expect.missing === undefined ? null
-    : answered && (expect.missing.fact === undefined || base.citedIds.includes(expect.missing.fact)) && !claims.some((text) => /[0-9]/.test(text));
+    : answered && (expect.missing.fact === undefined || base.citedIds.includes(expect.missing.fact)) && !/[0-9]/.test(base.text);
   const met = answered && (expect.mustCite ?? []).every((id) => base.citedIds.includes(id))
     && (expect.text === undefined || base.text === expect.text) && (expect.textIncludes === undefined || base.text.includes(expect.textIncludes))
     && missingHonest !== false;
@@ -149,8 +150,7 @@ export async function createAssistantReplayArtifact(questionSet: QuestionSet, re
     const rounds = responses.questions[q.repliesFrom ?? q.id];
     const data = datasets[q.dataset];
     const run = await runSavedCase(data.sources, q.question, rounds);
-    const claims = run.result.kind === "answer" ? run.result.answer.claims.map((claim) => claim.text) : [];
-    let scored = { ...scoreExpectation(row(q.dataset, data.dataTag, q.question, run), q.expect, claims), id: q.id };
+    let scored = { ...scoreExpectation(row(q.dataset, data.dataTag, q.question, run), q.expect), id: q.id };
     const injection = questionSet.datasets[q.dataset].injection;
     if (injection !== undefined) {
       const clean = await runSavedCase(datasets[questionSet.datasets[q.dataset].base ?? ""].sources, q.question, rounds);
@@ -169,7 +169,7 @@ export async function createAssistantReplayArtifact(questionSet: QuestionSet, re
     adversarial.push({ name: a.name, ...row(a.dataset, data.dataTag, a.question, await runSavedCase(data.sources, a.question, a.rounds)) });
   }
   return {
-    promptVersion: "t2.11-v1", assistantInstructions, replySchema: assistantReplySchema,
+    promptVersion: "t2.11-v2", assistantInstructions, replySchema: assistantReplySchema,
     recordings: [...new Set(Object.values(datasets).flatMap((data) => data.recordings))],
     note: responses.label,
     sections: { real, synthetic, adversarial },

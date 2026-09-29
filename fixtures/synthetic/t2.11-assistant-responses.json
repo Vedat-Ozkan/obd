@@ -29,7 +29,7 @@
     ],
     "q07": [
       {"reply":{"version":1,"kind":"tool","tool":"get_session","sessionId":"s2","claims":null}},
-      {"reply":{"version":1,"kind":"answer","tool":null,"sessionId":null,"claims":[{"text":"Cell voltages were not read in the phone-console scan, so no average is available.","factIds":["s2/cell-spread"]}]}}
+      {"reply":{"version":1,"kind":"answer","tool":null,"sessionId":null,"claims":[{"text":"{label:s2/cell-spread} is {fact:s2/cell-spread}.","factIds":["s2/cell-spread"]}]}}
     ],
     "q08": [
       {"reply":{"version":1,"kind":"tool","tool":"list_sessions","sessionId":null,"claims":null}},

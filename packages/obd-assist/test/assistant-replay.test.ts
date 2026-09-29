@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
-import { ASSISTANT_FALLBACK_TEXT, assistantInstructions, assistantReplySchema, MAX_TOOL_CALLS } from "obd-assist";
+import { ASSISTANT_FALLBACK_TEXT, assistantInstructions, assistantReplySchema, claimGrammar, MAX_TOOL_CALLS } from "obd-assist";
 import { INTEGRATED_LABEL } from "obd-battery/capacity";
 import {
   buildDatasets, createAssistantReplayArtifact, runSavedCase,
@@ -35,7 +35,7 @@ const questionOutcomes: Readonly<Record<string, { trace: string[]; text: string;
   q06: { trace: ["get_session:s1:ok"], text: "Battery health is not assessed from a single scan.", cited: ["s1/health-status", "s1/health-reason"] },
   q07: {
     trace: ["get_session:s2:ok"],
-    text: "Cell voltages were not read in the phone-console scan, so no average is available.",
+    text: "Cell spread is unavailable.",
     cited: ["s2/cell-spread"],
   },
   q08: {
@@ -127,8 +127,12 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
   const row = (id: string) => rows().find((r) => r.id === id) as AssistantReplayRow;
 
   it("captures the prompt, reply schema and recordings, with real and synthetic rows apart", () => {
-    expect(artifact.promptVersion).toBe("t2.11-v1");
+    expect(artifact.promptVersion).toBe("t2.11-v2");
     expect(artifact.assistantInstructions).toBe(assistantInstructions);
+    // The prompt teaches the checker's grammar: the shared text, and none of the old exact-quantity or fact-ID-in-text wording.
+    expect(assistantInstructions).toContain("Assistant prompt version: t2.11-v2");
+    expect(assistantInstructions.endsWith(claimGrammar)).toBe(true);
+    for (const stale of ["Label: value unit", "never in text", "t2.11-v1"]) expect(assistantInstructions, stale).not.toContain(stale);
     expect(artifact.replySchema).toEqual(assistantReplySchema);
     expect(artifact.recordings).toEqual([
       "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl",
@@ -155,7 +159,7 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
     expect(r.expectationMet).toBe(true);
   });
 
-  it("marks missing-data answers honest only when the named fact is cited and no claim has a digit", () => {
+  it("marks missing-data answers honest only when the named fact is cited and the displayed text has no digit", () => {
     for (const id of ["q05", "q06", "q07", "q08"]) expect(row(id).missingHonest).toBe(true);
     for (const id of ["q01", "q02", "q03", "q04", "q09", "q10"]) expect(row(id).missingHonest).toBeNull();
     for (const id of ["q11", "q12"]) expect(row(id).missingHonest).toBe(true);

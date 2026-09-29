@@ -2,15 +2,15 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: Stage 1 closed (commit 6f5340c, live D1 migrated); Stage 2 APPROVE (repairs 0/2 for this stage) — committed; Stage 3 committed (6f107cd); Stage 3b committed; waiting for the owner's D1 phone re-run; then Stage 4 (implementer may start in parallel, no paid assistant run until it lands). Tool: Claude Code, orchestrator `/feature`.
+- Stage: closed (desk). Stages 1–4 APPROVE — commits 6f5340c, 2e72c73, 6f107cd, d24b369, Stage 4 below. Owner D1 phone re-run PASS (b6640624).
 - Spec: `docs/specs/X-2026-09-29-summary-placeholders.md` (Stage 1 failed-check category, 2 placeholders and rendering, 3 summary prompt v4, 4 assistant t2.11-v2).
 - Repairs: 1/2. Escalations: 0.
 - Verdicts: Stage 1 APPROVE after repair 1; Stage 2 APPROVE; Stage 3 APPROVE; Stage 3b APPROVE (2026-09-29); full `pnpm check` reproduced PASS for both.
 - Decisions in effect (owner, 2026-09-29): (1) the model never writes numeric values; it writes placeholders naming fact IDs and the app renders the exact value and unit from the report; prose stays checked. (2) Record which check failed as a category only (for example `invalid-response:facts`), never reply text.
 - Owner authorizations: this change; 2026-09-29 build all four stages; hedging words around placeholders allowed (left to semantic grading). No paid call; the owner re-runs the D1 phone gate afterwards.
-- NOT RUN: none yet.
+- NOT RUN: T2.11b paid four-arm run (owner go-ahead; tracked in docs/task-runs/T2.11.md).
 - Blocker: none. X-2026-09-29-twelve-volt-name Stage 2 is on hold until this spec decides whether it is superseded.
-- Next action: Stage 1 implementer → reviewer → commit → live D1 migration; then Stages 2, 3 (owner D1 re-run after 3), 4. No paid call or phone run between Stage 2 and Stage 3.
+- Next action: none for this task. Follow-ups: guard that summarize renders from the rebuilt projection; remove the dead `checkSummary` export; T2.11c prompt renamed to `t2.11-v3` (done by the orchestrator).
 
 ## Baseline
 
@@ -44,3 +44,5 @@ Stage 1 review 1 (fixed in repair 1): (1, major) T2.10d Interfaces `DevelopmentS
 - 2026-09-29 architect Stage 3b (Claude): delete the prose fact-ID guard, fix the reply-shape line and trim claimGrammar; prompt stays v4. Orchestrator read-only precondition: ledger unchanged (uses 5, five rows). Owner accepted ID words in prose.
 - 2026-09-29 implementer Stage 3b (Claude): items 1–4 PASS (obd-assist 260, worker 4/4, mobile flow 101); full `pnpm check` PASS. Baseline diffs: spike only the `placeholder-id-in-prose` flip plus `id-underscore-in-prose`; phone-console only the two new llm cases. Counterfactuals: (a) guard restored at `check.ts:30` → exactly `placeholder-id-in-prose`, `prose-twelve-volt-battery`, `prose-twelve-volt-battery-status`, Worker `real-recording-twelve-volt-prose` fail; (b) old reply-shape sentence → `worker.test.ts:528`; `never in text` appended elsewhere → `worker.test.ts:537`.
 - 2026-09-29 reviewer Stage 3b (Claude): APPROVE; reproduced counterfactual (a) and one variant of (b); confirmed all six Equinox signal IDs contain `_`, so only the nine digit-free IDs can appear in prose. Minor: the assistant prompt (`assistant.ts:46`) still says "never in text" until Stage 4.
+- 2026-09-29 implementer Stage 4 (Claude): items 1–3 PASS (obd-assist 260, worker 4/4); pnpm check parts green, full run red only at eslint on the owner's `.wrangler/tmp`. Counterfactuals: (a) raw-claims scorer → `assistant-replay.test.ts:159`, `:163` (q07 missingHonest false); (b) old `assistant.ts:46` line → `assistant-replay.test.ts:135`, `worker.test.ts:773`; (c) old quantity line instead of claimGrammar → `assistant-replay.test.ts:134`, `worker.test.ts:771`; (d) Worker v1-only → `worker.test.ts:732`, v1+v2 accepted → `:733/:836`; (e) eval header v1 → `worker.test.ts:979`, replies literal v1 → `:1020`. Baseline diff: only promptVersion, instructions text and q07 displayed text.
+- 2026-09-29 reviewer Stage 4 (Claude): APPROVE; reproduced counterfactual (a). Minors: T2.11a:90 wording and T2.11c version clash fixed in place by the orchestrator; duplicate prompt assertions (`assistant-replay.test.ts:133-135`, `worker.test.ts:771`) accepted.

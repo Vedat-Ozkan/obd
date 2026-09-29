@@ -206,7 +206,7 @@ async function main(args: readonly string[]): Promise<void> {
     }
   }
   const header = {
-    codeSha, codeDirty: dirty, date: runDate, promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1", questionSet: options.questions, questionSetLabel: questionSet.label,
+    codeSha, codeDirty: dirty, date: runDate, promptVersion: "t2.11-v2", adapterPromptVersion: "t2.11-openrouter-v1", questionSet: options.questions, questionSetLabel: questionSet.label,
     metadataSource: synthetic ? "synthetic harness metadata (not OpenRouter)" : openRouterBase, snapshots: metadata,
   };
   const arms: unknown[] = [];
@@ -228,8 +228,7 @@ async function main(args: readonly string[]): Promise<void> {
       const started = performance.now();
       const result = await askAssistant(data.sources, q.question, one.client);
       const wallLatencyMs = Math.round(performance.now() - started);
-      const claims = result.kind === "answer" ? result.answer.claims.map((claim) => claim.text) : [];
-      const scored = scoreExpectation(row(q.dataset, data.dataTag, q.question, { result, requests: one.requests, calls: one.requests.length }), q.expect, claims);
+      const scored = scoreExpectation(row(q.dataset, data.dataTag, q.question, { result, requests: one.requests, calls: one.requests.length }), q.expect);
       const costs = one.rounds.map((item) => item.providerCostUsd);
       const latencies = one.rounds.map((item) => item.providerLatencyMs);
       rows.push({
@@ -254,7 +253,7 @@ async function main(args: readonly string[]): Promise<void> {
       writeFileSync(repliesFile, `${JSON.stringify({
         label: synthetic ? DRY_LABEL : LIVE_LABEL, model, canonicalSlug: pin.canonicalSlug, providerTag: pin.providerTag,
         returnedProviders: [...new Set(rows.flatMap((item) => item.rounds ?? []).flatMap((item) => item.returnedProvider === null ? [] : [item.returnedProvider]))],
-        promptVersion: "t2.11-v1", adapterPromptVersion: "t2.11-openrouter-v1", runDate, codeSha, evalArtifact: basename(options.out), questions: savedQuestions, adversarial: [],
+        promptVersion: "t2.11-v2", adapterPromptVersion: "t2.11-openrouter-v1", runDate, codeSha, evalArtifact: basename(options.out), questions: savedQuestions, adversarial: [],
       }, null, 2)}\n`);
     }
     arms.push({ model, pin: { canonicalSlug: pin.canonicalSlug, providerName: pin.providerName, providerTag: pin.providerTag }, maxSpendUsd: options.capsUsd[index], spentBeforeMicroUsd: before, spentAfterMicroUsd: after, stoppedBy, injection: verdict, repliesFile: repliesFile === null ? null : basename(repliesFile), rows });
