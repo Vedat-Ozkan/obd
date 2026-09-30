@@ -10,7 +10,7 @@ export interface SummaryFact {
   tier?: "verified" | "community";
   status?: string;
 }
-export interface SummaryRequest { version: 1; promptVersion: "t2.10-v3"; facts: readonly SummaryFact[] }
+export interface SummaryRequest { version: 1; promptVersion: "t2.10-v4"; facts: readonly SummaryFact[] }
 export interface SummaryClaim { text: string; factIds: readonly string[] }
 export interface StructuredSummary { version: 1; claims: readonly SummaryClaim[] }
 export type SummaryArea = ReportArea;
@@ -19,10 +19,11 @@ export interface LlmClient {
   generate(request: SummaryRequest, options: { model: string; effort: "none" | "low" }): Promise<unknown>;
 }
 
-export const summaryInstructions = `Summary prompt version: t2.10-v3. Explain this battery check to a used-EV buyer who has not used the app.
+export const summaryInstructions = `Summary prompt version: t2.10-v4. Explain this battery check to a used-EV buyer who has not used the app.
 Write one takeaway sentence about the whole check. Then, for each area in order (soc: state of charge; cells: cell balance; capacity: battery capacity; twelveVolt: the twelve-volt battery; codes: diagnostic trouble codes), write two or three claims, each one sentence: what it is, why a used-EV buyer cares, and what this check shows or what would be needed to know more. Never put two sentences in one claim.
 General knowledge may explain what an item is, why it matters and what to check next. Anything about this car must come from the supplied facts. Keep community and missing-data labels.
 {label:ID} names an item and {fact:ID} is its value; write each {fact:ID} at most once in a claim.
+A reason fact is a clause that starts in lower case: introduce it with "because" or a colon, as in: Capacity was not measured because {fact:capacity-reason}.
 The app prints each area's own rating and its basis above your sentences. Never judge this car yourself: claim text never contains these words, in any capitalization: ${verdictWords.join(", ")}. Never cite a fact whose ID ends in -rating or -rating-basis; the reason facts say what is missing.`;
 
 const formatNumber = (value: number): string => String(Math.round(value * 10000) / 10000);
@@ -82,6 +83,16 @@ function codeRollups(report: BatteryDiagnosisReport): SummaryFact[] {
   ];
 }
 
+const statusFactIds: ReadonlySet<string> = new Set(["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared"]);
+const reasonFactIds: ReadonlySet<string> = new Set(["capacity-reason", "health-reason", "twelve-volt-reason"]);
+
+/** Display form for the summary only: the report's status tokens as plain words, and its reasons as clauses that read mid-sentence. `status` keeps the raw token. */
+function displayFact(item: SummaryFact): SummaryFact {
+  if (statusFactIds.has(item.id)) return { ...item, value: item.value.replaceAll("-", " ") };
+  if (reasonFactIds.has(item.id)) return { ...item, value: `${item.value.charAt(0).toLowerCase()}${item.value.slice(1)}`.replace(/\.$/, "") };
+  return item;
+}
+
 /** Produce the only report projection that may be sent to a summary provider: the report's facts, then the app's rating for each area as context the model may not cite. */
 export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRequest {
   const ratings = reportRatings(report);
@@ -89,7 +100,7 @@ export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRe
     fact(`${prefix}-rating`, `${title} rating`, ratingWord[ratings[area].rating], { status: ratings[area].rating }),
     fact(`${prefix}-rating-basis`, `${title} rating basis`, ratings[area].basis, { status: "available" }),
   ]);
-  return { version: 1, promptVersion: "t2.10-v3", facts: [...reportFacts(report).filter((item) => !/^(codes|readiness)-\d/.test(item.id)), ...codeRollups(report), ...ratingFacts] };
+  return { version: 1, promptVersion: "t2.10-v4", facts: [...reportFacts(report).filter((item) => !/^(codes|readiness)-\d/.test(item.id)).map(displayFact), ...codeRollups(report), ...ratingFacts] };
 }
 
 /** Rebuild the local allowlist so server-supplied facts cannot be trusted. */

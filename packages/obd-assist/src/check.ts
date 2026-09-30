@@ -5,7 +5,7 @@ const factSchema = z.strictObject({
   id: z.string().trim().min(1), label: z.string().trim().min(1), value: z.string().trim().min(1),
   unit: z.string().trim().min(1).optional(), tier: z.enum(["verified", "community"]).optional(), status: z.string().trim().min(1).optional(),
 });
-const requestSchema = z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v3"), facts: z.array(factSchema) });
+const requestSchema = z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v4"), facts: z.array(factSchema) });
 const claimSchema = z.strictObject({ text: z.string().transform((text) => text.replace(/^ +| +$/g, "")).pipe(z.string().min(1)), factIds: z.array(z.string().trim().min(1)).min(1) });
 const summarySchema = z.strictObject({ version: z.literal(1), claims: z.array(claimSchema).min(1) });
 const areaSchema = <A extends SummaryArea>(area: A) => z.strictObject({ area: z.literal(area), claims: z.array(claimSchema).min(1).max(3) });
@@ -106,7 +106,11 @@ export function renderSummary(facts: readonly SummaryFact[], summary: AreaSummar
     if (!found) throw new Error("summary is missing a rating fact");
     return found.value;
   };
-  const render = (claim: SummaryClaim) => renderClaims(facts, { version: 1, claims: [claim] });
+  // Display only, after rendering, so the checker's input is unchanged: a claim starting with a reason clause reads as a sentence, and one ending in a bare clause is closed.
+  const render = (claim: SummaryClaim) => {
+    const text = renderClaims(facts, { version: 1, claims: [claim] });
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? "" : "."}`;
+  };
   return [
     render(summary.takeaway),
     ...SUMMARY_AREAS.flatMap(({ title, prefix }, index) => [

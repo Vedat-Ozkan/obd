@@ -2,7 +2,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
 import { batteryDiagnosisFromRecording, renderBatteryDiagnosis } from "obd-battery/report";
-import { summarize, type LlmClient, type SummaryRequest } from "obd-assist";
+import { summarize, summaryInstructions, type LlmClient, type SummaryRequest } from "obd-assist";
+import { verdictWords } from "../src/check.js";
+import { reportFacts } from "../src/summary.js";
 import { createClaimReplayArtifact, createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase } from "../scripts/replay-summary.js";
 
 const root = new URL("../../../", import.meta.url);
@@ -344,7 +346,7 @@ Cell balance compares the highest and lowest cell voltages; a wide gap can point
 
 Capacity
 Rating: Not rated. Basis: No threshold yet.
-Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: No completed charge log and reviewed capacity estimator are available.
+Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: no completed charge log and reviewed capacity estimator are available.
 
 12 V battery
 Rating: Not rated. Basis: No threshold yet.
@@ -383,7 +385,7 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
     expect(explanatoryKinds[saved.name]).toBeDefined();
     expect(result.kind).toBe(explanatoryKinds[saved.name]);
     // The projection carries the app's rating for every area, after the report's own facts.
-    expect(request?.promptVersion).toBe("t2.10-v3");
+    expect(request?.promptVersion).toBe("t2.10-v4");
     // The projection sent out carries no path, scan time, garage id, header or VIN, for real and synthetic-report cases alike.
     expect(JSON.stringify(request)).not.toMatch(/summary-replay|2026-09-22T00:00:00.000Z|2026-09-22-spike\.redacted|18DAF1|VIN/i);
     expect(request?.facts.slice(-10).map((fact) => fact.id)).toEqual(["soc", "cells", "capacity", "twelve-volt", "codes"].flatMap((prefix) => [`${prefix}-rating`, `${prefix}-rating-basis`]));
@@ -406,7 +408,7 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
   it("writes the replay artifact the public CLI helper produces", async () => {
     const artifact = await createSummaryReplayArtifact(report, explanatory);
     writeFileSync("/tmp/x-explanatory-spike.json", `${JSON.stringify(artifact, null, 2)}\n`);
-    expect(artifact.promptVersion).toBe("t2.10-v3");
+    expect(artifact.promptVersion).toBe("t2.10-v4");
     expect(explanatory.cases.map((saved) => saved.name)).toEqual(Object.keys(explanatoryKinds));
     expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual(Object.entries(explanatoryKinds));
   });
@@ -427,7 +429,7 @@ Cell balance compares the highest and lowest cell voltages. A wide gap can point
 
 Capacity
 Rating: Not rated. Basis: No threshold yet.
-Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: No completed charge log and reviewed capacity estimator are available.
+Capacity is how much energy the battery can still hold, which sets the car's real driving range. It was not measured: no completed charge log and reviewed capacity estimator are available.
 
 12 V battery
 Rating: Not rated. Basis: No threshold yet.
@@ -482,7 +484,100 @@ describe("claim-split summary v3 on the spike recording (synthetic replies)", ()
   it("writes the replay artifact the public CLI helper produces", async () => {
     const artifact = await createSummaryReplayArtifact(report, claimSplit);
     writeFileSync("/tmp/x-claim-split-spike-test.json", `${JSON.stringify(artifact, null, 2)}\n`);
-    expect(artifact.promptVersion).toBe("t2.10-v3");
+    expect(artifact.promptVersion).toBe("t2.10-v4");
     expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual(Object.entries(splitKinds));
+  });
+});
+
+// Summary v4 (X-2026-09-29-summary-wording-polish): display forms in the projection, two sentence rules at render. Every reply is SYNTHETIC.
+const polish = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-summary-wording-polish-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
+const polishText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
+
+State of charge
+Rating: Not rated. Basis: The app does not rate state of charge.
+State of charge is how full the high-voltage battery is, like a fuel gauge. This check read SoC: 69.8039 percent. It shows the charge at the time of the check, not the battery's condition.
+
+Cell balance
+Rating: Not rated. Basis: No threshold yet.
+Cell balance compares the highest and lowest cell voltages. A wide gap can point to a cell group that ages faster. Here the Cell spread is 0.003 volts, a community reading.
+
+Capacity
+Rating: Not rated. Basis: No threshold yet.
+This check reports capacity as not measured. To know more, a buyer would need no completed charge log and reviewed capacity estimator are available. A single scan and community cell readings cannot establish battery health.
+
+12 V battery
+Rating: Not rated. Basis: No threshold yet.
+The twelve-volt battery powers the car's computers and wakes the high-voltage system. The twelve-volt status is not assessed. The reason given is that in-car adapter and control-module supply voltage are not rested battery-terminal measurements; a load test or service assessment is needed for battery health.
+
+Diagnostic codes
+Rating: Good. Basis: Project policy: no codes reported, and the recently-cleared check says no.
+Stored diagnostic codes: none (5 of 5 modules read). Pending diagnostic codes: none (5 of 5 modules read); Permanent diagnostic codes: none (3 of 5 modules read). Readiness status: 5 of 5 modules read; the recently-cleared check was not indicated.`;
+const polishCapacityForm = "This check reports capacity as not measured. It was not measured because no completed charge log and reviewed capacity estimator are available. A single scan and community cell readings cannot establish battery health.";
+
+describe("wording polish v4 on the spike recording (synthetic replies)", () => {
+  let report: Awaited<ReturnType<typeof replayReport>>;
+  beforeAll(async () => { report = await replayReport(); });
+
+  it("labels the fixture synthetic", () => {
+    expect(polish.label).toBe("SYNTHETIC hand-written v4 summary replies reproducing the owner's 2026-09-29 run phrasing (request 498a2d47); not recorded model output");
+    expect(polish.cases.map((saved) => [saved.name, saved.report])).toEqual([["polish-owner-phrasing", "synthetic-not-indicated-no-recording"], ["polish-prompt-form", "synthetic-not-indicated-no-recording"]]);
+  });
+
+  // Failure 1: the display forms are wrong, or leak into the report facts the assistant reads.
+  it("sends plain status words and lower-case reasons, and leaves reportFacts raw", async () => {
+    let request: SummaryRequest | undefined;
+    await summarize(report, { generate(input) { request = input; return Promise.resolve(undefined); } }, { model: "saved-response", effort: "none" });
+    const sent = new Map((request?.facts ?? []).map((item) => [item.id, item]));
+    const shown = (id: string) => sent.get(id)?.value;
+    expect(request?.promptVersion).toBe("t2.10-v4");
+    expect(request?.facts).toHaveLength(28);
+    expect(shown("capacity-status")).toBe("not measured");
+    expect(shown("health-status")).toBe("not assessed");
+    expect(shown("twelve-volt-status")).toBe("not assessed");
+    expect(shown("codes-recently-cleared")).toBe("unknown");
+    expect(shown("capacity-reason")).toBe("no completed charge log and reviewed capacity estimator are available");
+    expect(shown("health-reason")).toBe("a single scan and community cell readings cannot establish battery health");
+    expect(shown("twelve-volt-reason")).toBe("in-car adapter and control-module supply voltage are not rested battery-terminal measurements; a load test or service assessment is needed for battery health");
+    const displayIds = ["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared", "capacity-reason", "health-reason", "twelve-volt-reason"];
+    const raw = reportFacts(report);
+    // Only the seven display facts differ from the report's own facts, and only in value.
+    for (const item of raw.filter((candidate) => sent.has(candidate.id))) {
+      const projected = sent.get(item.id);
+      if (displayIds.includes(item.id)) expect(projected, item.id).toEqual({ ...item, value: projected?.value });
+      else expect(projected, item.id).toEqual(item);
+    }
+    // The spike's recently-cleared verdict is "unknown", which has no hyphen to change; the other six differ from the raw value.
+    expect(displayIds.filter((id) => sent.get(id)?.value !== raw.find((item) => item.id === id)?.value)).toEqual(displayIds.filter((id) => id !== "codes-recently-cleared"));
+    expect(["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared", "capacity-reason", "health-reason", "twelve-volt-reason"].map((id) => sent.get(id)?.status)).toEqual(["not-measured", "not-assessed", "not-assessed", "unknown", "missing", "missing", "available"]);
+    expect(raw.find((item) => item.id === "capacity-status")?.value).toBe("not-measured");
+    expect(raw.find((item) => item.id === "capacity-reason")?.value).toMatch(/^No completed charge log.*available\.$/);
+    for (const id of ["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared"]) {
+      const words = shown(id) ?? "";
+      expect(words, id).not.toMatch(/\d/);
+      expect(words.split(/[^a-z]+/).filter((word) => verdictWords.includes(word)), id).toEqual([]);
+    }
+  });
+
+  // Failures 2 and 3: the owner's phrasing renders robotically, or the prompt's own form leaves a doubled period.
+  it.each(polish.cases)("saved reply $name", async (saved) => {
+    const caseReport = reportForSavedCase(report, saved);
+    const result = await summarize(caseReport, { generate() { return Promise.resolve(saved.response); } }, { model: "saved-response", effort: "none" });
+    expect(result.kind).toBe("llm");
+    if (saved.name === "polish-owner-phrasing") expect(result.text).toBe(polishText);
+    else {
+      expect(result.text.split("\n")[12]).toBe(polishCapacityForm);
+      expect(result.text).not.toContain("..");
+    }
+  });
+
+  it("teaches the reason form in the prompt", () => {
+    expect(summaryInstructions).toContain("A reason fact is a clause that starts in lower case: introduce it with \"because\" or a colon, as in: Capacity was not measured because {fact:capacity-reason}.\n");
+  });
+
+  it("writes the replay artifact the public CLI helper produces", async () => {
+    const artifact = await createSummaryReplayArtifact(report, polish);
+    writeFileSync("/tmp/x-wording-polish-spike-test.json", `${JSON.stringify(artifact, null, 2)}\n`);
+    expect(artifact.promptVersion).toBe("t2.10-v4");
+    expect(artifact.cases.map((item) => [item.name, item.kind])).toEqual([["polish-owner-phrasing", "llm"], ["polish-prompt-form", "llm"]]);
   });
 });

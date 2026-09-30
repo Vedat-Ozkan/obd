@@ -28,7 +28,7 @@ const facts = z.array(z.strictObject({
 const requestSchema = z.strictObject({
   requestId,
   consentVersion: z.literal("t2.10-openrouter-deepseek-v1"),
-  request: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v3"), facts }),
+  request: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v4"), facts }),
 });
 const tools = assistantReplySchema.properties.tool.enum.filter((name) => name !== null);
 // Raw request cap; the outgoing body has its own cap (maxAssistantBodyBytes).

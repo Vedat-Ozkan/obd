@@ -35,7 +35,7 @@ const url = "http://192.168.1.20:8788";
 const rows: Record<string, unknown>[] = [];
 let reports: BatteryDiagnosisReport[];
 const ids = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
-const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v3", adapterPromptVersion: "t2.10-openrouter-v6", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
+const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v4", adapterPromptVersion: "t2.10-openrouter-v7", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
 const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
 const accepted = savedReply("explanatory-accepted");
@@ -91,6 +91,11 @@ describe("recording → public development flow → HTTP access → local checke
     for (const title of ["State of charge", "Cell balance", "Capacity", "12 V battery", "Diagnostic codes"]) expect(view.text).toContain(`\n\n${title}\nRating: `);
     for (const row of reportSummary(reports[index]).rows) expect(view.text).toContain(`\n\n${row.label}\nRating: ${ratingWord[row.rating.rating]}. Basis: ${row.rating.basis}.\n`);
     expect(view.text).not.toContain("{");
+    // X-2026-09-29-summary-wording-polish item 3: status words and reasons read as plain prose on every recording.
+    const sections = view.text.split("\n\n");
+    expect(sections[3].split("\n")[2]).toBe("Capacity was not measured: no completed charge log and reviewed capacity estimator are available.");
+    expect(sections[4].split("\n")[2]).toBe("The twelve-volt battery status is not assessed.");
+    expect(view.text).not.toMatch(/not-measured|not-assessed|not-indicated/);
     // The codes area reads the four roll-ups, each with its coverage; the phone console read only stored.
     const codesLine = view.text.split("\n\n").at(-1)?.split("\n")[2];
     expect(codesLine).toContain("Stored diagnostic codes: none (5 of 5 modules read). ");
@@ -337,7 +342,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   const badFields: [string, unknown][] = [
     ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 2049], ["outputTokens", -1],
     ["cachedInputTokens", 201], ["reasoningTokens", 21], ["providerCostUsd", -0.1], ["providerCostUsd", 1.01], ["estimatedUsd", null], ["estimatedUsd", 1.01],
-    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["promptVersion", "t2.10-v2"], ["adapterPromptVersion", "t2.10-openrouter-v5"], ["model", "private-evidence-sentinel".repeat(1000)],
+    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["promptVersion", "t2.10-v2"], ["adapterPromptVersion", "t2.10-openrouter-v5"], ["promptVersion", "t2.10-v3"], ["adapterPromptVersion", "t2.10-openrouter-v6"], ["model", "private-evidence-sentinel".repeat(1000)],
   ];
   it.each(badFields.map(([field, value], index) => ({ field, value, index })))("drops malformed usage $index $field independently of checked content", async ({ field, value, index }) => {
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: { ...validUsage, [field]: value } })));

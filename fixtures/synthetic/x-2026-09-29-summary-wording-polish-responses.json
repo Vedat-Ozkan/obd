@@ -1,0 +1,269 @@
+{
+  "label": "SYNTHETIC hand-written v4 summary replies reproducing the owner's 2026-09-29 run phrasing (request 498a2d47); not recorded model output",
+  "cases": [
+    {
+      "name": "polish-owner-phrasing",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "This check reports capacity as {fact:capacity-status}.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "To know more, a buyer would need {fact:capacity-reason}.",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              },
+              {
+                "text": "{fact:health-reason}",
+                "factIds": [
+                  "health-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The twelve-volt status is {fact:twelve-volt-status}",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The reason given is that {fact:twelve-volt-reason}",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently-cleared check was {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-not-indicated-no-recording"
+    },
+    {
+      "name": "polish-prompt-form",
+      "response": {
+        "version": 2,
+        "takeaway": {
+          "text": "This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.",
+          "factIds": [
+            "capacity-status"
+          ]
+        },
+        "areas": [
+          {
+            "area": "soc",
+            "claims": [
+              {
+                "text": "State of charge is how full the high-voltage battery is, like a fuel gauge.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "This check read {label:signal-EQUINOXEV_SOC}: {fact:signal-EQUINOXEV_SOC}.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              },
+              {
+                "text": "It shows the charge at the time of the check, not the battery's condition.",
+                "factIds": [
+                  "signal-EQUINOXEV_SOC"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "cells",
+            "claims": [
+              {
+                "text": "Cell balance compares the highest and lowest cell voltages.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "A wide gap can point to a cell group that ages faster.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              },
+              {
+                "text": "Here the {label:cell-spread} is {fact:cell-spread}, a community reading.",
+                "factIds": [
+                  "cell-spread"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "capacity",
+            "claims": [
+              {
+                "text": "This check reports capacity as {fact:capacity-status}.",
+                "factIds": [
+                  "capacity-status"
+                ]
+              },
+              {
+                "text": "It was not measured because {fact:capacity-reason}.",
+                "factIds": [
+                  "capacity-reason"
+                ]
+              },
+              {
+                "text": "{fact:health-reason}",
+                "factIds": [
+                  "health-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "twelveVolt",
+            "claims": [
+              {
+                "text": "The twelve-volt battery powers the car's computers and wakes the high-voltage system.",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The twelve-volt status is {fact:twelve-volt-status}",
+                "factIds": [
+                  "twelve-volt-status"
+                ]
+              },
+              {
+                "text": "The reason given is that {fact:twelve-volt-reason}",
+                "factIds": [
+                  "twelve-volt-reason"
+                ]
+              }
+            ]
+          },
+          {
+            "area": "codes",
+            "claims": [
+              {
+                "text": "{label:codes-stored}: {fact:codes-stored}.",
+                "factIds": [
+                  "codes-stored"
+                ]
+              },
+              {
+                "text": "{label:codes-pending}: {fact:codes-pending}; {label:codes-permanent}: {fact:codes-permanent}.",
+                "factIds": [
+                  "codes-pending",
+                  "codes-permanent"
+                ]
+              },
+              {
+                "text": "{label:readiness}: {fact:readiness}; the recently-cleared check was {fact:codes-recently-cleared}.",
+                "factIds": [
+                  "readiness",
+                  "codes-recently-cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "report": "synthetic-not-indicated-no-recording"
+    }
+  ]
+}
