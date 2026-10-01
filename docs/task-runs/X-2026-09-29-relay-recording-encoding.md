@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: closed (desk). APPROVE (repairs 1/2) — commit below. Tool: Claude Code, orchestrator `/feature`.
+- Stage: closed (desk). APPROVE (repairs 1/2) — commit f58887d. Tool: Claude Code, orchestrator `/feature`.
 - Spec: `docs/specs/X-2026-09-29-relay-recording-encoding.md` (size S; 0 open questions).
 - Repairs: 1/2. Escalations: 0.
 - Verdicts: APPROVE after repair 1 (2026-09-29).
@@ -10,7 +10,7 @@
 - Owner authorizations: 2026-09-29 owner asked for this task ("do 1-4 in any order you want"); scope taken as confirmed by that instruction, no separate confirmation.
 - NOT RUN: owner `pnpm hil:smoke` re-run, redact and replay (phone and car).
 - Blocker: none.
-- Next action: owner re-runs Owner re-runs `pnpm hil:smoke` after the fix (the 2026-09-28 raw file is not converted).
+- Next action: owner re-runs `pnpm hil:smoke` after the fix (the 2026-09-28 raw file is not converted).
 
 ## Baseline
 

@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-09-29)
 
-- Stage: closed (desk). APPROVE (repairs 0/2) — commit below. Summary work paused by the owner.
+- Stage: closed (desk). APPROVE (repairs 0/2) — commit 06d4826. Summary work paused by the owner.
 - Spec: `docs/specs/X-2026-09-29-summary-wording-polish.md` (size S; display forms in the summary projection only, two render rules, prompt t2.10-v4 / adapter v7).
 - Repairs: 0/2. Escalations: 0.
 - Verdicts: APPROVE (2026-09-29); pnpm check parts green (full run red only on the owner's running wrangler bundle).
