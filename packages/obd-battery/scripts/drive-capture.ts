@@ -5,7 +5,8 @@ import { parseElmResponse } from "../../obd-core/src/elm/reader.js";
 import { reassemble } from "../../obd-core/src/elm/isotp.js";
 import { parseRecording, type RecordingLine } from "../../obd-core/src/recording/format.js";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/obdb/import.js";
-import { chargeLogFromRecording, num, span, type Point } from "../src/session.js";
+import { GROUP_EXCESS_LIMIT_MOHM, LOAD_A, groupsUnderLoad, median as medianOf } from "../src/driveGroups.js";
+import { chargeLogFromRecording, num, span, type ChargeLog, type Point } from "../src/session.js";
 
 // Layout: docs/specs/T2.12-test-drive-capture.md §Design, Analysis script. Decoding is chargeLogFromRecording's (T2.4); this file only
 // measures the times and the steps around the decoded samples.
@@ -47,7 +48,24 @@ function rawHex(text: string): string {
   return frame === undefined ? "none" : [...frame.data.subarray(3)].map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join("") || "empty";
 }
 
-export async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string): Promise<string> {
+/** Current at t, linearly interpolated from the samples; the nearest sample when there is one on only one side. */
+function currentAt(current: readonly Point[], t: number): number {
+  const i = current.findIndex((p) => p.t >= t);
+  const after = i < 0 ? undefined : current.at(i); const before = i < 0 ? current.at(-1) : i > 0 ? current.at(i - 1) : undefined;
+  if (before === undefined || after === undefined) return (before ?? after)?.value ?? 0;
+  return before.value + (after.value - before.value) * (t - before.t) / (after.t - before.t);
+}
+
+/** Spec T2.13 §Synthetic weak group: a connection-resistance rise scales with current (docs/ML.md §BM3). Applies to every complete set. */
+function withWeakGroup(log: ChargeLog, inject: { group: number; excessMohm: number }): ChargeLog {
+  const groups = log.groups.map((set) => {
+    const drop = inject.excessMohm / 1000 * currentAt(log.current, set.t);
+    return { ...set, volts: set.volts.map((v, g) => g === inject.group ? v - drop : v) };
+  });
+  return { ...log, groups, synthetic: true };
+}
+
+export async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string, inject?: { group: number; excessMohm: number }): Promise<string> {
   const signals = importObdbMode22(JSON.parse(readFileSync(resolve(root, "packages/obd-core/vehicles/chevrolet-equinox-ev/default.json"), "utf8")));
   const log = await chargeLogFromRecording(lines, recording, signals);
 
@@ -143,11 +161,38 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   const raw = txs.flatMap((tx, i) => tx.command === "22 2AF1" ? [rawHex(replyText(lines, txLine[i] ?? 0))] : []);
   const amps = log.current.map((p) => p.value);
 
+  // T2.13 §The measure. Only this section sees the injected log.
+  const under = groupsUnderLoad(inject === undefined ? log : withWeakGroup(log, inject));
+  const excess = sortedCopy(under.groups.map((g) => g.excessMohm));
+  const named = (index: number) => `group ${String(index + 1)} (module ${String(under.groups[index]?.module ?? "?")})`;
+  const byExcess = [...under.groups].sort((a, b) => a.excessMohm - b.excessMohm);
+  const [lowest, highest] = [byExcess.at(0), byExcess.at(-1)];
+  const groupSection = [
+    "## Groups under load",
+    "",
+    `Each group's volts minus the set median, regressed on the set's mean bracketing current over steady sets; excess = -1000 x slope (mΩ), lower bound = excess - Z x SE.`,
+    "",
+    `- Status: ${under.status}${under.reason === undefined ? "" : ` (${under.reason})`}`,
+    `- Sets: ${String(under.completeSets)} complete, ${String(under.steadySets)} steady, ${String(under.loadedSets)} loaded (|I| >= ${String(LOAD_A)} A)`,
+    ...(under.status === "checked" && under.currentRange !== undefined && highest !== undefined && lowest !== undefined ? [
+      `- Steady current: ${num(under.currentRange.min)} A to ${num(under.currentRange.max)} A`,
+      `- Excess (mΩ): median ${num(medianOf(excess))}, max ${num(highest.excessMohm)} at ${named(highest.index)}, min ${num(lowest.excessMohm)} at ${named(lowest.index)}`,
+      `- Max lower bound (mΩ): ${num(Math.max(...under.groups.map((g) => g.lowerMohm)))}`,
+      `- Median group resistance, recorded only (mΩ): ${num(under.medianGroupMohm ?? NaN)}`,
+      `- L = ${String(GROUP_EXCESS_LIMIT_MOHM)} mΩ`,
+      `- Flagged: ${under.flagged.length === 0 ? "none" : under.flagged.map(named).join(", ")}`,
+    ] : [
+      `- L = ${String(GROUP_EXCESS_LIMIT_MOHM)} mΩ`,
+      "- Flagged: none",
+    ]),
+    "",
+  ];
+
   const out = [
     `# Test drive: ${recording}`,
     "",
     `Recording: ${recording}`,
-    `Synthetic: ${log.synthetic ? "yes" : "no"}`,
+    inject === undefined ? `Synthetic: ${log.synthetic ? "yes" : "no"}` : `Synthetic: yes (group ${String(inject.group + 1)} +${num(inject.excessMohm)} mΩ injected into a real log)`,
     `Stop: ${stopLine?.dir === "meta" && typeof stopLine.note === "string" ? stopLine.note.slice("test drive stopped:".length).trim() : "none recorded"}`,
     `Span: ${first === undefined || last === undefined ? "no tx" : `${num(span(first.t, last.t))} s (t=${num(first.t)} to t=${num(last.t)})`}`,
     `Sessions: ${String(Math.max(1, (log.sessions ?? []).length))}${boundaries.length === 0 ? "" : ` (${boundaries.map((s) => `${s.reason} at t=${num(s.t)}`).join("; ")})`}`,
@@ -193,6 +238,7 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
       ...largest.map((s) => `| ${num(s.a.point.t)} | ${num(span(s.a.point.t, s.b.point.t))} | ${num(s.a.point.value)} → ${num(s.b.point.value)} | ${num(s.va.point.value)} → ${num(s.vb.point.value)} | ${mohm(s.r)} | ${lineOf(s.a.tx)}, ${lineOf(s.va.tx)}, ${lineOf(s.b.tx)}, ${lineOf(s.vb.tx)} |`),
       "",
     ]),
+    ...groupSection,
     "## Context",
     "",
     `- SOC (2B43): ${socs.length === 0 ? "none" : `first ${num(socs[0]?.value ?? NaN)} % at t=${num(socs[0]?.t ?? NaN)}, last ${num(socs.at(-1)?.value ?? NaN)} % at t=${num(socs.at(-1)?.t ?? NaN)}`}`,
