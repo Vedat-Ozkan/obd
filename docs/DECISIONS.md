@@ -23,8 +23,12 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 | 015 Equinox EV required; ICE cars optional bench | Current |
 | 016 Measurement-first battery ML; LLM only explains | Current |
 | 017 Committed recordings mask VIN serial | Current; raw-original commits up to `c88dffa` accepted by owner |
-| 018 Battery diagnosis stays in the garage; PDF waits for beta | Current |
+| 018 Battery diagnosis stays in the garage; PDF waits for beta | Current, as amended by 022 (labeled BMS capacity figure) and 023 (red-flag screen) |
 | 019 Automatic beta upload via Cloudflare R2 + Worker | Current (accepted 2026-09-25) |
+| 020 Hosted DeepSeek summary funded by optional rewarded ads | Current (accepted 2026-09-26) |
+| 021 Android first, iOS-ready | Current (accepted 2026-09-28) |
+| 022 Three check modes; test-drive check; charge log paused | Current, as amended by 023 (the drive's headline is cell groups under load, not pack resistance) |
+| 023 Buyer check: a red-flag screen from a parked scan, an optional short drive and a rescan | Current (accepted 2026-10-01) |
 
 ## ADR-001: Android only until Phase 3 (2026-09-16)
 
@@ -249,3 +253,28 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 **Open, for the charge-log redesign.** Owner idea (2026-09-28): connect only at the two ends of an overnight charge. Both ends can be rested (parked before plug-in, hours after the charge ends), which suits OCV-anchored SOC. What is missing is the charge that went in: current integration needs the whole session, `27AF` is the BMS's own estimate (discovery §7.5), and charger-reported kWh (the Gate B fallback) carries charger losses and a wider band. A cumulative charge or energy throughput counter on the BECM would close the gap; none is verified. Decide in a new task before BM1/BM2 depend on it.
 
 **Amends ADR-018** (the parked scan shows the labeled BMS figure; capacity measured only by a charge log remains NOT MEASURED) and the Phase 2 milestone in `docs/PLAN.md` (the charge-log capacity item is paused; T2.12–T2.13 added). **Unchanged:** read-only toward the vehicle (hard rule 5), hard rule 1 sourcing for every DID and scaling, and BM1–BM3 still need charge data.
+
+## ADR-023: Buyer check: a red-flag screen from a parked scan, an optional short drive and a rescan (2026-10-01, Accepted)
+
+**Decision.** Owner, 2026-10-01. A buyer should reach a verdict in 10–30 minutes, at relative confidence, not absolute.
+
+1. **Red-flag screen.** A check ends in one of three outcomes: "No red flags found", "Ask about this", or "Red flag: get it inspected". It is always shown with a coverage list: each check, whether it ran, and why not if it did not. The worst finding sets the outcome. "No red flags found" needs the core checks (codes read, cell groups at rest) to have run and always means "among the checks listed"; otherwise the headline is "Check incomplete". It is not a score, a grade or a health certificate.
+2. **Rating basis.** Until fleet data exists, findings rest on self-comparison (each cell group against the other 79 in the same pack) and on limits labeled "project policy", as the codes rating already is (`packages/obd-battery/src/rating.ts`). Each limit is a named constant, written in a spec with the recordings it was set from before it is applied.
+3. **Parked scan** (about 1 min) gains the 80 cell-group voltages over a few cycles, the labeled BMS capacity figure `27AF` ÷ SOC (ADR-022; shown, not judged, until a reference is sourced), and the raw pack temperature sensors' agreement.
+4. **Drive** (optional, 10 or 20 min). Its headline is each cell group's sag under load against the other groups, followed by an automatic codes rescan compared with the pre-drive scan. Absolute pack resistance is recorded, not shown.
+5. **Manufacturer codes per module** (UDS service `19`, ReadDTCInformation) move from Phase 3 into Phase 2. Read-only, default session only, on the five modules recorded as answering (`17`, `28`, `40`, `45`, `CB`). The report shows code and status only.
+
+**Why.** The report gave a buyer four "Not rated" areas out of five and no overall answer. The two 2026-09-30 test drives (`fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-drive.redacted.jsonl` and `-2`) showed which measurements hold up in the time available:
+- Absolute pack resistance failed T2.12's criterion G3: the step estimate's interquartile range was 214–313 % of its median, and there is no sourced reference resistance or verified temperature to label it with (`docs/test-drive-2026-09.md`).
+- Comparing each cell group with the other 79 needs no outside reference. One car gives no ground truth for absolute health; it does give 79 references for each group.
+- Capacity cannot be measured in a drive (ADR-022). The BMS figure is the only capacity number a buyer can get, so it is shown with its label.
+- Components other than the battery can only be covered through what the car reports in codes, and standard OBD codes are a small part of that.
+
+**Limits to state in the app and the specs.** Self-comparison cannot see a pack that has degraded evenly. Policy limits are set from one healthy car, and their sensitivity is shown only on injected faults (hard rule 11: synthetic and real results in separate tables; the drive rule is written before the confirming drive). A flagged group may be a sensor offset, which is why the wording is "get it inspected".
+
+**Amends.**
+- ADR-018: "does not certify battery health" and `health: not-assessed` stay; the report now carries the red-flag screen with its coverage list. A post-drive report may point to the pre-drive report of the same garage entry; each still cites only its own recording.
+- ADR-022 mode 2: the headline changes from pack resistance to cell groups under load plus the rescan. Temperature bins wait for a verified temperature scaling (T2.17). The drive's AI summary (owner, 2026-09-29) is deferred.
+- `docs/PLAN.md`: the Phase 2 milestone, the T2.13 row, new rows T2.14–T2.18, and the Phase 3 `19 02` bullet (enumerating further modules stays in Phase 3).
+
+**Unchanged.** Read-only toward the vehicle (hard rule 5, ADR-008): service `19` is a read, and no session change is made for it. Hard rule 1: no `19` decode before a capture from the car, no temperature in °C before T2.17. Signal tiers (ADR-014), measurement-first ML (ADR-016), VIN masking (ADR-017). Measured capacity stays NOT MEASURED without a charge log; the charge log stays paused and owner-only (ADR-022). The rating chips and the AI summary are not changed by this ADR.
