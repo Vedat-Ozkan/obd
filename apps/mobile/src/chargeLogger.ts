@@ -71,16 +71,21 @@ export class LinkError extends Error {}
 /** Each Mode 22 reply goes to the builder; an error reply ends the cycle; a stop request ends it before the next command. */
 export class CycleSession extends Elm327Session {
   private target = "";
-  constructor(transport: Transport, private readonly deps: ChargeLogDeps, private readonly builder: ChargeLogBuilder, private readonly lastTx: () => number) {
+  /** resendNrc21: T2.13, a `22 <DID>` answered 7F 22 21 is sent once more and only the second reply reaches the builder. */
+  constructor(transport: Transport, private readonly deps: ChargeLogDeps, private readonly builder: ChargeLogBuilder, private readonly lastTx: () => number, private readonly resendNrc21 = false) {
     super(transport);
   }
 
   override async send(command: string, opts?: SendOptions): Promise<ElmResponse> {
     if (this.deps.stopRequested()) throw new StopRequested();
-    const response = await super.send(command, opts);
-    if (response.kind === "error") throw new ReplyError(response, command);
-    if (command.startsWith("ATSH DA")) this.target = command.slice(7, 9);
     const did = /^22 ([0-9A-F]{4})$/.exec(command)?.[1];
+    let response = await super.send(command, opts);
+    if (response.kind === "error") throw new ReplyError(response, command);
+    if (this.resendNrc21 && did !== undefined && response.frames.some((f) => f.negative?.service === 0x22 && f.negative.code === 0x21)) {
+      response = await super.send(command, opts);
+      if (response.kind === "error") throw new ReplyError(response, command);
+    }
+    if (command.startsWith("ATSH DA")) this.target = command.slice(7, 9);
     // The tx t of the attempt that was answered (after any core retry), as chargeLogFromRecording uses (Decision 15).
     if (did !== undefined) this.builder.add(this.lastTx(), this.target, did, response.frames);
     return response;

@@ -5,32 +5,46 @@ import { genericProfile, scanMode22Profile } from "obd-core/vehicles";
 import { ChargeLogBuilder } from "obd-battery/session";
 import { clock, CycleSession, FLUSH_S, LinkError, RECOVERY_WAIT_S, reasonFor, ReplyError, StopRequested, type ChargeLogDeps } from "./chargeLogger.js";
 
-// Behavior: docs/specs/T2.12-test-drive-capture.md §Design (Schedule, Stop rule, Recovery). Read-only: the only commands are
-// genericProfile's init, scanMode22Profile and bare `22 <DID>` repeats, all through Elm327Session's allowlist. The run copies
-// runChargeLog's recovery, flushing and session boundaries, so chargeLogFromRecording replays the file unchanged.
+// Behavior: docs/specs/T2.12-test-drive-capture.md §Design (Stop rule, Recovery) and docs/specs/T2.13-drive-check.md §Design (Capture
+// schedule, 7F 22 21, 10-minute option). Read-only: the only commands are genericProfile's init, scanMode22Profile, the three module-switch
+// lines scanMode22Profile sends and bare `22 <DID>` repeats, all through Elm327Session's allowlist. The run copies runChargeLog's
+// recovery, flushing and session boundaries, so chargeLogFromRecording replays the file unchanged.
 
 // obd-core/vehicles does not export VehicleProfile and obd-core is frozen for this task, so the type is taken from its consumer.
 type VehicleProfile = Parameters<typeof scanMode22Profile>[1];
 
 // Policy values, not vehicle constants (spec §Design).
-export const DRIVE_S = 1200;
+export const DRIVE_MINUTES = [10, 20] as const;
 export const DRIVE_SILENT_S = 60;
 export const FAST_PAIRS = 10;
+/** SOC and the raw temperature change slowly: read every 10th block (about 30 s), and in block 0 (spec §Capture schedule). */
+export const CONTEXT_EVERY = 10;
 
 /** Spec §Sources: 17/2414 pack current and 17/2885 pack voltage. */
 export const DRIVE_FAST_PROFILE: VehicleProfile = { protocol: "7", mode22: [{ target: "17", dids: ["2414", "2885"] }] };
-/** Spec §Sources: CB/2AE1-2AE7 group voltages, 2AF5 cell min/max, 2B43 SOC, 2AF1 raw. */
-export const DRIVE_GROUP_PROFILE: VehicleProfile = {
-  protocol: "7",
-  mode22: [{ target: "CB", dids: ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7", "2AF5", "2B43", "2AF1"] }],
-};
+/** Spec §Sources: CB/2AE1-2AE7 group voltages; CB/2AF5 cell min/max, 2B43 SOC, 2AF1 raw. */
+export const GROUP_DIDS: readonly string[] = ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7"];
+export const CONTEXT_DIDS: readonly string[] = ["2AF5", "2B43", "2AF1"];
+
+/**
+ * The three per-module setup lines scanMode22Profile sends for a non-first module (spec §Sources); ATCP, ATFCSD and ATFCSM are not resent.
+ * Evidence (spec §Sources row, A2-1): in 2026-09-23-discovery-targeted.redacted.jsonl `ATCP 18` (line 218), `ATFCSD 300000` (226) and `ATFCSM 1` (228)
+ * are sent once; the CB switch at lines 505-509 resends none of them and the multi-frame reply at line 516 completes. Caveat: this shows the
+ * replies complete, not that the non-default values persisted (the ELM may complete with its defaults). Stage B confirms it on the car.
+ */
+async function switchTo(session: CycleSession, target: string): Promise<void> {
+  for (const command of [`ATSH DA${target}F1`, `ATCRA 18DAF1${target}`, `ATFCSH 18DA${target}F1`]) {
+    const response = await session.send(command);
+    if (response.kind !== "ok") throw new ElmSessionError("init", command, response);
+  }
+}
 
 export interface DriveCaptureResult { file: string; stopReason: string; saved: string }
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 /** Never rejects. Ends with a final flush, the copy to the folder, and a last meta line naming the stop reason. */
-export async function runDriveCapture(deps: ChargeLogDeps): Promise<DriveCaptureResult> {
+export async function runDriveCapture(deps: ChargeLogDeps, minutes: 10 | 20): Promise<DriveCaptureResult> {
   const { recording, stream } = deps;
   let file: string;
   try { file = stream.create(); }
@@ -64,7 +78,7 @@ export async function runDriveCapture(deps: ChargeLogDeps): Promise<DriveCapture
   };
   const stopFor = (): string | undefined => {
     if (deps.stopRequested()) return "disconnect pressed";
-    if (deps.now() - start >= DRIVE_S) return "20 min recorded";
+    if (deps.now() - start >= minutes * 60) return `${String(minutes)} min recorded`;
     if (recording.elapsed() - lastCurrent >= DRIVE_SILENT_S) return "no current for 60 s (car off or not in Ready)";
     return undefined;
   };
@@ -104,7 +118,7 @@ export async function runDriveCapture(deps: ChargeLogDeps): Promise<DriveCapture
         }
       }
       // A fresh session writes only ATZ or ATI until one is answered cleanly (docs/ELM327.md §Write safety).
-      const session = new CycleSession(link.view, deps, builder, () => lastTx);
+      const session = new CycleSession(link.view, deps, builder, () => lastTx, true);
       let failure: unknown;
       // Stops are checked after every pair and after the group block.
       // Returning true leaves the block; the loop condition then names the reason again.
@@ -115,18 +129,28 @@ export async function runDriveCapture(deps: ChargeLogDeps): Promise<DriveCapture
         await session.init(genericProfile, {
           onInformationalReply(command, response) { if (response.kind === "error") throw new ReplyError(response, command); },
         });
-        block: for (;;) {
+        block: {
           await scanMode22Profile(session, DRIVE_FAST_PROFILE);
-          if (checkpoint()) break;
-          // The header stays DA17F1 until the group profile changes it, so these pairs carry no setup.
-          for (let pair = 1; pair < FAST_PAIRS; pair++) {
+          if (checkpoint()) break block;
+          // The header stays DA17F1 until switchTo changes it, so the bare pairs carry no setup. Block 0 follows the pair above.
+          for (let b = 0; ; b++) {
+            for (let pair = b === 0 ? 1 : 0; pair < FAST_PAIRS; pair++) {
+              await session.send("22 2414");
+              await session.send("22 2885");
+              if (checkpoint()) break block;
+            }
+            if (b % CONTEXT_EVERY === 0) {
+              await switchTo(session, "CB");
+              for (const did of CONTEXT_DIDS) await session.send(`22 ${did}`);
+              await switchTo(session, "17");
+            }
             await session.send("22 2414");
-            await session.send("22 2885");
+            await switchTo(session, "CB");
+            for (const did of GROUP_DIDS) await session.send(`22 ${did}`);
+            await switchTo(session, "17");
             if (checkpoint()) break block;
+            deps.onStatus(`Test drive: ${clock(deps.now() - start)} of ${clock(minutes * 60)} recorded; ${String(samples)} current samples.`);
           }
-          await scanMode22Profile(session, DRIVE_GROUP_PROFILE);
-          if (checkpoint()) break;
-          deps.onStatus(`Test drive: ${clock(deps.now() - start)} of ${clock(DRIVE_S)} recorded; ${String(samples)} current samples.`);
         }
       } catch (error) {
         failure = error;

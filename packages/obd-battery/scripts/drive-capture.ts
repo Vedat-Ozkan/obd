@@ -5,7 +5,7 @@ import { parseElmResponse } from "../../obd-core/src/elm/reader.js";
 import { reassemble } from "../../obd-core/src/elm/isotp.js";
 import { parseRecording, type RecordingLine } from "../../obd-core/src/recording/format.js";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/obdb/import.js";
-import { GROUP_EXCESS_LIMIT_MOHM, LOAD_A, groupsUnderLoad, median as medianOf } from "../src/driveGroups.js";
+import { GROUP_EXCESS_LIMIT_MOHM, LOAD_A, groupsUnderLoad } from "../src/driveGroups.js";
 import { chargeLogFromRecording, num, span, type ChargeLog, type Point } from "../src/session.js";
 
 // Layout: docs/specs/T2.12-test-drive-capture.md §Design, Analysis script. Decoding is chargeLogFromRecording's (T2.4); this file only
@@ -23,6 +23,11 @@ interface Sample { point: Point; tx: number; session: number }
 /** Nearest rank: the smallest value with at least p of the sample at or below it. */
 const rank = (sorted: readonly number[], p: number): number => sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)] ?? NaN;
 const sortedCopy = (values: readonly number[]) => [...values].sort((a, b) => a - b);
+/** The usual median (mean of the middle two when even), unlike `rank`, which is nearest rank. */
+const medianSorted = (sorted: readonly number[]): number => {
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 === 1 ? sorted[mid] ?? NaN : ((sorted[mid - 1] ?? NaN) + (sorted[mid] ?? NaN)) / 2;
+};
 const stats = (values: readonly number[]): string => {
   if (values.length === 0) return "n=0";
   const sorted = sortedCopy(values);
@@ -176,7 +181,7 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
     `- Sets: ${String(under.completeSets)} complete, ${String(under.steadySets)} steady, ${String(under.loadedSets)} loaded (|I| >= ${String(LOAD_A)} A)`,
     ...(under.status === "checked" && under.currentRange !== undefined && highest !== undefined && lowest !== undefined ? [
       `- Steady current: ${num(under.currentRange.min)} A to ${num(under.currentRange.max)} A`,
-      `- Excess (mΩ): median ${num(medianOf(excess))}, max ${num(highest.excessMohm)} at ${named(highest.index)}, min ${num(lowest.excessMohm)} at ${named(lowest.index)}`,
+      `- Excess (mΩ): median ${num(medianSorted(excess))}, max ${num(highest.excessMohm)} at ${named(highest.index)}, min ${num(lowest.excessMohm)} at ${named(lowest.index)}`,
       `- Max lower bound (mΩ): ${num(Math.max(...under.groups.map((g) => g.lowerMohm)))}`,
       `- Median group resistance, recorded only (mΩ): ${num(under.medianGroupMohm ?? NaN)}`,
       `- L = ${String(GROUP_EXCESS_LIMIT_MOHM)} mΩ`,

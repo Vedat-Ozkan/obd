@@ -9,7 +9,7 @@ import { runView, type RememberedDongle } from "../ble/dongleLink.js";
 import { runCapture } from "../capture.js";
 import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosisFlow.js";
 import { runChargeLog } from "../chargeLogger.js";
-import { runDriveCapture } from "../driveCapture.js";
+import { DRIVE_MINUTES, runDriveCapture } from "../driveCapture.js";
 import { keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
@@ -24,6 +24,9 @@ import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep
 import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui/kit.js";
 import { DonglePicker } from "./DonglePicker.js";
 import { useTokens } from "../ui/theme.js";
+
+/** The cap of the test drive now running (T2.13). Module-level because the run outlives this screen and the running card is read again on a remount. */
+let driveMinutes: 10 | 20 = 20;
 
 function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
   vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>;
@@ -360,7 +363,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     }
   };
   // docs/specs/T2.12-test-drive-capture.md: the same start steps, gate and release as chargeLog(); one tap while parked, then it stops and saves by itself.
-  const testDrive = async () => {
+  // T2.13: two buttons share this handler; `minutes` is the cap.
+  const testDrive = async (minutes: 10 | 20) => {
     const active = dongleLink.current();
     if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
@@ -378,6 +382,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       notStarted("Test drive not started: the dongle disconnected. Connect and try again.");
       return;
     }
+    driveMinutes = minutes;
     const run = chargeRun.begin(active, "Starting the test drive…", "drive");
     chargeStarting.current = false;
     // The link stays open when the run ends by itself; Disconnect during the run closes and holds it once the recording is saved.
@@ -386,7 +391,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       chargeRun.end(line);
     };
     const driveRecording = new RecordingBuffer();
-    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.12 test drive: ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.13 test drive (${String(minutes)} min): ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     let connected = false;
     let notified = 0;
     const task = async () => {
@@ -406,7 +411,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         },
         stream: driveTargets,
         stopRequested: () => run.stop,
-      });
+      }, minutes);
       // Nothing is queued for beta and no share sheet opens; a failed copy names the private file in the final line.
       try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}`); }
       finally { await foregroundService.stop(); }
@@ -516,7 +521,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     </Card> : null}
     {chargeLogging ? <>
       <Card><Text>{driving
-        ? "Recording a test drive. It stops and saves by itself after 20 minutes, or a minute after you switch the car off. Do not touch the phone while driving. Disconnect stops it early; what was recorded is kept."
+        ? `Recording a test drive. It stops and saves by itself after ${String(driveMinutes)} minutes, or a minute after you switch the car off. Do not touch the phone while driving. Disconnect stops it early; what was recorded is kept.`
         : "The charge log stops and saves by itself. Disconnect stops it early; what was logged so far is kept."}</Text></Card>
       {disconnect}
     </> : <>
@@ -557,8 +562,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
-          <Button title="Record test drive" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive()} />
-          <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive 15–20 min.</Text>
+          {DRIVE_MINUTES.map((minutes) => <Button key={minutes} title={`Record test drive (${String(minutes)} min)`} tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive(minutes)} />)}
+          <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive for the chosen length.</Text>
           {captureStep ? <Text>{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
           <TextInput style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
