@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { importObdbMode22 } from "../../obd-core/src/vehicles/index.js";
 import { batteryDiagnosisFromRecording, renderBatteryDiagnosis } from "obd-battery/report";
-import { summarize, summaryInstructions, type LlmClient, type SummaryRequest } from "obd-assist";
+import { prepareSummaryRequest, summarize, summaryInstructions, type LlmClient, type SummaryRequest } from "obd-assist";
 import { verdictWords } from "../src/check.js";
 import { reportFacts } from "../src/summary.js";
 import { createClaimReplayArtifact, createSummaryReplayArtifact, reportForSavedCase, type SavedSummaryCase } from "../scripts/replay-summary.js";
@@ -15,6 +15,22 @@ const explanatory = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-0
 const claimSplit = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-summary-claim-split-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
 const phoneConsolePath = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
 const signalset = importObdbMode22(JSON.parse(readFileSync(new URL("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json", root), "utf8")));
+
+it("keeps the real assistant projection equal to the pre-marker legacy prefix", async () => {
+  const recording = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
+  const lines = readFileSync(new URL(recording, root), "latin1").split("\n");
+  const boundary = lines.findIndex((line) => line.includes('"note": "parked scan start"'));
+  expect(boundary).toBeGreaterThan(0);
+  const input = { garageVehicleId: "summary-replay", catalogId: "chevrolet-equinox-ev-2024" as const, scannedAt: "2026-09-24T00:00:00.000Z", recording, scanStatus: "complete" as const };
+  const upgraded = await batteryDiagnosisFromRecording(lines.join("\n"), input, signalset);
+  const legacy = await batteryDiagnosisFromRecording(lines.slice(0, boundary).join("\n"), input, signalset);
+  const full = prepareSummaryRequest(upgraded);
+  const before = prepareSummaryRequest(legacy);
+  const artifact = { synthetic: true, full: { facts: full.facts, ratings: full.facts.filter((fact) => fact.id.endsWith("-rating")), promptVersion: full.promptVersion }, before: { facts: before.facts, ratings: before.facts.filter((fact) => fact.id.endsWith("-rating")), promptVersion: before.promptVersion }, equal: JSON.stringify(full) === JSON.stringify(before) };
+  writeFileSync("/tmp/t2.14-summary-projection.json", `${JSON.stringify(artifact, null, 2)}\n`);
+  expect(artifact.equal).toBe(true);
+  expect(upgraded.parked?.bmsFigure).toBeDefined();
+});
 
 async function replayReport() {
   return batteryDiagnosisFromRecording(readFileSync(new URL(fixturePath, root), "latin1"), {

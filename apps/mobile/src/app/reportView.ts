@@ -1,4 +1,4 @@
-import type { BatteryDiagnosisReport, ObservedBatterySignal } from "obd-battery/report";
+import { redFlagScreen, type BatteryDiagnosisReport, type ObservedBatterySignal } from "obd-battery/report";
 import { codesRating, codesRead, distinctCodes, reportRatings, type RatingView } from "obd-battery/rating";
 import { LOW_COUNTER, type CodesReport, type Tri } from "obd-core/report";
 
@@ -60,11 +60,12 @@ function codesValue(codes: CodesReport): string {
 }
 
 /** Report summary (spec §Screens 3): the SoC hero and four rows in fixed order. */
-export function reportSummary(report: BatteryDiagnosisReport): { soc: ReturnType<typeof socHero>; rows: readonly { section: "cells" | "capacity" | "twelveVolt" | "codes"; label: string; value: string; rating: RatingView }[] } {
+export function reportSummary(report: BatteryDiagnosisReport): { soc: ReturnType<typeof socHero>; verdict: ReturnType<typeof redFlagScreen>; rows: readonly { section: "cells" | "capacity" | "twelveVolt" | "codes"; label: string; value: string; rating: RatingView }[] } {
   const twelve = lastTwelveVolt(report);
   const ratings = reportRatings(report);
   return {
     soc: socHero(report),
+    verdict: redFlagScreen(report),
     rows: [
       { section: "cells", label: "Cell balance", value: report.cellSpread ? `${(report.cellSpread.volts * 1000).toFixed(1)} mV` : "Not read", rating: ratings.cells },
       { section: "capacity", label: "Capacity", value: "Not measured", rating: ratings.capacity },
@@ -103,22 +104,25 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
   if (section === "cells") {
     const cells = cellReply(report);
     const spread = report.cellSpread;
+    const groups = report.parked?.groupVoltages;
+    const raw = report.parked?.temperatureRaw;
     return {
       hero: spread ? { value: (spread.volts * 1000).toFixed(1), unit: "mV", tag: "community", tagLabel: TAG_LABEL.community } : { value: "Not read", tag: "neutral", tagLabel: "Not read" },
       rating: ratings.cells,
-      readings: spread ? [...(cells ? [reading("Lowest cell", cells.min), reading("Average cell", cells.avg), reading("Highest cell", cells.max)] : []), { label: "Spread", value: `${(spread.volts * 1000).toFixed(1)} mV`, tier: spread.tier }] : [],
-      meaning: `${report.health.reason} These cell voltages come from a community signal definition, not one verified on this car.`,
-      source: spread ? [...new Set([spread.min, spread.max].map((source) => `${source.command} from ECU ${source.ecu}`))].join("; ") : "Not read in this check",
+      readings: [ ...(spread && cells ? [reading("Lowest cell", cells.min), reading("Average cell", cells.avg), reading("Highest cell", cells.max)] : []), { label: "Group voltages at rest", value: groups ? `80 values, modules 1–10, ${String(groups.completeSets)} complete sets, ${num(Math.min(...groups.volts))}–${num(Math.max(...groups.volts))} V` : "Not available at rest" }, ...(groups ? Array.from({ length: 10 }, (_, index) => ({ label: `Module ${String(index + 1)}`, value: groups.volts.filter((_, i) => groups.modules[i] === index + 1).map((volts) => `${num(volts)} V`).join(", ") })) : []), { label: "Raw 2AF1 response", value: raw?.payloadHex ?? "Not read" }, ...(spread ? [{ label: "Spread", value: `${(spread.volts * 1000).toFixed(1)} mV`, tier: spread.tier }] : []) ],
+      meaning: `${report.health.reason}${spread ? " The legacy min/average/max and spread use a community signal definition not verified on this car." : ""}${groups ? " The 80 cell-group voltages come from recorded 2AE1–2AE7 replies at rest." : ""}`,
+      source: [ ...(spread ? [spread.min, spread.max] : []), ...(groups?.sources ?? []), ...(raw ? [raw.source] : []) ].length ? [...new Set([ ...(spread ? [spread.min, spread.max] : []), ...(groups?.sources ?? []), ...(raw ? [raw.source] : []) ].map((source) => `${source.command} from ECU ${source.ecu} (${source.recording})`))].join("; ") : "Not read in this check",
       ...(cells ? { cellRange: { minMv: mv(cells.min.value), avgMv: mv(cells.avg.value), maxMv: mv(cells.max.value) } } : {}),
     };
   }
   if (section === "capacity") {
+    const figure = report.parked?.bmsFigure;
     return {
       hero: { value: "Not measured", tag: "neutral", tagLabel: "Not measured" },
       rating: ratings.capacity,
-      readings: [],
-      meaning: `${report.capacity.reason} Capacity stays not measured until a completed charge log and a reviewed estimator exist.`,
-      source: "Not measured; needs a completed charge log",
+      readings: figure ? [{ label: "BMS figure", value: `${num(figure.valueKwh)} kWh`, tier: figure.tier }, { label: "BMS energy remaining", value: `${num(figure.energyKwh)} kWh` }, { label: "BMS SOC", value: `${num(figure.socPercent)} %` }] : [{ label: "BMS figure", value: "Not read" }],
+      meaning: `${report.capacity.reason} Capacity stays not measured until a completed charge log and a reviewed estimator exist.${figure ? " The BMS figure is a comparison from the car's reported energy and SOC; its absolute energy level and implied capacity remain unverified." : ""}`,
+      source: figure ? `${figure.energySource.command} from ECU ${figure.energySource.ecu} (${figure.energySource.recording}); ${figure.socSource.command} from ECU ${figure.socSource.ecu} (${figure.socSource.recording})` : "Not measured; needs a completed charge log",
     };
   }
   const twelve = lastTwelveVolt(report);

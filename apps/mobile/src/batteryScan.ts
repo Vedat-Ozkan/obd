@@ -3,6 +3,7 @@ import { latin1Decode } from "obd-core/recording";
 import type { Transport } from "obd-core/transport";
 import { equinoxEv2024Profile, genericProfile, scanMode22Profile } from "obd-core/vehicles";
 import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
+import { CHARGE_LOG_PROFILE } from "obd-battery/session";
 import { CODES_SCAN_COMMANDS } from "./codesScan.js";
 import type { RecordingBuffer } from "./recording.js";
 import type { GarageVehicle } from "./garage/flow.js";
@@ -89,6 +90,11 @@ export async function runBatteryDiagnosisScan(
     if (stopReason === undefined) {
       onProgress("Reading Equinox battery modules");
       await scanMode22Profile(session, equinoxEv2024Profile);
+      recording.meta("parked scan start");
+      for (let cycle = 0; cycle < 3; cycle++) {
+        onProgress(`Reading parked battery cycle ${String(cycle + 1)} of 3`);
+        await scanMode22Profile(session, CHARGE_LOG_PROFILE);
+      }
     }
   } catch (error) {
     stopReason = error instanceof Error ? error.message : String(error);

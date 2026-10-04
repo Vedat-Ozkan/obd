@@ -22,6 +22,25 @@ const ARTIFACT = "/tmp/x-redesign-report-view.json";
 const artifact: Record<string, unknown> = {};
 const save = () => { write(ARTIFACT, `${JSON.stringify(artifact, null, 2)}\n`); };
 
+it("shows saved upgraded and legacy detail states without changing summary rows", async () => {
+  const synthetic = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
+  const upgraded = await batteryDiagnosisFromRecording(read(new URL(synthetic, root), "latin1"), { garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-24T00:00:00.000Z", recording: synthetic, scanStatus: "complete" }, signals);
+  const legacy = await batteryDiagnosisFromRecording(read(new URL("fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl", root), "latin1"), { garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-22T00:00:00.000Z", recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl", scanStatus: "complete" }, signals);
+  const output = { synthetic: true, upgraded: { summary: reportSummary(upgraded), cells: sectionDetail(upgraded, "cells"), capacity: sectionDetail(upgraded, "capacity") }, legacy: { summary: reportSummary(legacy), cells: sectionDetail(legacy, "cells"), capacity: sectionDetail(legacy, "capacity") } };
+  write("/tmp/t2.14-report-views.json", `${JSON.stringify(output, null, 2)}\n`);
+  expect(output.upgraded.summary.rows).toEqual(output.legacy.summary.rows);
+  expect(output.upgraded.cells.readings.some((item) => item.label === "Group voltages at rest" && item.value.includes("80"))).toBe(true);
+  expect(output.upgraded.cells.readings.filter((item) => item.label.startsWith("Module "))).toHaveLength(10);
+  expect(output.upgraded.cells.readings.find((item) => item.label === "Module 1")?.value.split(", ")).toHaveLength(8);
+  expect(output.upgraded.cells.meaning).toContain("The 80 cell-group voltages come from recorded 2AE1–2AE7 replies at rest.");
+  expect(output.upgraded.cells.meaning).toContain("The legacy min/average/max and spread use a community signal definition not verified on this car.");
+  expect(output.legacy.cells.meaning).not.toContain("80 cell-group voltages");
+  expect(output.legacy.cells.meaning).toContain("The legacy min/average/max and spread use a community signal definition not verified on this car.");
+  expect(output.upgraded.capacity.readings.some((item) => item.label === "BMS figure")).toBe(true);
+  expect(output.upgraded.cells.readings.some((item) => item.label === "Raw 2AF1 response")).toBe(true);
+  expect(output.legacy.cells.readings.some((item) => item.value === "Not available at rest")).toBe(true);
+});
+
 const NO_THRESHOLD = "No threshold yet";
 const CODE_POOR = "Project policy: a reported code is Poor";
 const CLEARED_POOR = "Project policy (T0.7): the recently-cleared check says yes";
@@ -71,6 +90,71 @@ const load = async (name: string) => {
 };
 
 describe("report screens over the committed Equinox recordings", () => {
+  it("delivers real and labeled synthetic replay verdicts with unchanged summary rows", async () => {
+    const realNames = [...Object.keys(RECORDINGS), "2026-09-30-test-drive.redacted.jsonl", "2026-09-30-test-drive-2.redacted.jsonl"];
+    const real = await Promise.all(realNames.map(async (name) => {
+      if (name in RECORDINGS) return load(name);
+      const recording = base + name;
+      return batteryDiagnosisFromRecording(read(new URL(recording, root), "latin1"), { garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-30T10:00:00.000Z", recording, scanStatus: "complete" }, signals);
+    }));
+    const syntheticPath = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
+    const synthetic = await batteryDiagnosisFromRecording(read(new URL(syntheticPath, root), "latin1"), { garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-24T00:00:00.000Z", recording: syntheticPath, scanStatus: "complete" }, signals);
+    const groups = synthetic.parked?.groupVoltages;
+    if (!groups) throw new Error("synthetic full scan needs rest groups");
+    const variant = (volts: number[], scanStatus: BatteryDiagnosisReport["scanStatus"] = "complete"): BatteryDiagnosisReport => ({ ...synthetic, scanStatus, parked: { ...synthetic.parked, groupVoltages: { ...groups, volts } } });
+    const syntheticReports = [synthetic,
+      variant(Array.from({ length: 80 }, (_, i) => 4 - (i === 0 ? 0.015 : 0))),
+      variant(Array.from({ length: 80 }, (_, i) => 4 - (i === 0 ? 0.007 : 0))),
+      variant(Array.from({ length: 80 }, (_, i) => 4 + (i === 0 ? 0.004 : i === 1 ? -0.004 : 0))),
+      variant(Array.from({ length: 80 }, (_, i) => 4 + (i === 0 ? -0.005 : i === 1 ? 0.001 : 0))),
+      variant(Array.from({ length: 80 }, () => 4), "partial")];
+    const codeNames = ["codes-stored.jsonl", "codes-permanent.jsonl", "codes-cleared.jsonl"];
+    const codeReports = await Promise.all(codeNames.map(async (name) => ({ name, codes: await codesReportFromRecording(parseRecording(read(new URL(`fixtures/synthetic/${name}`, root), "latin1"))) })));
+    const codeCases = codeReports.map(({ name, codes }) => ({ name, report: { ...real[0], codes } }));
+    const spike = real[0];
+    const failed = { ...spike, codes: { ...spike.codes, modules: spike.codes.modules.map((module) => ({ ...module, pending: { status: "not-read" as const } })) } };
+    const fixtureStored = codeReports[0]?.codes.modules.flatMap((module) => module.stored.status === "read" ? module.stored.dtcs : [])[0];
+    if (!fixtureStored) throw new Error("synthetic stored-code recording needs a decoded code");
+    const observedWithFailure = { ...failed, codes: { ...failed.codes, modules: failed.codes.modules.map((module, index) => index === 0 ? { ...module, stored: { status: "read" as const, dtcs: [fixtureStored] } } : module) } };
+    const cases = [...real.map((report, index) => ({ name: realNames[index], synthetic: false, report })), ...syntheticReports.map((report, index) => ({ name: ["base", "injected", "ask", "spread", "boundary", "partial"][index], synthetic: true, report })), ...codeCases.map(({ name, report }) => ({ name, synthetic: true, report })), { name: "missing-pending", synthetic: true, report: failed }, { name: "observed-code-and-missing-pending", synthetic: true, report: observedWithFailure }];
+    const rows = cases.map(({ name, synthetic, report }) => ({ name, synthetic, recording: report.recording, summary: reportSummary(report) }));
+    expect(rows.map((row) => row.summary.verdict.headline)).toEqual([
+      ...Array.from({ length: 7 }, () => "Check incomplete"), "No red flags found", "Red flag: get it inspected", "Ask about this", "Ask about this", "No red flags found", "Check incomplete",
+      "Ask about this", "Ask about this", "Ask about this", "Check incomplete", "Ask about this",
+    ]);
+    expect(rows[0]?.summary.verdict.coverage[0]?.reason).toBe("No complete 80-group set with rest-bracketed current in this report recording.");
+    expect(rows[2]?.summary.verdict.coverage[0]?.status).toBe("checked");
+    const expectedRows = (cells: string, twelveVolt: string, codes: string, rating: string, basis: string) => [
+      { section: "cells", label: "Cell balance", value: cells, rating: { rating: "not-rated", basis: NO_THRESHOLD } },
+      { section: "capacity", label: "Capacity", value: "Not measured", rating: { rating: "not-rated", basis: NO_THRESHOLD } },
+      { section: "twelveVolt", label: "12 V battery", value: twelveVolt, rating: { rating: "not-rated", basis: NO_THRESHOLD } },
+      { section: "codes", label: "Diagnostic codes", value: codes, rating: { rating, basis } },
+    ];
+    for (const [index, want] of Object.values(RECORDINGS).entries()) {
+      expect(rows[index]?.summary.soc?.percent ?? null).toBe(want.soc);
+      expect(rows[index]?.summary.rows).toEqual(expectedRows(want.cells, want.twelveVolt, want.codes, want.codesRating, want.codesBasis));
+    }
+    expect(rows[5]?.summary.soc?.percent).toBe(74.5);
+    expect(rows[5]?.summary.rows).toEqual(expectedRows("5.2 mV", "12.3 V", "Not read", "not-rated", NOT_READ));
+    expect(rows[6]?.summary.soc?.percent).toBe(73.7);
+    expect(rows[6]?.summary.rows).toEqual(expectedRows("4.8 mV", "12.8 V", "Not read", "not-rated", NOT_READ));
+    for (const row of rows.slice(7, 13)) {
+      expect(row.summary.soc).toEqual({ percent: 69.8, tier: "verified", scannedAt: "2026-09-24T00:00:00.000Z" });
+      expect(row.summary.rows).toEqual(expectedRows("3.0 mV", "12.7 V", "No codes", "ok", OK_BASIS));
+    }
+    for (const [index, codes] of ["2 codes", "1 code", "No codes", "No codes", "1 code"].entries()) {
+      const row = rows[index + 13];
+      expect(row.summary.soc).toEqual({ percent: 69.8, tier: "verified", scannedAt: RECORDINGS["2026-09-22-spike.redacted.jsonl"].scannedAt });
+      expect(row.summary.rows).toEqual(expectedRows("3.0 mV", "12.7 V", codes, index === 3 ? "ok" : "poor", index === 3 ? OK_BASIS : index === 2 ? CLEARED_POOR : CODE_POOR));
+    }
+    expect(rows.slice(13).map((row) => row.summary.verdict.coverage[1]?.status)).toEqual(["checked", "checked", "checked", "not-checked", "not-checked"]);
+    expect(rows.slice(13).map((row) => row.summary.verdict.findings.map((finding) => finding.detail))).toEqual([
+      ["stored code P0133 reported by ECU 7E8.", "pending code U0158 reported by ECU 7E8.", "permanent code P0133 reported by ECU 7E8."],
+      ["permanent code P0133 reported by ECU 7E8.", "Recently cleared codes: indicated by the reported checks."],
+      ["Recently cleared codes: indicated by the reported checks."], [], ["stored code P0133 reported by ECU 17."],
+    ]);
+    write("/tmp/t2.15-report-summary.json", `${JSON.stringify(rows, null, 2)}\n`);
+  });
   it.each(Object.keys(RECORDINGS))("%s", async (name) => {
     const want = RECORDINGS[name];
     const report = await load(name);
@@ -98,7 +182,7 @@ describe("report screens over the committed Equinox recordings", () => {
     expect(sections.capacity.meaning.startsWith(report.capacity.reason)).toBe(true);
     expect(sections.twelveVolt.meaning.startsWith(report.twelveVolt.reason)).toBe(true);
     // C3 (C2 review finding 4): the Capacity source says nothing was measured, not that a charge log supplied the value.
-    expect(sections.capacity.source).toBe("Not measured; needs a completed charge log");
+    if (!report.parked?.bmsFigure) expect(sections.capacity.source).toBe("Not measured; needs a completed charge log");
     // Chart 4: min ≤ avg ≤ max, and max − min is the report's own cell spread.
     expect(sections.cells.cellRange ?? null).toEqual(want.cellRange);
     if (want.cellRange && want.spreadVolts !== null) {
@@ -145,8 +229,8 @@ describe("report screens over the committed Equinox recordings", () => {
     const detail = sectionDetail(derived, "cells");
     // C3 repair 1 (orchestrator fix 3 ruling): an undecoded AVG leaves no whole reply to show, so only the spread is shown.
     expect(detail.cellRange).toBeUndefined();
-    expect(detail.readings).toEqual([{ label: "Spread", value: `${((max2.value - min2.value) * 1000).toFixed(1)} mV`, tier: "community" }]);
-    expect(detail.source).toBe("22 2AF5 from ECU CB");
+    expect(detail.readings.filter((r) => ["Lowest cell", "Average cell", "Highest cell", "Spread"].includes(r.label))).toEqual([{ label: "Spread", value: `${((max2.value - min2.value) * 1000).toFixed(1)} mV`, tier: "community" }]);
+    expect(detail.source).toContain("22 2AF5 from ECU CB");
     artifact["synthetic/derived-partial-2af5"] = { synthetic: true, derivedFrom: `${base}2026-09-23-discovery-targeted.redacted.jsonl`, cells: detail };
     save();
   });
@@ -168,8 +252,8 @@ describe("report screens over the committed Equinox recordings", () => {
     expect(max2.value - min1.value).not.toBe(max3.value - min3.value);
     const detail = sectionDetail(derived, "cells");
     expect(detail.cellRange).toBeUndefined();
-    expect(detail.readings.map((r) => r.label)).toEqual(["Spread"]);
-    expect(detail.source).toBe("22 2AF5 from ECU CB");
+    expect(detail.readings.filter((r) => ["Lowest cell", "Average cell", "Highest cell", "Spread"].includes(r.label)).map((r) => r.label)).toEqual(["Spread"]);
+    expect(detail.source).toContain("22 2AF5 from ECU CB");
     artifact["synthetic/derived-undecoded-between-replies"] = { synthetic: true, derivedFrom: `${base}2026-09-23-discovery-targeted.redacted.jsonl`, cells: detail };
     save();
   });
