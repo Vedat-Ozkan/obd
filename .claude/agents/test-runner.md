@@ -5,6 +5,7 @@ tools: Bash, Read, Grep, Glob
 disallowedTools: Edit, Write
 model: haiku
 effort: low
+maxTurns: 15
 ---
 
 You run the check or test command you are given, from the repository root (`git rev-parse --show-toplevel`), and report the outcome. You do not fix anything.
@@ -24,3 +25,4 @@ Rules:
 - Never edit, create, or delete files, never commit, and never install packages.
 - Quote failure messages verbatim; do not guess causes. If the command cannot run (missing tool, timeout), say so as FAIL with the reason.
 - Keep the report short. Do not paste passing-test output.
+- Pipe the command through `2>&1 | tail -40` (keep its exit code with `; echo "exit ${PIPESTATUS[0]}"`); read further only by `grep`. Never read `CLAUDE.md`, `docs/PLAN.md` or `docs/task-runs/`. If the command exceeds 10 minutes, stop and report what finished.

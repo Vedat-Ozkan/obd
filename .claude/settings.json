@@ -1,4 +1,8 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "opus",
+  "effortLevel": "medium",
+  "availableModels": ["opus", "sonnet", "haiku"],
   "permissions": {
     "allow": [
       "Bash(pnpm check:*)",
@@ -6,16 +10,45 @@
       "Bash(pnpm lint:*)",
       "Bash(pnpm typecheck:*)",
       "Bash(pnpm -r:*)",
+      "Bash(pnpm -F:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm replay:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git worktree:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(codex exec:*)"
     ],
     "deny": [
       "Bash(git reset --hard:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
       "Read(./.env)",
       "Read(./.env.*)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
+  "worktree": { "baseRef": "head" },
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-context.py", "timeout": 10 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deny-dangerous.py", "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit",
+        "hooks": [ { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/eslint-on-edit.py", "timeout": 60 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.py", "timeout": 900 } ] }
     ]
   }
 }

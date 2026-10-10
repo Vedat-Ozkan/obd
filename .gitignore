@@ -38,3 +38,9 @@ fixtures/beta-intake-index.json*
 
 # Windows download markers
 *:Zone.Identifier
+
+# Claude Code: agent worktrees, local settings, lead-only unlock and kill-switch files
+.claude/worktrees/
+.claude/settings.local.json
+.claude/ALLOW_TOOLCHAIN
+AGENT_STOP
