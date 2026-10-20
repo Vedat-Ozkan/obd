@@ -1,5 +1,3 @@
-"""Offline checks for targeted.py (spec T2.3b, Verification "Here"). Fake BLE client; no bleak, no car."""
-
 import asyncio
 import json
 import os
@@ -50,7 +48,6 @@ def test_watch_list_cites_recording() -> None:
     lines = read(D)
     start = next(i for i, x in enumerate(lines) if x.get("phase") == "B")
     end = next(i for i, x in enumerate(lines) if "positives" in x)
-    # Every phase-B positive: (module, did) -> (1-based tx line, single frame), module = last ATSH before it.
     found, module = {}, None
     for i in range(start, end):
         data = lines[i].get("data", "") if lines[i]["dir"] == "tx" else ""
@@ -64,11 +61,9 @@ def test_watch_list_cites_recording() -> None:
                 found[(module, data[3:7])] = (i + 1, discover._single(reply, module, did))
     positives = lines[end]["positives"]
     assert sorted(found) == sorted((m, d) for m, v in positives.items() for d in v)
-    watched = set(lines[end + 1]["watch"]["CB"])  # T2.3a phase-C watch meta
+    watched = set(lines[end + 1]["watch"]["CB"])
     with open(targeted.WATCH_LIST, encoding="utf-8") as f:
         data = json.load(f)
-    # Selection rule (spec Selection rule + Decisions 1 and 2), applied to line 49772 positives.
-    # VIN-bearing DIDs are excluded by the allowlist (X-2026-09-23-vin-redaction Decision 3).
     keep = [d for d in positives["CB"] if d not in CORE and d != "2E8E" and not is_f1xx(d) and not is_vin(d)]
     rotate = [("CB", d) for d in sorted(d for d in keep if not found[("CB", d)][1] or d not in watched)]
     rotate += [("17", d) for d in positives["17"] if not is_f1xx(d) and not is_vin(d)]
@@ -96,7 +91,6 @@ class CapturingRecorder(Recorder):
 
 
 class QueuedPressClient(FakeClient):
-    """Queues presses during ATRV writes, before that cycle reaches its input boundary."""
 
     def __init__(self, clock: Clock, marks: "asyncio.Queue[str]") -> None:
         super().__init__()
@@ -110,30 +104,25 @@ class QueuedPressClient(FakeClient):
         if bytes(data) == b"ATRV\r" and self.rec is not None and self.rec.states:
             state = self.rec.states[-1]
             cycle = self.cycles[state] = self.cycles.get(state, 0) + 1
-            # Charging needs six cycles to reach five logical minutes, but rotation is complete after three.
-            # This makes the charging-time gate independently observable.
             self.clock.now += 50 if state == targeted.CHARGE_STATE else 100
             if (state == discover.STATES[0] and cycle == 1) or (state == targeted.CHARGE_STATE and cycle == 1):
                 for _ in range(3):
                     self.marks.put_nowait("\n")
-            if state == discover.STATES[0] and cycle == 3:  # final ineligible rotation cycle
+            if state == discover.STATES[0] and cycle == 3:
                 self.marks.put_nowait("\n")
             if state == targeted.CHARGE_STATE and cycle == 4:
-                # Rotation ended in cycle 3; this must still be ignored until the five-minute gate ends.
                 self.marks.put_nowait("\n")
             fresh_cycle = 5 if state == discover.STATES[0] else 8 if state == targeted.CHARGE_STATE else 4
             if cycle == fresh_cycle:
                 self.fresh_states.append(state)
                 if state == targeted.CHARGE_STATE:
                     self.charging_elapsed_at_fresh = self.clock.now
-                # The second mark crosses a state boundary and must be drained while the next state is ineligible.
                 for _ in range(2 if state == discover.STATES[0] else 1):
                     self.marks.put_nowait("\n")
         await super().write_gatt_char(char, data, response)
 
 
 class SurplusPressClient(FakeClient):
-    """Uses a one-entry rotation so an inherited armed flag would accept a surplus mark immediately."""
 
     def __init__(self, clock: Clock, marks: "asyncio.Queue[str]") -> None:
         super().__init__()
@@ -198,9 +187,9 @@ def test_fake_run(tmp_path, monkeypatch) -> None:
     phases = [x["phase"] for x in lines if "phase" in x]
     assert [p for n, p in enumerate(phases) if n == 0 or phases[n - 1] != p] == ["A", "C", "end"]
     assert [x["state"] for x in lines if "state" in x and "note" not in x] == list(discover.STATES)
-    assert client.cycles[discover.STATES[0]] == 5  # boundary backlog and an empty eligible cycle precede fresh input
-    assert client.cycles[discover.STATES[1]] == 4  # surplus accepted with state 0 did not advance state 1
-    assert client.cycles[targeted.CHARGE_STATE] == 8  # rotation completes before the charging time gate
+    assert client.cycles[discover.STATES[0]] == 5
+    assert client.cycles[discover.STATES[1]] == 4
+    assert client.cycles[targeted.CHARGE_STATE] == 8
     ignored = [x["state"] for x in lines if x.get("note") == "early mark ignored"]
     assert ignored == [discover.STATES[0], discover.STATES[0], discover.STATES[1], targeted.CHARGE_STATE,
                        targeted.CHARGE_STATE]
@@ -214,10 +203,10 @@ def test_fake_run(tmp_path, monkeypatch) -> None:
     for cyc in cycles:
         dids = [x[3:] for x in cyc if x.startswith("22 ")]
         assert cyc[1] == "ATSH DACBF1" and dids[:2] == ["27C6", "2AF5"]
-        assert len(dids) == 3  # ROTATE_S = 0: exactly one rotating DID per cycle
+        assert len(dids) == 3
         polled.append(dids[2])
-    assert polled == [rotate[i % 3][1] for i in range(len(cycles))]  # pointer wraps, persists across states
-    assert [len(c) for c in cycles][:4] == [7, 10, 10, 7]  # a 17 entry needs its select; CB re-selected each cycle
+    assert polled == [rotate[i % 3][1] for i in range(len(cycles))]
+    assert [len(c) for c in cycles][:4] == [7, 10, 10, 7]
     assert lines[-1]["phase"] == "end"
     assert client.charging_elapsed_at_fresh >= targeted.CHARGE_MIN_S
     assert replay_ok(lines, strict=True)

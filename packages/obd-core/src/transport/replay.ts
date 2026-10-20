@@ -3,11 +3,8 @@ import { latin1Decode, latin1Encode } from "../recording/format.js";
 import type { Transport } from "./types.js";
 
 export class ReplayMismatchError extends Error {
-  /** 1-based line in the recording, or the line after the last one when the recording is exhausted. */
   readonly line: number;
-  /** Next tx data, undefined when exhausted. */
   readonly expected: string | undefined;
-  /** What was written, latin1-decoded. */
   readonly actual: string;
 
   constructor(line: number, expected: string | undefined, actual: string) {
@@ -23,13 +20,7 @@ export class ReplayMismatchError extends Error {
   }
 }
 
-/**
- * Plays a parsed recording back through the Transport interface. Each write must match the next
- * tx line exactly (docs/ARCHITECTURE.md "Recording format"); the rx lines up to the following tx
- * are delivered asynchronously, one callback per rx line, so recorded chunk boundaries survive.
- */
 export class ReplayTransport implements Transport {
-  /** It only answers what is written, so it is never busy when a session starts. */
   readonly startsIdle = true;
   private cursor = 0;
   private closed = false;
@@ -41,7 +32,6 @@ export class ReplayTransport implements Transport {
     if (this.closed) return Promise.reject(new Error("replay: transport is closed"));
     const actual = latin1Decode(bytes);
     const batch: string[] = [];
-    // Collect rx (skipping meta) from index i up to the next tx; returns that tx's index or lines.length.
     const collectRx = (from: number): number => {
       let i = from;
       for (; i < this.lines.length; i++) {

@@ -1,8 +1,3 @@
-// `pnpm beta:intake` (ADR-019): docs/specs/T2.9-beta-data-upload.md §Stage C2, §Flow, Decisions 2 (24-month retention)
-// and 13 (the provenance line is removed before the idempotence check); orchestrator rulings (2)–(4) in
-// docs/task-runs/T2.9.md. Pulls complete beta files from the Worker's admin routes, re-checks them, writes gitignored
-// local originals, runs redact_vin.py on each, and applies tombstones and retention. The log never holds file content,
-// secrets, or a full installId.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -15,8 +10,8 @@ import { scrubRecording } from "../../packages/obd-core/src/recording/scrub.js";
 export interface IntakeDeps {
   fetch: typeof fetch; baseUrl: string; adminToken: string;
   repoRoot: string; now: Date;
-  redact(path: string): Promise<void>;   // CLI: spawns `uv run tools/spike/redact_vin.py <path>`; exit ≠ 0 throws
-  log(line: string): void;               // one line per action; never prints file content, secrets, or installIds in full
+  redact(path: string): Promise<void>;
+  log(line: string): void;
 }
 export interface IntakeResult { added: string[]; refused: string[]; deleted: string[]; expired: string[] }
 
@@ -28,14 +23,12 @@ const MANIFEST_KEY = new RegExp(`^files/(${UUID_V4})/(${UUID_V4})/manifest\\.jso
 const indexSchema = z.strictObject({
   version: z.literal(1),
   files: z.array(z.strictObject({ installId: z.string(), fileId: z.string(), month: z.string(), paths: z.array(z.string()),
-    // Saved before the original is written and cleared after redact, so an interrupted run's files are known.
     pending: z.literal(true).optional() })),
 });
 type Index = z.infer<typeof indexSchema>;
 
 class Refused extends Error {}
 
-/** The CLI's redact: `uv run tools/spike/redact_vin.py <path>` from repoRoot. Its output is not logged. */
 export function uvRedact(repoRoot: string): (path: string) => Promise<void> {
   return (path) => new Promise((done, fail) => {
     const child = spawn("uv", ["run", "tools/spike/redact_vin.py", path], { cwd: repoRoot, stdio: "ignore" });
@@ -73,8 +66,6 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
     save();
   };
 
-  // Tombstones, retention and interrupted runs first, over what is already local. An interrupted entry's files are
-  // removed and the file is pulled again below.
   const tombstones = new Set(z.object({ installIds: z.array(z.string()) }).parse(await (await admin("/admin/tombstones")).json()).installIds);
   for (const entry of [...index.files]) {
     const why = tombstones.has(entry.installId) ? "deleted" : expired(entry.month, deps.now) ? "expired" : entry.pending ? "interrupted" : undefined;
@@ -88,7 +79,7 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
       result[why].push(path);
       deps.log(`${why} ${path}${why === "deleted" ? " (tombstone)" : ""}`);
     }
-    try { rmdirSync(dirname(at(entry.paths[0]))); } catch { /* not empty */ }
+    try { rmdirSync(dirname(at(entry.paths[0]))); } catch { }
     drop(entry);
   }
 
@@ -118,7 +109,6 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
       const p = manifest.provenance;
       const path = `fixtures/recordings/${p.catalogId}-beta-${p.vehicleKey.slice(0, 8)}/${p.month}-${p.kind}-${p.fileId.slice(0, 8)}.jsonl`;
       const entry: Index["files"][number] = { installId, fileId, month: p.month, paths: [path, path.replace(/\.jsonl$/, ".redacted.jsonl")], pending: true };
-      // Checked before the pending save, so an index entry only ever names paths intake created.
       if (entry.paths.some((local) => existsSync(at(local)))) throw new Refused("the local file exists; not overwritten");
       index.files.push(entry);
       save();
@@ -126,7 +116,6 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
       try {
         writeFileSync(at(path), bytes, { flag: "wx" });
       } catch (error) {
-        // Any other error (EIO, ENOSPC) may leave a partial original: keep the pending entry so the next run removes it.
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
         drop(entry);
         throw new Refused("the local file exists; not overwritten");
@@ -134,7 +123,6 @@ export async function runIntake(deps: IntakeDeps): Promise<IntakeResult> {
       try {
         await deps.redact(at(path));
       } catch {
-        // Ruling (3): both paths were free before this run, so remove both (a partial .redacted.jsonl too); the next run retries.
         for (const local of entry.paths) rmSync(at(local), { force: true });
         drop(entry);
         throw new Refused("redact_vin.py refused it");
@@ -162,7 +150,6 @@ function parseManifest(bytes: Uint8Array, fileId: string): BetaManifest {
   return parsed.data;
 }
 
-/** Every listed part, each with its manifest size and line count, line-aligned. */
 async function download(manifest: BetaManifest, prefix: string, object: (key: string) => Promise<Uint8Array>): Promise<Uint8Array> {
   const parts: Uint8Array[] = [];
   for (const [i, listed] of manifest.parts.entries()) {
@@ -176,7 +163,6 @@ async function download(manifest: BetaManifest, prefix: string, object: (key: st
   return all;
 }
 
-/** The last line is exactly the manifest's provenance line; the rest re-scrubs unchanged (Decision 13). */
 function checkContent(text: string, manifest: BetaManifest): void {
   const cut = text.lastIndexOf("\n", text.length - 2) + 1;
   const body = text.slice(0, cut);

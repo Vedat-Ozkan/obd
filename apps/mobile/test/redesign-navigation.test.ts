@@ -1,5 +1,3 @@
-// X-2026-09-28-app-redesign C1: system back (spec §Verification, isolated failures 1 and 2) and the Car screen's SoC hero
-// (Decision 2: EQUINOXEV_SOC, 22 2B43, one decimal) replayed from the committed Equinox recordings.
 // @ts-expect-error Node built-ins are outside the mobile compilation target.
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -20,7 +18,6 @@ const checkStack: readonly Route[] = [{ name: "garage" }, { name: "car", entryId
 describe("system back", () => {
   it("blocks on the check screen while a diagnosis or charge log runs, instead of unmounting the console", () => {
     expect(back(checkStack, true)).toBe("blocked");
-    // Unlocked, the same stack pops, so the block comes from the lock and not from the route.
     expect(back(checkStack, false)).toEqual(checkStack.slice(0, 2));
     artifact.back = { lockedCheck: back(checkStack, true), unlockedCheck: back(checkStack, false) };
   });
@@ -50,9 +47,8 @@ describe("Car screen SoC hero", () => {
     const hero = socHero(report);
     const soc = report.signals.filter((s) => s.id === "EQUINOXEV_SOC" && s.source.command === "22 2B43").at(-1);
     if (soc) {
-      // The latest 2B43 reading, not the high-resolution 27C6 one, rounded to one decimal as in the mockups.
       expect(hero).toEqual({ percent: Math.round(soc.value * 10) / 10, tier: "verified", scannedAt: report.scannedAt });
-      if (name === "2026-09-22-spike.redacted.jsonl") expect(hero?.percent).toBe(69.8); // the approved mockup's value
+      if (name === "2026-09-22-spike.redacted.jsonl") expect(hero?.percent).toBe(69.8);
     } else {
       expect(hero).toBeUndefined();
     }

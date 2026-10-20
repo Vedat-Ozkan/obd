@@ -1,5 +1,3 @@
-// Markdown codes section from fixed templates: docs/specs/T0.7-codes-report.md "Stage B2: render.ts".
-// Numbers are rounded to 3 decimals as scripts/replay.ts readingText does. No VIN (ADR-014, ADR-017; Q6).
 import type { PidReading } from "../obd/j1979.js";
 import { LOW_COUNTER, type CodesReport, type DtcRead, type FreezeFrame, type ModuleCodes, type PidValue, type Tri } from "./codes.js";
 
@@ -74,7 +72,6 @@ function verdictSentence(r: CodesReport["recentlyCleared"]): string {
   return "Unknown: the checks disagree, so the data does not show whether codes were cleared recently.";
 }
 
-/** Markdown section from fixed templates; deterministic; no VIN; numbers only from the report. */
 export function renderCodesReport(report: CodesReport): string {
   const { legs, verdict } = report.recentlyCleared;
   const n = report.modules.length;

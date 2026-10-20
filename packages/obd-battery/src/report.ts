@@ -161,8 +161,6 @@ export function buildBatteryDiagnosis(input: {
   parked?: ParkedScan;
 }): BatteryDiagnosisReport {
   const signals: ObservedBatterySignal[] = input.signalReadings.flatMap(({ reading, command }) => reading.ok ? [{ id: reading.id, name: reading.name, value: reading.value, unit: reading.unit, tier: reading.tier, source: { recording: input.recording, command, ecu: reading.ecu } }] : []);
-  // The decoder emits the three 2AF5 definitions together for each reply frame.
-  // Restart at AVG so MIN and MAX cannot be paired across replies.
   let min: ObservedBatterySignal | undefined;
   let max: ObservedBatterySignal | undefined;
   let pair: { min: ObservedBatterySignal; max: ObservedBatterySignal } | undefined;
@@ -210,7 +208,6 @@ export async function batteryDiagnosisFromRecording(jsonl: string, input: { gara
   const sessionCars = lines.flatMap((line) => line.dir === "meta" && "car" in line ? [line.car] : []);
   if (sessionCars.length > 1) throw new Error("expected a single recording session");
   if (sessionCars[0] !== "chevrolet-equinox-ev-2024") throw new Error("Equinox recording meta is missing");
-  // The app's battery-scan key (X-2026-09-27-power-state-meta) wins; older files carry the power state only in a note.
   const start = lines.find((line) => line.dir === "meta" && "car" in line);
   const key = start?.dir === "meta" ? start.powerState : undefined;
   if (key !== undefined && key !== "ready" && key !== "unknown") throw new Error("battery scan power state meta is invalid");

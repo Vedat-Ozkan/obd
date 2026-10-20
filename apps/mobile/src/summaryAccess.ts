@@ -1,10 +1,8 @@
 import type { SummaryRequest } from "obd-assist";
 
-// C1 HTTP contract and D1 disclosure version, not beta consent.
 export const SUMMARY_CONSENT_VERSION = "t2.10-openrouter-deepseek-v1";
 export const SUMMARY_DISCLOSURE = "Send minimized, VIN-free battery report facts through OpenRouter (United States) to DeepSeek (mainland China) for an AI summary. These services may process or retain the facts under their privacy policies. The offline report stays available. You can stop future requests by withdrawing consent.";
 
-// Exact C1 aliases, prompts and development policy bounds (T2.10d Sources).
 export const SUMMARY_MODEL = "deepseek/deepseek-v4.1-flash";
 export interface DevelopmentUsage {
   model: typeof SUMMARY_MODEL | "deepseek/deepseek-v4.1-flash-20260910";
@@ -13,10 +11,8 @@ export interface DevelopmentUsage {
   providerCostUsd: number | null; estimatedUsd: number; latencyMs: number;
 }
 export interface DevelopmentBudget { uses: number; headroomMicroUsd: number; enabled: boolean; chargedOrReservedMicroUsd: number }
-// Closed copy of the Worker's FailedCheck (tools/summary-backend/openrouter.ts); the phone cannot import tools/.
 export const SERVER_FAILED_CHECKS = ["envelope", "bounds", "provider", "json", "shape", "facts"] as const;
 export type ServerFailedCheck = (typeof SERVER_FAILED_CHECKS)[number];
-// failedCheck is non-null only for a fallback envelope with reason "invalid-response" and a value in the set.
 export interface SummaryAccessResult { kind: "llm" | "fallback"; summary?: unknown; usage: DevelopmentUsage | null; failedCheck: ServerFailedCheck | null }
 export interface SummaryAccess {
   generate(request: SummaryRequest, requestId: string): Promise<SummaryAccessResult>;
@@ -25,7 +21,6 @@ export interface SummaryAccess {
 }
 const integer = (value: unknown, max = Number.MAX_SAFE_INTEGER): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
 const cost = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
-// 2048 is summaryMaxCompletionTokens in tools/summary-backend/openrouter.ts; this file cannot import the Worker.
 function projectUsage(value: unknown): DevelopmentUsage | null {
   if (typeof value !== "object" || value === null) return null;
   const u = value as Record<string, unknown>;
@@ -50,8 +45,6 @@ export class SummaryAccessError extends Error {
 }
 
 function localOrigin(value: string): string | undefined {
-  // Validate the spelling before URL canonicalization (which accepts 127.1,
-  // octal and integer hostnames). Never accept credentials, query or paths.
   const match = /^(https?):\/\/(localhost|\d+\.\d+\.\d+\.\d+)(?::([1-9]\d{0,4}))?\/?$/.exec(value);
   if (!match) return;
   const [, , host, port] = match;
@@ -66,8 +59,6 @@ function localOrigin(value: string): string | undefined {
 }
 
 async function readResponse(response: Response): Promise<string> {
-  // C1 bounds output at 32 KiB. Expo fetch may not expose a stream reader;
-  // both the streaming and text response paths enforce the same byte bound.
   if (!response.body?.getReader) {
     const text = await response.text();
     if (new TextEncoder().encode(text).byteLength > 32768) throw new Error("invalid response");
@@ -89,7 +80,6 @@ async function readResponse(response: Response): Promise<string> {
   } finally { void reader.cancel().catch(() => {}); }
 }
 
-/** Holds only the separate owner-entered development token, never a provider key. */
 export function createDevelopmentSummaryAccess(options: { development: boolean; fetch: typeof globalThis.fetch }) {
   let origin: string | undefined;
   let token = "";

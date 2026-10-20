@@ -13,7 +13,6 @@ const write = writeFileSync as (path: string, text: string) => void;
 const root = new URL("../../../", import.meta.url);
 const FIXTURE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
 const ARTIFACT = "/tmp/t0.6b-relay-replay.json";
-// The screen builds this URL; the client must never put it, or the token, on the wire or in the artifact.
 const TOKEN = "SECRET-TOKEN-0123";
 const phoneUrl = `ws://relay.test:8765/phone?token=${TOKEN}`;
 const phoneMeta: RelayPhoneMeta = { vehicle: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", writeChar: "fff2", notifyChar: "fff1", mtu: 247 };
@@ -49,7 +48,7 @@ class FakeTransport implements Transport {
   constructor(private readonly log: string[]) {}
   async write(bytes: Uint8Array): Promise<void> { this.onWrite?.(); this.writes.push(latin1Decode(bytes)); this.log.push(`ble:write:${latin1Decode(bytes)}`); if (this.fail) throw this.fail; }
   onData(callback: (bytes: Uint8Array) => void): () => void { this.subscribers.add(callback); return () => { this.subscribers.delete(callback); }; }
-  async close(): Promise<void> { /* nothing to release */ }
+  async close(): Promise<void> { }
   data(bytes: string | number[]): void { const chunk = typeof bytes === "string" ? latin1Encode(bytes) : Uint8Array.from(bytes); for (const callback of [...this.subscribers]) callback(chunk); }
 }
 
@@ -119,19 +118,31 @@ describe("recording replay through RelayClient", () => {
 });
 
 describe("synthetic failure scenarios (one per listed failure)", () => {
+  it("T2.16 accepts exact 1902FF and refuses variants before BLE", async () => {
+    const { socket, fake } = harness();
+    socket.receive(command("exact", "19 02 FF")); await flush();
+    expect(fake.writes).toEqual(["19 02 FF\r"]);
+    fake.data("18DAF117035902FF\r>"); await flush();
+    for (const [index, text] of ["190200", "190201", "190A", "1901FF", "19FFFF", "1902FF00", "1902FFF", "1902F", "19\r02FF"].entries()) {
+      socket.receive(command(String(index), text)); await flush();
+    }
+    expect(fake.writes).toEqual(["19 02 FF\r"]);
+    expect(socket.results().find((result) => result.id === "exact")).toMatchObject({ ok: true });
+    expect(socket.results().filter((result) => result.id !== "exact")).toHaveLength(9);
+  });
   it("1. a malformed, binary, duplicate-ID or pre-open command never reaches BLE", async () => {
     for (const frame of ["{not json", JSON.stringify({ type: "command", id: "1" }), JSON.stringify({ ...command("1", "0100"), extra: 1 }), new Uint8Array([1, 2, 3])]) {
       const { socket, fake, terminals } = harness();
       socket.emit("message", { data: frame });
       await flush(); expect(fake.writes).toEqual([]); expect(socket.results()).toEqual([]); expect(terminals).toEqual([false]);
     }
-    { // duplicate ID after a completed request
+    {
       const { socket, fake, terminals } = harness();
       socket.receive(command("1", "0100")); await flush(); fake.data("41 00\r\r>"); await flush();
       socket.receive(command("1", "0100")); await flush();
       expect(fake.writes).toEqual(["0100\r"]); expect(terminals).toEqual([false]);
     }
-    { // traffic before the socket opened
+    {
       const log: string[] = []; const socket = new FakeSocket(log); const fake = new FakeTransport(log); const terminals: boolean[] = [];
       const client = new RelayClient(socket, fake, phoneMeta, async () => true, undefined, undefined, (u) => { terminals.push(u); });
       socket.receive(command("1", "0100")); await flush();

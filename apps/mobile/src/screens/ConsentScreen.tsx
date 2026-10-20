@@ -7,7 +7,6 @@ import { Button, Card, Screen, styles, Text } from "../ui/kit.js";
 import { consentSections } from "../ui/text.js";
 import { useTokens } from "../ui/theme.js";
 
-/** One pinned paragraph behind its own title; closed until tapped. */
 function ConsentSection({ title, body }: { title: string; body: string }) {
   const tokens = useTokens();
   const [open, setOpen] = useState(false);
@@ -22,8 +21,6 @@ function ConsentSection({ title, body }: { title: string; body: string }) {
   </Card>;
 }
 
-// Spec §Screens 8 and §Decisions 5: the pinned beta-1 text verbatim, the intro always shown and each "**Title:**" paragraph
-// in its own section. The switch, Continue and the decision are unchanged (T2.9).
 function ConsentScreen({ beta, betaMessage, consentShare, setConsentShare, busy, decideBeta }: { beta: BetaStatus; betaMessage: string; consentShare: boolean; setConsentShare: (share: boolean) => void; busy: boolean; decideBeta: (share: boolean) => Promise<void> }) {
   const tokens = useTokens();
   const { intro, sections } = consentSections(CONSENT_TEXT);

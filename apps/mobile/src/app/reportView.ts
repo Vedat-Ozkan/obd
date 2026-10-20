@@ -6,35 +6,20 @@ type Section = "soc" | "cells" | "capacity" | "twelveVolt";
 type Module = CodesReport["modules"][number];
 export type { RatingView };
 
-/**
- * The SoC hero: the latest EQUINOXEV_SOC (22 2B43) reading with one decimal, as in the approved mockups
- * (docs/specs/X-2026-09-28-app-redesign.md Decision 2; signal from packages/obd-core/vehicles/chevrolet-equinox-ev/default.json).
- */
 export function socHero(report: BatteryDiagnosisReport): { percent: number; tier: "verified" | "community"; scannedAt: string } | undefined {
   const soc = report.signals.filter((signal) => signal.id === "EQUINOXEV_SOC").at(-1);
   return soc ? { percent: Math.round(soc.value * 10) / 10, tier: soc.tier, scannedAt: report.scannedAt } : undefined;
 }
 
-/** The route names its report by scannedAt and recording; shared screen state would show whichever report was opened last. */
 export function findReport(reports: readonly BatteryDiagnosisReport[], key: { scannedAt: string; recording: string }): BatteryDiagnosisReport | undefined {
   return reports.find((report) => report.scannedAt === key.scannedAt && report.recording === key.recording);
 }
 
-// Report precision, as renderBatteryDiagnosis prints it.
 const num = (value: number) => String(Math.round(value * 10000) / 10000);
 const UNITS: Partial<Record<string, string>> = { percent: "%", volts: "V" };
 const withUnit = (signal: ObservedBatterySignal) => `${num(signal.value)} ${UNITS[signal.unit] ?? signal.unit}`;
 const mv = (volts: number) => Math.round(volts * 10000) / 10;
 
-/**
- * The 22 2AF5 reply behind the report's cell spread. The decoder emits AVG, MIN, MAX together for each reply, so the report's
- * signals hold each reply's readings next to each other. buildBatteryDiagnosis takes the first reply whose MIN and MAX both
- * decoded from one ECU, but the report drops undecoded rows, so it cannot show where one reply ended. This takes the first
- * MIN directly followed by a MAX, and returns it only with the AVG directly before it and when max − min is the report's own
- * spread (the same decoded numbers, so exact). Anything else shows the spread alone. Residual: if hidden undecoded rows
- * join two replies whose pair happens to give the same spread, the cells shown can belong to another reply than the one
- * buildBatteryDiagnosis used; only recording the chosen reply in obd-battery removes that (redesign task record follow-up).
- */
 function cellReply(report: BatteryDiagnosisReport): { min: ObservedBatterySignal; avg: ObservedBatterySignal; max: ObservedBatterySignal } | undefined {
   const spread = report.cellSpread;
   if (!spread) return undefined;
@@ -59,7 +44,6 @@ function codesValue(codes: CodesReport): string {
   return codesRead(codes.modules) ? "No codes" : "Not read";
 }
 
-/** Report summary (spec §Screens 3): the SoC hero and four rows in fixed order. */
 export function reportSummary(report: BatteryDiagnosisReport): { soc: ReturnType<typeof socHero>; verdict: ReturnType<typeof redFlagScreen>; rows: readonly { section: "cells" | "capacity" | "twelveVolt" | "codes"; label: string; value: string; rating: RatingView }[] } {
   const twelve = lastTwelveVolt(report);
   const ratings = reportRatings(report);
@@ -84,10 +68,6 @@ const TAG_LABEL = { verified: "Verified", community: "Community" };
 const reading = (label: string, signal: ObservedBatterySignal): Reading => ({ label, value: withUnit(signal), tier: signal.tier });
 const sourceOf = (signals: readonly ObservedBatterySignal[]) => [...new Set(signals.map((s) => `${s.source.command} from ECU ${s.source.ecu}`))].join("; ");
 
-/**
- * A section detail (spec §Screens 4). "What this means" is the report's own reason string plus at most two fixed sentences,
- * each backed by ADR-018 §Evidence and limits or the spec's §Sources row for that value.
- */
 export function sectionDetail(report: BatteryDiagnosisReport, section: Section): Detail {
   if (section === "soc") {
     const soc = report.signals.filter((s) => s.id === "EQUINOXEV_SOC").at(-1);
@@ -140,7 +120,6 @@ export function sectionDetail(report: BatteryDiagnosisReport, section: Section):
   };
 }
 
-// Labels as renderCodesReport prints them (packages/obd-core/src/report/render.ts).
 const LEGS: readonly [keyof CodesReport["recentlyCleared"]["legs"], string][] = [
   ["noStoredDtcs", "No stored codes (Mode 03)"],
   ["monitorsIncomplete", "A readiness monitor incomplete (PID 01)"],
@@ -154,7 +133,6 @@ function moduleSummary(module: Module): string {
   return codesRead([module]) ? "No codes" : "Codes not read";
 }
 
-/** Codes (spec §Screens 5). */
 export function codesView(codes: CodesReport): { rating: RatingView; codeCount: number; legs: readonly { label: string; result: Tri }[]; thresholds: typeof LOW_COUNTER; modules: readonly { ecu: string; summary: string }[] } {
   return {
     rating: codesRating(codes),
@@ -165,7 +143,6 @@ export function codesView(codes: CodesReport): { rating: RatingView; codeCount: 
   };
 }
 
-// Module detail wording follows renderCodesReport's module section (render.ts), so each value reads as the module reported it.
 const round3 = (v: number) => String(Math.round(v * 1000) / 1000);
 type Status = { status: "not-read" } | { status: "unsupported" } | { status: "failed"; reason: string; code?: number };
 function statusWord(s: Status): string {
@@ -183,7 +160,6 @@ function freezeText(f: Module["freezeFrame"]): string {
   return [`stored for ${f.dtc}`, ...readings].join("; ");
 }
 
-/** Module detail (spec §Screens 5): modes 03/07/0A, readiness, PIDs 30/31/4E/21/4D and the freeze frame. */
 export function moduleRows(codes: CodesReport, ecu: string): readonly { label: string; value: string }[] | undefined {
   const m = codes.modules.find((module) => module.ecu === ecu);
   if (!m) return undefined;
@@ -206,7 +182,6 @@ export function moduleRows(codes: CodesReport, ecu: string): readonly { label: s
   ];
 }
 
-/** Chart 2 (scan history): one SoC point per check that read one, oldest first. */
 export function historyPoints(reports: readonly BatteryDiagnosisReport[]): readonly { scannedAt: string; percent: number }[] {
   return reports.flatMap((report) => {
     const hero = socHero(report);

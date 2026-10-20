@@ -5,7 +5,6 @@ import type { Frame } from "../src/elm/isotp.js";
 import { decodeReadiness, SPARK_MONITORS, type MonitorId } from "../src/obd/readiness.js";
 import { decodeSupported } from "../src/obd/supported.js";
 
-// Synthetic frames (ecu 7E8), built inline.
 function frame(...bytes: number[]): Frame {
   return { header: "7E8", ecu: "7E8", data: Uint8Array.from(bytes) };
 }
@@ -58,15 +57,12 @@ describe("readiness layout against the vendored OBDb 01/01 (bix = 8 * byte + 7 -
   const signals = obdb.commands.find((c) => c.cmd["01"] === "01")?.signals ?? [];
   const bix = (id: string) => signals.find((s) => s.id === id)?.fmt.bix;
 
-  /** A 41 01 frame with only OBDb bit `bix` set (bix 0 = A7, 8 = B7, ...). */
   function withBix(b: number): Frame {
     const data = [0, 0, 0, 0];
     data[b >> 3] |= 0x80 >> (b & 7);
     return frame(0x41, 0x01, ...data);
   }
 
-  // B-byte *_SUP bix 13/14/15 = B2/B1/B0; C-byte *_SUP bix 16..23 = C7..C0 = SPARK_MONITORS[23 - bix].
-  // C4: OBDb says ACRF (A/C refrigerant); we follow Wikipedia's GPF (docs/ELM327.md §J1979 conventions, conflict).
   it.each([
     ["CCM_SUP", "components"], ["FUEL_SUP", "fuel"], ["MIS_SUP", "misfire"],
     ["EGR_SUP", "egrVvt"], ["HTR_SUP", "o2Heater"], ["O2S_SUP", "o2Sensor"], ["ACRF_SUP", "gpf"],

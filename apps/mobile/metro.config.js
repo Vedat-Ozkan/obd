@@ -1,5 +1,3 @@
-// Sources use NodeNext-style `.js` specifiers for `.ts` files (tsc needs them);
-// Metro does not map those, so try `.ts`/`.tsx` first for relative `.js` imports.
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);

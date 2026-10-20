@@ -1,14 +1,7 @@
-// Beta upload Worker's request handler (ADR-019): docs/specs/T2.9-beta-data-upload.md §Stage C1 HTTP contract, plus the
-// orchestrator's C1-b route DELETE /v1/files/<fileId>, D1's 410 and C1b's 204 deletes (docs/task-runs/T2.9.md). The R2
-// binding is typed locally (no @cloudflare/workers-types). It logs nothing: no IP, secret, token or body ever reaches a log
-// or a response.
-// D5: worker.ts is the entry module and exports only the fetch handler, since workerd treats every named export of the
-// main module as an entrypoint.
 import { z } from "zod";
 import { betaManifestSchema, CONSENT_VERSIONS, PART_MAX_BYTES } from "../../packages/obd-core/src/recording/provenance.js";
 
 export interface BucketObject { key: string; size: number; uploaded: Date }
-/** The R2Bucket subset used here. */
 export interface BucketLike {
   put(key: string, value: string | ArrayBuffer): Promise<unknown>;
   get(key: string): Promise<(BucketObject & { body: ReadableStream }) | null>;
@@ -20,12 +13,11 @@ export interface Env { BETA_BUCKET: BucketLike; ADMIN_TOKEN: string }
 
 export const REGISTRATIONS_PER_DAY = 20;
 export const INSTALL_DAILY_BYTES = 500 * 1024 * 1024;
-export const GLOBAL_MAX_BYTES = 60 * 1024 ** 3;   // ≈ $0.75/month ceiling at the recalled R2 price
+export const GLOBAL_MAX_BYTES = 60 * 1024 ** 3;
 
 const UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const isId = (value: string) => new RegExp(`^${UUID_V4}$`).test(value);
 const PART_INDEX = /^(\d|[1-5]\d|6[0-3])$/;
-// The phone's secret is two UUID v4s joined (spec §Provenance and keys).
 const registerSchema = z.strictObject({
   installId: z.string().regex(new RegExp(`^${UUID_V4}$`)),
   secret: z.string().regex(new RegExp(`^(${UUID_V4}){2}$`)),
@@ -33,7 +25,6 @@ const registerSchema = z.strictObject({
 });
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-/** Fixed reasons only: nothing from the request is echoed. */
 const fail = (status: number, reason: string) => json({ error: reason }, status);
 const day = (date: Date) => date.toISOString().slice(0, 10);
 const month = (date: Date) => date.toISOString().slice(0, 7);
@@ -42,7 +33,6 @@ async function sha256(text: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
 }
 const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-/** Constant time over two equal-length digests. */
 function sameDigest(a: Uint8Array, b: Uint8Array): boolean {
   let diff = a.length ^ b.length;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ (b[i] ?? 0);
@@ -73,7 +63,6 @@ function bearer(request: Request): string | undefined {
 
 interface Install { installId: string; known: boolean }
 
-/** `Bearer <installId>:<secret>`. undefined = 401. `known: false` = no install record (the delete routes only). */
 async function tester(request: Request, bucket: BucketLike): Promise<Install | undefined> {
   const match = new RegExp(`^(${UUID_V4}):(.+)$`).exec(bearer(request) ?? "");
   if (!match) return undefined;
@@ -96,11 +85,8 @@ async function register(request: Request, bucket: BucketLike, now: Date): Promis
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) return fail(400, "bad body");
   const { installId, secret, consentVersion } = parsed.data;
-  // A deleted install stays deleted: its tombstone tells intake to drop everything under that installId. 410 tells the
-  // phone to wipe (D1); 409 means a live record, whose secret may differ.
   if (await bucket.head(`tombstones/${installId}.json`)) return fail(410, "install deleted");
   if (await bucket.head(`installs/${installId}.json`)) return fail(409, "install exists");
-  // R4: an install deleted today still counts, by its tombstone's upload day, so deletes free no registration slot.
   const today = [...await listAll(bucket, "installs/"), ...await listAll(bucket, "tombstones/")].filter((object) => day(object.uploaded) === day(now));
   if (today.length >= REGISTRATIONS_PER_DAY) return fail(429, "too many registrations today");
   await bucket.put(`installs/${installId}.json`, JSON.stringify({ secretSha256: hex(await sha256(secret)), consentVersion, month: month(now) }));
@@ -114,7 +100,6 @@ async function putPart(request: Request, bucket: BucketLike, installId: string, 
   const length = Number(declared);
   if (length > PART_MAX_BYTES) return fail(413, "part too large");
   const key = `files/${installId}/${fileId}/part-${String(index).padStart(3, "0")}.jsonl`;
-  // A re-sent part replaces the stored one, so the old copy does not count against the quotas.
   const others = (objects: BucketObject[]) => objects.filter((object) => object.key !== key);
   const mine = others(await listAll(bucket, `files/${installId}/`)).filter((object) => day(object.uploaded) === day(now));
   if (mine.reduce((sum, object) => sum + object.size, 0) + length > INSTALL_DAILY_BYTES) return fail(429, "daily upload quota reached");
@@ -140,10 +125,7 @@ async function putManifest(request: Request, bucket: BucketLike, installId: stri
 }
 
 async function deleteInstall(bucket: BucketLike, install: Install, now: Date): Promise<Response> {
-  // C1b: no record = deleted (tombstoned) or never registered, so nothing is held; 204 and nothing is written. A 401 then
-  // only means a live record holds another secret.
   if (!install.known) return new Response(null, { status: 204 });
-  // Files first and the install record last, so an interrupted delete can be repeated with the same credentials.
   await deleteAll(bucket, `files/${install.installId}/`);
   await bucket.put(`tombstones/${install.installId}.json`, JSON.stringify({ month: month(now) }));
   await bucket.delete(`installs/${install.installId}.json`);
@@ -190,7 +172,6 @@ async function route(request: Request, env: Env, now: Date): Promise<Response> {
   if (!isId(match[1]) || (part && !PART_INDEX.test(part[2]))) return fail(400, "bad id");
   const install = await tester(request, bucket);
   if (!install) return fail(401, "unauthorized");
-  // C1b: a file delete for an install with no record is done, as for DELETE /v1/installs/me; nothing is written.
   if (!install.known) return method === "DELETE" ? new Response(null, { status: 204 }) : fail(401, "unauthorized");
   if (part) return putPart(request, bucket, install.installId, match[1], Number(part[2]), now);
   if (manifest) return putManifest(request, bucket, install.installId, match[1]);
@@ -202,7 +183,6 @@ export async function handleRequest(request: Request, env: Env, now: Date): Prom
   try {
     return await route(request, env, now);
   } catch {
-    // Deliberately not logged: an error may carry request data.
     return fail(500, "internal error");
   }
 }

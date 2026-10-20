@@ -14,7 +14,6 @@ export interface SummaryEnv {
   SUMMARY_DB?: SummaryDatabase;
   SUMMARY_DEV_ENABLED?: string; SUMMARY_DEV_HOST?: string; SUMMARY_DEV_TOKEN?: string;
   OPENROUTER_API_KEY?: string; SUMMARY_KEY_LIMIT_USD?: string; SUMMARY_BUDGET_MICRO_USD?: string;
-  // "1" admits the comparison arms (assistant models other than the summary model) on the assistant route.
   SUMMARY_COMPARE_ENABLED?: string;
 }
 interface Budget { uses: number; spent: number; inflight: string | null; disabled: number }
@@ -31,7 +30,6 @@ const requestSchema = z.strictObject({
   request: z.strictObject({ version: z.literal(1), promptVersion: z.literal("t2.10-v4"), facts }),
 });
 const tools = assistantReplySchema.properties.tool.enum.filter((name) => name !== null);
-// Raw request cap; the outgoing body has its own cap (maxAssistantBodyBytes).
 const maxRawAssistantBytes = 32768;
 const models = Object.keys(pins) as AssistantModel[];
 const assistantSchema = z.strictObject({
@@ -43,7 +41,6 @@ const assistantSchema = z.strictObject({
 });
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const fallback = (reason: SummaryFallback, status = 200) => json({ kind: "fallback", reason }, status);
-/** The fallback after a paid call, both routes. `upstreamStatus` is a bare number and exists only for a provider-error, `failedCheck` a closed word and only for an invalid-response; no upstream or reply text is copied. */
 const postCallFallback = (result: { reason?: SummaryFallback; usage?: unknown; upstreamStatus: number | null; failedCheck: FailedCheck | null }) => {
   const reason = result.reason ?? "invalid-response";
   return json({ kind: "fallback", reason, ...(result.usage ? { usage: result.usage } : {}), ...(reason === "provider-error" ? { upstreamStatus: result.upstreamStatus } : {}), ...(reason === "invalid-response" ? { failedCheck: result.failedCheck } : {}) });
@@ -69,8 +66,6 @@ async function budget(db: SummaryDatabase): Promise<Budget> {
   return row;
 }
 async function reserve(db: SummaryDatabase, requestId: string, reservation: number): Promise<SummaryFallback | null> {
-  // Both writes form one transaction. The acquisition ID guards the insert after
-  // an unsuccessful conditional update; unique ID conflicts roll back the batch.
   const result = await db.batch([
     db.prepare("UPDATE summary_budget SET uses=uses+1, spent=spent+?, inflight=? WHERE id=1 AND disabled=0 AND inflight IS NULL AND spent+?<=1000000 AND NOT EXISTS (SELECT 1 FROM summary_requests WHERE request_id=?)").bind(reservation, requestId, reservation, requestId),
     db.prepare("INSERT INTO summary_requests (request_id,state,reservation,actual,error) SELECT ?, 'inflight', ?, NULL, NULL FROM summary_budget WHERE id=1 AND inflight=? AND changes()=1").bind(requestId, reservation, requestId),
@@ -81,14 +76,12 @@ async function reserve(db: SummaryDatabase, requestId: string, reservation: numb
   if (row.disabled || row.inflight) return "unavailable";
   return row.spent + reservation > 1000000 ? "budget-exhausted" : "unavailable";
 }
-/** The `error` column: a bare reason, plus the upstream status or the failed check when one is known. */
 function storedError(result: Pick<AdapterResult, "reason" | "upstreamStatus" | "failedCheck">): string | null {
   if (result.reason === "provider-error" && result.upstreamStatus !== null) return `provider-error:${String(result.upstreamStatus)}`;
   if (result.reason === "invalid-response" && result.failedCheck !== null) return `invalid-response:${result.failedCheck}`;
   return result.reason ?? null;
 }
 async function settle(db: SummaryDatabase, requestId: string, reservation: number, result: Pick<AdapterResult, "actualMicroUsd" | "kill" | "reason" | "upstreamStatus" | "failedCheck">): Promise<void> {
-  // The update uses the still-inflight request; a second settlement changes nothing.
   const charged = result.actualMicroUsd ?? reservation;
   const adjusted = result.kill ? Math.max(charged, reservation) : charged;
   const writes = await db.batch([
@@ -98,7 +91,6 @@ async function settle(db: SummaryDatabase, requestId: string, reservation: numbe
   if (writes.length !== 2 || !writes.every((entry) => entry.meta.changes === 1)) throw new Error("unsettled request");
 }
 
-/** Everything before a paid call, shared by both routes: replay, one-in-flight, budget, provider preflight, then the reservation. */
 async function admit(db: SummaryDatabase, key: string, adapter: ReturnType<typeof createOpenRouter>, requestId: string, reservation: number, pin: ModelPin): Promise<SummaryFallback | null> {
   const seen = await db.prepare("SELECT request_id FROM summary_requests WHERE request_id=?").bind(requestId).first();
   if (seen) return "already-requested";
@@ -116,7 +108,6 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
     try {
       const parsed = JSON.parse(await readBounded(request, maxRawAssistantBytes)) as unknown;
       if (typeof parsed === "object" && parsed !== null && "model" in parsed && typeof parsed.model === "string" && models.some((name) => name === parsed.model)) {
-        // The comparison arms exist only while the owner switches them on; each arm has its own consent.
         if (parsed.model !== summaryModel && env.SUMMARY_COMPARE_ENABLED !== "1") return fallback("unavailable", 503);
         if (!("consentVersion" in parsed) || parsed.consentVersion !== consentFor(parsed.model as AssistantModel)) return fallback("consent-required", 400);
       }
@@ -153,7 +144,6 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
         if (typeof parsed === "object" && parsed !== null && (!('consentVersion' in parsed) || parsed.consentVersion !== "t2.10-openrouter-deepseek-v1")) return fallback("consent-required", 400);
         input = requestSchema.parse(parsed);
       } catch { return fallback("invalid-request", 400); }
-      // The reservation comes from the exact outgoing body, before any D1 access.
       const prepared = prepareSummary(input.request);
       if (prepared.bodyBytes > maxSummaryBodyBytes) return fallback("invalid-request", 400);
       const reservation = prepared.reservation.microUsd;
@@ -168,5 +158,4 @@ export function createSummaryWorker(options: AdapterOptions = { fetch: globalThi
 }
 
 const worker = createSummaryWorker();
-// Wrangler's module entry requires a default export; the factory is the named API.
 export default worker;

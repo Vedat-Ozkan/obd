@@ -88,6 +88,6 @@ Architect writes a spec, implementer builds to it, reviewer gates it. `/feature 
 
 ## Style
 
-- TypeScript: strict, ESM, named exports only, `zod` at package boundaries, `vitest`. Small files, small functions. Comments explain why, not what.
+- TypeScript: strict, ESM, named exports only, `zod` at package boundaries, `vitest`. Small files, small functions.
 - Python (laptop bridge and planned isolated ML workspace): `uv`, `ruff`, type hints, `pytest`. Training dependencies stay out of the bridge and normal fixture-based CI.
 - Commit messages: imperative subject, body says what was verified. In Claude Code the implementer commits on its own worktree branch, staging files by path, and the integrator merges that branch into main after the reviewer approves it (never touching another tool's in-flight work). Other agents commit only when the user asks.

@@ -1,6 +1,3 @@
-// `pnpm replay <recording.jsonl>`: Node-only CLI, kept outside src/ so obd-core/src stays pure.
-// Output format: docs/specs/T0.4-elm327-session.md "packages/obd-core/scripts/replay.ts"; `decoded` lines:
-// docs/specs/T0.5-standard-decoding.md "scripts/replay.ts".
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -28,12 +25,9 @@ function count(map: Map<string, number>, key: string): void {
 
 const listCounts = (map: Map<string, number>) => [...map].map(([k, n]) => `${k}=${String(n)}`).join(", ");
 
-// ADR-014/ADR-017: the VIN stays on the device. Commands whose replies carry it, mapped to the number of
-// leading bytes kept (service + PID/DID echo): 0902 -> 49 02; 22 4193 -> 62 41 93 (spec amendment 2026-09-23).
 const VIN_REPLIES: Readonly<Record<string, number>> = { "0902": 2, "224193": 3 };
 const vinKeep = (cmd: string) => VIN_REPLIES[cmd.replace(/ /g, "").toUpperCase()] as number | undefined;
 
-/** afterVin: the previous command was a VIN command, so leftover VIN frames can land in this response's drops. */
 function formatBlock(lineNo: number, cmd: string, r: ElmResponse, afterVin: boolean, signals: readonly ObdbMode22Signal[]): string[] {
   const keep = vinKeep(cmd);
   const vin = keep !== undefined;
@@ -76,7 +70,6 @@ function readingText(r: PidReading): string {
   return `${r.id} ${String(Math.round(r.value * 1000) / 1000)} ${r.unit}`;
 }
 
-/** Mode 02 `02 <pid> <frame#>`: bitmap, PID 02 DTC, or a MODE01_PIDS value, each prefixed `freeze <frame#>`. */
 function freezeText(pid: number, frameNo: number, frame: Frame): string | undefined {
   const head = `freeze ${String(frameNo)}`;
   if (BITMAP_PIDS.includes(pid)) {
@@ -94,8 +87,6 @@ function freezeText(pid: number, frameNo: number, frame: Frame): string | undefi
   return undefined;
 }
 
-/** The `decoded` text for one frame, or undefined when the command has no decoder (T0.5 spec, replay table).
- *  VIN: status only, never a character (ADR-014, ADR-017). */
 function decodeText(cmd: string, frame: Frame): string | undefined {
   const c = cmd.replace(/ /g, "").toUpperCase();
   const m01 = /^01([0-9A-F]{2})$/.exec(c);
@@ -136,7 +127,6 @@ function decodeText(cmd: string, frame: Frame): string | undefined {
   return undefined;
 }
 
-/** Runs every tx of a recording through Elm327Session.send (retry: false, timeoutMs: 500) and formats the result. */
 export async function replayRecording(lines: readonly RecordingLine[], options: { signals?: readonly ObdbMode22Signal[] } = {}): Promise<string[]> {
   const session = new Elm327Session(new ReplayTransport(lines));
   const signals = lines.some((line) => line.dir === "meta" && line.car === "chevrolet-equinox-ev-2024")
@@ -196,7 +186,6 @@ async function main(): Promise<number> {
     process.stdout.write(output.join("\n") + "\n");
     return 0;
   } catch (e) {
-    // Parse errors and ReplayMismatchError both land here.
     if (e instanceof Error) {
       process.stderr.write(`${e.message}\n`);
       return 1;

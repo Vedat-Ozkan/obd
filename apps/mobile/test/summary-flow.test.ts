@@ -15,9 +15,7 @@ const bodyText = (init: RequestInit) => { if (typeof init.body !== "string") thr
 
 const root = new URL("../../../", import.meta.url);
 const paths = ["2026-09-22-spike", "2026-09-22-spike-2", "2026-09-24-phone-console"].map((name) => `fixtures/recordings/chevrolet-equinox-ev-2024/${name}.redacted.jsonl`);
-// SYNTHETIC hand-written v2 replies; not recorded model output.
 const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-explanatory-summary-responses.json", root), "utf8")) as { cases: { name: string; response: unknown }[] };
-// SYNTHETIC hand-written v3 replies, including a reconstruction of the diagnosed reply shape; not recorded model output.
 const splitResponses = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-summary-claim-split-responses.json", root), "utf8")) as { cases: { name: string; response: unknown }[] };
 function savedSplitReply(name: string): unknown {
   const found = splitResponses.cases.find((entry) => entry.name === name);
@@ -39,7 +37,6 @@ const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "
 const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
 const accepted = savedReply("explanatory-accepted");
-// Cites only IDs all three recordings have; the full explanatory reply cites SoC and 12 V facts the other reports may lack. The codes area is three claims citing the roll-ups.
 const commonReply = savedSplitReply("claim-split-common");
 
 function harness(reply: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = () => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: validUsage })), development = true, statusReply: () => Promise<Response> = () => Promise.resolve(Response.json(validBudget)), nextRequestId?: () => string) {
@@ -54,7 +51,6 @@ function harness(reply: (input: RequestInfo | URL, init?: RequestInit) => Promis
   } });
   access.configure(url, token);
   const flow = createDevelopmentSummaryFlow({ access, nextRequestId: nextRequestId ?? (() => ids(++sequence)), now: () => { clock += 25; return clock; } });
-  // The card rating and basis the app itself shows for the report, recorded beside each displayed summary so the artifact pairs them.
   const record = (name: string, view: SummaryView, source = "synthetic", report: BatteryDiagnosisReport = reports[0]) => {
     const cards = view.kind === "llm" ? reportSummary(report).rows.map((row) => ({ label: row.label, rating: ratingWord[row.rating.rating], basis: row.rating.basis })) : undefined;
     rows.push({ source, name, state: view.kind, text: view.text, ...cards ? { cards } : {}, template: view.template, reason: view.reason, evidence: view.evidence, consentVersion: SUMMARY_CONSENT_VERSION, requestCount: sent.length, postCount: sent.length, statusCount: statusSent.length, requestIds: sent.map((entry) => (JSON.parse(bodyText(entry.init)) as { requestId: string }).requestId) });
@@ -96,7 +92,6 @@ describe("recording → public development flow → HTTP access → local checke
     expect(sections[3].split("\n")[2]).toBe("Capacity was not measured: no completed charge log and reviewed capacity estimator are available.");
     expect(sections[4].split("\n")[2]).toBe("The twelve-volt battery status is not assessed.");
     expect(view.text).not.toMatch(/not-measured|not-assessed|not-indicated/);
-    // The codes area reads the four roll-ups, each with its coverage; the phone console read only stored.
     const codesLine = view.text.split("\n\n").at(-1)?.split("\n")[2];
     expect(codesLine).toContain("Stored diagnostic codes: none (5 of 5 modules read). ");
     if (index === 0) expect(codesLine).toBe("Stored diagnostic codes: none (5 of 5 modules read). Pending diagnostic codes: none (5 of 5 modules read); Permanent diagnostic codes: none (3 of 5 modules read). Readiness status: 5 of 5 modules read; the recently cleared check answered unknown.");
@@ -114,7 +109,6 @@ describe("recording → public development flow → HTTP access → local checke
     h.record("checked summary", view, path, reports[index]);
   });
 
-  // Item 4: the diagnosed reply shape, and a v2-era module citation, served as an `llm` summary, are caught by the phone's own check.
   it.each(["synthetic-reconstructed-single-claim-areas", "v2-era-module-citation"])("locally rejects synthetic %s HTTP output", async (name) => {
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: savedSplitReply(name) })));
     h.flow.consent(true);
@@ -148,7 +142,6 @@ describe("recording → public development flow → HTTP access → local checke
   });
 
   it("renders the adapter quantity from the phone's own report, whatever the server sent", async () => {
-    // One fixed server reply; only the report it is rendered against differs. The 12.8 report is a synthetic copy, not a recording.
     const synthetic128: BatteryDiagnosisReport = { ...reports[0], twelveVolt: { ...reports[0].twelveVolt, observations: reports[0].twelveVolt.observations.map((observation, index) => index === 0 ? { ...observation, volts: 12.8 } : observation) } };
     const shown: string[] = [];
     for (const [name, report, source] of [["real spike report", reports[0], paths[0]], ["synthetic copy with 12.8 V", synthetic128, "synthetic"]] as const) {
@@ -163,14 +156,12 @@ describe("recording → public development flow → HTTP access → local checke
   });
 
   it("renders every rating line from the phone's own report, whatever the server or the request handed to the client said", async () => {
-    // One fixed server reply. The stored-code report is a synthetic copy of the spike report, not a recording.
     const stored: BatteryDiagnosisReport = { ...reports[0], codes: { ...reports[0].codes, modules: reports[0].codes.modules.map((module, index) => index === 0 ? { ...module, stored: { status: "read", dtcs: ["P0133", "P0420"] } } : module) } };
     const codesLine = (text: string) => text.split("\n").filter((line, index, lines) => lines[index - 1] === "Diagnostic codes")[0];
     const shown: string[] = [];
     for (const [name, report, source, mutate] of [["real spike report", reports[0], paths[0], false], ["synthetic stored-code copy", stored, "synthetic", false], ["real spike report, request mutated by the client", reports[0], paths[0], true]] as const) {
       const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted })));
       if (mutate) {
-        // A test client that tampers with the request it was handed: the displayed rating must not follow it.
         const generate = h.access.generate.bind(h.access);
         h.access.generate = (request, requestId) => {
           for (const fact of request.facts) if (fact.id === "codes-rating") (fact as { value: string }).value = "Great";
@@ -180,7 +171,6 @@ describe("recording → public development flow → HTTP access → local checke
       h.flow.consent(true);
       const view = await h.flow.summaryFor(report);
       expect(view.kind).toBe("llm");
-      // The card's own data: every area except state of charge, which the app does not rate.
       for (const row of reportSummary(report).rows) expect(view.text, `${name} ${row.label}`).toContain(`\n\n${row.label}\nRating: ${ratingWord[row.rating.rating]}. Basis: ${row.rating.basis}.\n`);
       shown.push(codesLine(view.text));
       h.record(`rating lines rendered against the ${name}`, view, source, report);
@@ -305,7 +295,6 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     h.record(`usage ${name}`, view);
   });
 
-  // Failure 8: the phone shows a failed-check category only when the server envelope is an invalid-response naming one of the six.
   it.each([
     ["invalid-response", "facts", "facts"], ["invalid-response", "envelope", "envelope"], ["invalid-response", "bounds", "bounds"], ["invalid-response", "provider", "provider"], ["invalid-response", "json", "json"], ["invalid-response", "shape", "shape"],
     ["invalid-response", "SENTINEL reply", null], ["invalid-response", "FACTS", null], ["invalid-response", "facts ", null], ["invalid-response", 7, null], ["invalid-response", null, null], ["provider-error", "facts", null], ["no-credit", "facts", null],
@@ -317,7 +306,6 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     expect(view.evidence?.failedCheck).toBe(shown);
     expect(view.evidence?.usage).toEqual(validUsage);
     expect(JSON.stringify(view)).not.toContain("SENTINEL");
-    // The artifact row must not carry the sentinel value itself.
     h.record(`failedCheck ${reason} ${failedCheck === "SENTINEL reply" ? "reply-like text" : JSON.stringify(failedCheck)}`, view);
   });
 
@@ -355,7 +343,6 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
     h.record(`invalid usage ${String(index)} ${field}`, view);
   });
 
-  // Stage 3: the summary route's completion cap is 2,048 (openrouter.ts summaryMaxCompletionTokens); 1,024 was the v1 bound.
   it.each([1025, 1500, 2048])("keeps valid usage with %i output tokens", async (outputTokens) => {
     const usage = { ...validUsage, outputTokens };
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage })));

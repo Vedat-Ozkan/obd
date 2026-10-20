@@ -1,7 +1,6 @@
 export type Tier = "verified" | "beta";
 export type CatalogVehicle = { id: string; make: string; model: string; year: number; tier: Tier; recording?: string };
 
-// Exact model years and manufacturer sources are recorded in docs/specs/T2.8a-garage-picker-local.md.
 const models = [
   { slug: "chevrolet-equinox-ev", make: "Chevrolet", model: "Equinox EV", years: [2024, 2025, 2026] },
   { slug: "chevrolet-blazer-ev", make: "Chevrolet", model: "Blazer EV", years: [2024, 2025, 2026] },

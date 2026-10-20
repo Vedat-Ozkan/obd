@@ -1,6 +1,3 @@
-"""Offline checks for redact_vin.py (spec X-2026-09-23-vin-redaction, Verification). The real VIN never appears
-here: tests that need it learn it at runtime from the local originals and report only positions or names."""
-
 import hashlib
 import json
 import os
@@ -10,7 +7,7 @@ import go
 import pytest
 import redact_vin
 
-VIN = "1C4SYNTHETICVIN00"  # the repo's synthetic VIN (T0.4 spec Sources)
+VIN = "1C4SYNTHETICVIN00"
 MASKED = VIN[:11] + "000000"
 DIR = os.path.join(go.REPO, "fixtures", "recordings", "chevrolet-equinox-ev-2024")
 SPIKES = ("2026-09-22-spike", "2026-09-22-spike-2")
@@ -18,7 +15,6 @@ SHA = "0" * 64
 
 
 def frames(header: str, payload: bytes, sep: str = "") -> list[str]:
-    """ISO-TP frames as the ELM prints them with ATH1 (sep " " for ATS1)."""
     def fmt(pci: str, data: bytes) -> str:
         return sep.join([header, *(pci[i:i + 2] for i in range(0, len(pci), 2)), *(f"{b:02X}" for b in data)])
     out = [fmt(f"1{len(payload):03X}", payload[:6])]
@@ -56,7 +52,6 @@ def check_redacted(text: str, expected: str, masked: int) -> None:
 def test_29bit_two_ecus() -> None:
     def rec(vin: str) -> str:
         return recording("0902", interleave(frames("18DAF117", vin_0902(vin)), frames("18DAF128", vin_0902(vin))))
-    # 11-char chunks of 23-char frames: cuts land inside headers and inside serial bytes
     check_redacted(rec(VIN), rec(MASKED), 2)
     _, entries = redact_vin.redact(rec(VIN), "syn.jsonl", SHA)
     assert entries == ["L2 0902 18DAF117", "L2 0902 18DAF128"]
@@ -81,7 +76,7 @@ def test_did_4193_four_copies() -> None:
 
 
 def test_look_alikes_untouched() -> None:
-    s1_2af5 = recording("22 2AF5", ["18DAF1CB100D622AF5998199", "18DAF1CB2177999509022505"])  # spike line 156
+    s1_2af5 = recording("22 2AF5", ["18DAF1CB100D622AF5998199", "18DAF1CB2177999509022505"])
     assert "0902" in "".join(r.get("data", "") for r in read_records(s1_2af5))
     other = bytes.fromhex("490202") + VIN.encode()
     for text in (s1_2af5, recording("0902", frames("18DAF117", other))):
@@ -104,7 +99,6 @@ def with_rows(text: str, rows: list[dict]) -> str:
 
 
 def serial_in_unlisted_did() -> str:
-    """Mode 22 reply to a DID no RULES entry covers, carrying the VIN: only the safety net can catch it."""
     reply = "\r".join(frames("18DAF117", bytes.fromhex("621234") + VIN.encode())) + "\r\r>"
     return with_rows(recording("0902", frames("18DAF117", vin_0902(VIN))),
                      [{"t": 2.0, "dir": "tx", "data": "22 1234\r"}, {"t": 2.1, "dir": "rx", "data": reply}])
@@ -135,8 +129,6 @@ def test_refusals(text: str, reason: str, tmp_path, capsys) -> None:
 
 
 def test_already_masked_input_passes() -> None:
-    """T2.9 C2 ruling (1): a phone-scrubbed file (serial already 000000) is redacted, not refused; a real serial that
-    survives elsewhere is still refused."""
     two = recording("0902", interleave(frames("18DAF117", vin_0902(MASKED)), frames("18DAF128", vin_0902(MASKED))))
     did = recording("22 4193", frames("18DAF117", bytes.fromhex("624193") + MASKED.encode() * 4))
     for text, masked in ((two, 2), (did, 1)):
@@ -196,7 +188,6 @@ def test_committed_copy(stem: str) -> None:
 
 
 def diff_outside_windows(orig: str, out: str) -> tuple[int, list[int], list[str]]:
-    """Returns (masked digit positions, changed line numbers, problems) without exposing any content."""
     a, b = read_records(orig), read_records(out)
     windows = {}
     for m in redact_vin.messages(a):

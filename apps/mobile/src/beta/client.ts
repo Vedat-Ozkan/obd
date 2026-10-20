@@ -1,13 +1,8 @@
 import type { BetaManifest } from "obd-core/recording/provenance";
 import { BackendError, type Auth, type BetaBackend } from "./outbox.js";
 
-// The phone's HTTPS client for the beta upload Worker (ADR-019): docs/specs/T2.9-beta-data-upload.md §Stage C1 HTTP
-// contract and §client.ts, plus the orchestrator's C1-b DELETE /v1/files/<fileId>. A rejected request is
-// BackendError("network"); an answer other than 2xx is BackendError(<status>). Messages never hold the secret.
-
 export function createBetaClient(baseUrl: string, deps: {
   fetch: typeof fetch;
-  /** Stage D: expo-file-system UploadTask (httpMethod "PUT", BINARY_CONTENT). Tests: read the fake file, call fetch. */
   putFile(url: string, path: string, headers: Record<string, string>): Promise<{ status: number }>;
 }): BetaBackend {
   const url = (path: string) => `${baseUrl.replace(/\/+$/, "")}${path}`;

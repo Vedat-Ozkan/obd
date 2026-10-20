@@ -1,9 +1,6 @@
 import type { CellMinMax, ChargeLog, ChargePhases, GroupSet, Window } from "./session.js";
 
-// Spec §Estimates and error budgets, "Imbalance"; Decision 8. Community tier, no fault verdict.
-
 export interface SpreadPoint { at: "pre-rest-end" | "post-rest-end" | "charge-max"; t: number; spreadMv: number; socPct?: number }
-/** minIndex/maxIndex: 1-based position in the 80 valid records, record order. */
 export interface GroupExtremes { t: number; minIndex: number; minModule: number; maxIndex: number; maxModule: number; spreadMv: number }
 export interface Agreement { matching: number; of: number }
 
@@ -22,7 +19,6 @@ function extremes(set: GroupSet): GroupExtremes {
   };
 }
 
-/** A cycle: a complete group set and the 2AF5 sample read before it since the previous group set. */
 function cycles(log: ChargeLog): { cell: CellMinMax; set: GroupSet }[] {
   const out: { cell: CellMinMax; set: GroupSet }[] = [];
   let previous = -Infinity;

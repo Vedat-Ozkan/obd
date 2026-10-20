@@ -1,7 +1,3 @@
-// T2.7: a garage entry tagged `checked` gets the same battery diagnosis as a `mine` entry. Case 1 persists the redacted
-// Equinox spike report under the checked entry's ID and reads it back through fresh flow and history instances. Case 2 runs
-// the production scan action for the checked entry over the labelled synthetic combined scan. Expected values are fixed
-// literals read off `battery-diagnosis.ts <recording> --garage-id 2` output (spec §Sources), not re-derived from the report.
 // @ts-expect-error Node built-ins are outside the mobile compilation target.
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

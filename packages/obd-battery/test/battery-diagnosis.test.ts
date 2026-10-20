@@ -136,7 +136,6 @@ describe("T2.15 report-derived verdict replay", () => {
 
   it("shows synthetic code findings and incomplete coverage together", async () => {
     const baseReport = await replay("2026-09-22-spike.redacted.jsonl");
-    // Codes and ECU below come from the documented bytes in these labeled synthetic recordings.
     const names = ["codes-stored.jsonl", "codes-permanent.jsonl", "codes-cleared.jsonl"];
     const expectedFindings = [
       ["stored code P0133 reported by ECU 7E8.", "pending code U0158 reported by ECU 7E8.", "permanent code P0133 reported by ECU 7E8."],
@@ -266,7 +265,6 @@ describe("battery diagnosis recording replay", () => {
     expect(result.error).toMatch(/single recording session/);
   });
 
-  // X-2026-09-27-power-state-meta R1-R2. Synthetic: battery-diagnosis-full-scan.jsonl with only line 1 replaced.
   const synthetic = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
   const withStart = (note: string, powerState: unknown) => {
     const [, ...rest] = readFileSync(new URL(synthetic, root), "latin1").split("\n");

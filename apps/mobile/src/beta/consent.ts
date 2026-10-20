@@ -1,5 +1,3 @@
-// Beta consent (ADR-019): docs/specs/T2.9-beta-data-upload.md §Consent screen and §Privacy note, verbatim, one array
-// entry per line of the drafts. Any change needs a new CONSENT_VERSION (test/beta-consent.test.ts pins the digest).
 import type { CONSENT_VERSIONS } from "obd-core/recording/provenance";
 
 export const CONSENT_VERSION: (typeof CONSENT_VERSIONS)[number] = "beta-1";

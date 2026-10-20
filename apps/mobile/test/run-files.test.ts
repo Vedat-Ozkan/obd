@@ -1,5 +1,3 @@
-// T0.9b isolated failure modes I1-I5: docs/specs/T0.9b-one-and-done-captures.md Verification "Isolated tests".
-// Vitest runs in Node; Expo's mobile typecheck intentionally omits Node typings.
 // @ts-expect-error Node built-in types are not part of the mobile compilation target.
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";

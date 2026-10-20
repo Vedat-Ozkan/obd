@@ -4,12 +4,10 @@ import type { GarageState, GarageVehicle } from "../garage/flow.js";
 import { ListRow, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 
-/** The Mine/Checking tag for a garage entry's `ownership` (spec §Screens 1). */
 function ownershipLabel(ownership: GarageVehicle["ownership"]): string {
   return ownership === "mine" ? "Mine" : "Checking";
 }
 
-/** Garage only picks the car (spec §Screens 1); the settings gear sits in the top bar. */
 function GarageScreen({ state, busy, openCar, addVehicle }: { state: GarageState; busy: boolean; openCar: (id: string) => void; addVehicle: () => void }) {
   const tokens = useTokens();
   return <View>

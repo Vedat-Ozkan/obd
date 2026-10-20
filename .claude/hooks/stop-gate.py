@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Stop: block finishing while the tests of the changed packages fail. Skips docs-only changes."""
 import os, re, sys
 sys.path.insert(0, os.path.dirname(__file__)); from _lib import *  # noqa
 d = read_input(); root = project_root(d)
@@ -7,7 +6,6 @@ if d.get("stop_hook_active") or os.environ.get("OBD_SKIP_GATE") == "1": sys.exit
 if not os.path.exists(os.path.join(root, "node_modules")): sys.exit(0)
 base = run("git merge-base HEAD main 2>/dev/null || git rev-parse HEAD~1 2>/dev/null", cwd=root).stdout.strip()
 changed = run(f"git diff --name-only {base} HEAD 2>/dev/null; git diff --name-only; git ls-files --others --exclude-standard", cwd=root).stdout.split()
-# Bookkeeping, specs, recordings and agent config never need a test run.
 changed = [c for c in changed if c and not (c.endswith(".md") or c.startswith(("docs/", "fixtures/", "reports/", ".claude/", ".codex/", ".agents/")))]
 cmds = set()
 for c in changed:

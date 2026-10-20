@@ -1,5 +1,3 @@
-"""Offline check of the recording format contract (spec T0.2, Interfaces). Does not import bleak."""
-
 import json
 import os
 
@@ -7,7 +5,7 @@ from spike import Recorder
 
 
 def test_recorder_format(tmp_path) -> None:
-    path = tmp_path / "chrysler-200-2013" / "rec.jsonl"  # dir must be created by Recorder
+    path = tmp_path / "chrysler-200-2013" / "rec.jsonl"
     rec = Recorder(str(path))
     rec.meta(car="chrysler-200-2013", note="synthetic")
     rec.event("tx", "ATZ\r")
@@ -35,7 +33,6 @@ def test_go_never_reuses_a_recording_path(tmp_path, monkeypatch) -> None:
 
 
 def test_send_records_tx_before_a_reply_that_arrives_during_the_write(tmp_path, monkeypatch, capsys) -> None:
-    """T2.3b Decision 5: fake bleak module whose client delivers the whole reply before write_gatt_char returns."""
     import asyncio
     import sys
     import types
@@ -63,7 +60,7 @@ def test_send_records_tx_before_a_reply_that_arrives_during_the_write(tmp_path, 
 
         async def write_gatt_char(self, char: object, data: bytes, response: bool) -> None:
             if data.endswith(b"\r"):
-                self.cb(None, bytearray(b"OK\r\r>"))  # synthetic reply
+                self.cb(None, bytearray(b"OK\r\r>"))
 
     monkeypatch.setitem(sys.modules, "bleak", types.SimpleNamespace(BleakClient=FakeBleakClient, BleakScanner=None))
     monkeypatch.setattr(spike.importlib.metadata, "version", lambda _: "fake")
@@ -74,4 +71,4 @@ def test_send_records_tx_before_a_reply_that_arrives_during_the_write(tmp_path, 
     lines = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()]
     assert [ln["dir"] for ln in lines] == ["meta"] + ["tx", "rx"] * len(spike.COMMANDS)
     assert [ln["data"][:-1] for ln in lines if ln["dir"] == "tx"] == spike.COMMANDS
-    assert "| 2 | ATZ |" in capsys.readouterr().out  # printed line = the tx line
+    assert "| 2 | ATZ |" in capsys.readouterr().out

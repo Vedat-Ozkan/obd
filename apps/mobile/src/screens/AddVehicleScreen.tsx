@@ -8,7 +8,6 @@ import { useTokens } from "../ui/theme.js";
 type Change = (action: () => Promise<GarageState>, after?: () => void) => Promise<void>;
 type InterestForm = { make: string; model: string; year: string; joinBeta: boolean };
 
-/** Add a vehicle (spec §Screens 1): the picker, then the not-listed form and saved interests, moved here from Garage. */
 function AddVehicleScreen({ make, setMake, model, setModel, year, setYear, tag, setTag, busy, change, onAdded, reopenInterest, interests }: {
   make: string; setMake: (make: string) => void; model: string; setModel: (model: string) => void; year: number | undefined; setYear: (year: number | undefined) => void;
   tag: Ownership; setTag: (tag: Ownership) => void; busy: boolean; change: Change; onAdded: () => void; reopenInterest: (saved?: Interest) => void; interests: readonly Interest[];

@@ -1,16 +1,12 @@
 import { bridgedRecoveries, isRecoveryGap, largestGap, MAX_GAP_S, span, type ChargeLog, type ChargePhases, type Point } from "./session.js";
 
-// Formulas and labels: docs/specs/T2.4-charge-logger.md §Estimates and error budgets (ADR-016).
-
 export type CapacityEstimate =
   | {
       status: "estimated";
       method: "integrated-current-bms-soc" | "bms-energy-over-soc";
       label: string;
       value: number; band: number; unit: "Ah" | "kWh";
-      /** The bounded error terms. */
       terms: readonly { name: string; value: number; unit: string }[];
-      /** What the figure was computed from, for the summary. */
       inputs: readonly { name: string; value: number; unit: string }[];
       unbounded: readonly string[];
       t: number;
@@ -20,12 +16,10 @@ export type CapacityEstimate =
 export const INTEGRATED_LABEL = "BMS-SOC-referenced: divides by the BMS's own SOC, so it is not independent of the BMS (ADR-016). Not truth.";
 export const BMS_LABEL = "BMS figure: 27AF energy remaining ÷ SOC. A comparison, not the reference (ADR-016). Not truth.";
 
-// Half a count of each scaling (spec §Sources, "Resolutions used in the error bands").
 const CURRENT_HALF_COUNT_A = 0.025;
 const ENERGY_HALF_COUNT_KWH = 0.005;
 const SOC_HALF_COUNT_PCT = 100 / 255 / 2;
 
-/** Linear interpolation of the current at t (samples are sorted and bracket t). */
 function currentAt(current: readonly Point[], t: number): number {
   const after = current.findIndex((p) => p.t >= t);
   if (after === 0) return current[0].value;
@@ -48,7 +42,6 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
   if (start === undefined || end === undefined) return { status: "not-estimated", method, reason: "no SOC sample in a rest window" };
   const inside = log.current.filter((p) => p.t > start.t && p.t < end.t);
   const samples = [{ t: start.t, value: currentAt(log.current, start.t) }, ...inside, { t: end.t, value: currentAt(log.current, end.t) }];
-  // Decision 22: only bridged recoveries, the same ones the windows were built with.
   const bridged = bridgedRecoveries(log.current, log.recoveries);
   const gap = largestGap(samples, undefined, bridged);
   if (gap.seconds > MAX_GAP_S) return { status: "not-estimated", method, reason: `current gap of ${String(gap.seconds)} s at t=${String(gap.at)}` };
@@ -61,7 +54,6 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
     const dt = samples[i].t - samples[i - 1].t;
     ampSeconds += ((samples[i].value + samples[i - 1].value) / 2) * dt;
     spread += Math.abs(samples[i].value - samples[i - 1].value) * dt;
-    // Decision 19: the current during a recovery gap was not observed; bound it by the larger |I| on either side.
     if (isRecoveryGap(samples[i - 1].t, samples[i].t, bridged)) {
       const value = (Math.max(Math.abs(samples[i - 1].value), Math.abs(samples[i].value)) * span(samples[i - 1].t, samples[i].t)) / 3600;
       recoveries.push({ name: `recovery gap at t=${String(samples[i - 1].t)}`, value, unit: "Ah" });
@@ -103,9 +95,7 @@ function bmsFigure(energy: Point, soc: Point): CapacityEstimate {
   };
 }
 
-/** First and last cycle that has both 27AF and 2B43, plus the min and max over all such cycles. */
 export function bmsEnergyCapacity(log: ChargeLog): { first: CapacityEstimate; last: CapacityEstimate; range?: { min: number; max: number; n: number } } {
-  // A cycle's pair: a 2B43 sample and the 27AF sample read before it since the previous 2B43.
   const figures: CapacityEstimate[] = [];
   let e = 0;
   let previous = -Infinity;
@@ -123,19 +113,16 @@ export function bmsEnergyCapacity(log: ChargeLog): { first: CapacityEstimate; la
   return { first: figures[0], last: figures[figures.length - 1], range: { min: Math.min(...values), max: Math.max(...values), n: values.length } };
 }
 
-/** Mean I x V over the charge window against the 27AF slope over the same window. undefined without a charge window. */
 export function powerCheck(log: ChargeLog, phases: ChargePhases): { ivKw: number; energySlopeKw: number; ratio: number } | undefined {
   const charge = phases.charge;
   if (charge === undefined) return undefined;
   const within = (p: Point) => p.t >= charge.start && p.t <= charge.end;
-  // Each current sample pairs with the pack voltage read next in its cycle (17: 2414 then 2885).
   const products = log.current.filter(within).flatMap((i) => {
     const v = log.packVolts.find((p) => p.t >= i.t && p.t - i.t <= MAX_GAP_S);
     return v === undefined ? [] : [i.value * v.value];
   });
   const energy = log.energyKwh.filter(within);
   if (products.length === 0 || energy.length < 2) return undefined;
-  // Power into the pack is positive: charging current is negative (17/2414 sign).
   const ivKw = -products.reduce((sum, p) => sum + p, 0) / products.length / 1000;
   const first = energy[0];
   const last = energy[energy.length - 1];

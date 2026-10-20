@@ -25,9 +25,9 @@ from go import ask, find_dongle, next_out_path
 from spike import SERVICE, Recorder
 
 WATCH_LIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "targeted_watch.json")
-ROTATE_S = 6  # rotating-slice time per cycle (spec Time budget)
-CHARGE_STATE = STATES[3]  # "plugged in and charging"
-CHARGE_MIN_S = 5 * 60  # task text: charging state >= 5 min
+ROTATE_S = 6
+CHARGE_STATE = STATES[3]
+CHARGE_MIN_S = 5 * 60
 _INSTRUCTIONS = (
     ("HVAC off, car in Ready, Park. Wait for 'full rotation done', then set the heater to max (hot, fan high) "
      "and press Enter once hot air flows."),
@@ -73,18 +73,18 @@ async def watch_targeted(elm: Elm, rec: Recorder, core: list[tuple[str, str]],
                          rotate: list[tuple[str, str]], marks: "asyncio.Queue[str]") -> None:
     rec.meta(phase="C", watch_list="tools/spike/targeted_watch.json", watch_list_sha256=_sha256(WATCH_LIST),
              core=len(core), rotate=len(rotate), rotate_s=ROTATE_S, charge_min_s=CHARGE_MIN_S)
-    ptr = 0  # persists across cycles and states
+    ptr = 0
     for state, text in zip(STATES, _INSTRUCTIONS, strict=True):
         rec.meta(phase="C", state=state)
         print(f"\nC state: {state}\n  {text}")
         entered, cycles, rotated, armed = time.monotonic(), 0, 0, False
         while True:
             await elm.send("ATRV")
-            selected = None  # forgotten each cycle: every cycle re-selects its first module
+            selected = None
             for entry in core:
                 selected = await _poll(elm, entry, selected)
             started = time.monotonic()
-            while True:  # at least one rotating DID per cycle
+            while True:
                 selected = await _poll(elm, rotate[ptr], selected)
                 ptr, rotated = (ptr + 1) % len(rotate), rotated + 1
                 if time.monotonic() - started >= ROTATE_S:
@@ -133,7 +133,6 @@ def main() -> None:
 
     core, rotate = load_watch_list()
     note = f"ready, park, dash SOC {ask('Battery % on the dash')}%, ambient {ask('Outside temperature in C')} C"
-    # spec Time budget: 77.2 s of phase-B time for the 839 rotating DIDs; ~1.8 s of each cycle is not rotation.
     rotation_s = math.ceil(len(rotate) * 77.2 / 839 / ROTATE_S) * (ROTATE_S + 1.8)
     print(f"Plan: A standard sweep (~20 s); C watch: {len(core)} core DIDs every cycle, {len(rotate)} rotating "
           f"(one full rotation ~{rotation_s:.0f} s). Each state needs one full rotation; charging also needs "
@@ -141,7 +140,7 @@ def main() -> None:
 
     async def session() -> None:
         address = await find_dongle()
-        day = datetime.datetime.now(datetime.UTC).astimezone().date().isoformat()  # local date
+        day = datetime.datetime.now(datetime.UTC).astimezone().date().isoformat()
         out = next_out_path(CAR, day, "discovery-targeted")
         print(f"Recording to {out}\n")
         rec = Recorder(out)
@@ -166,7 +165,7 @@ def main() -> None:
             await sweep(elm, rec)
             marks: asyncio.Queue[str] = asyncio.Queue()
 
-            async def feed() -> None:  # until EOF: ignored early marks mean more than len(STATES) lines
+            async def feed() -> None:
                 while line := await asyncio.to_thread(sys.stdin.readline):
                     await marks.put(line)
 

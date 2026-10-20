@@ -37,7 +37,6 @@ function codeFacts(moduleId: string, kind: string, value: unknown): SummaryFact[
   return state.dtcs.map((dtc) => fact(`codes-${moduleId}-${kind}-${dtc}`, `${kind} diagnostic code`, dtc, { status: "available" }));
 }
 
-/** The report's own facts, without rating facts: what the assistant's tools may return. */
 export function reportFacts(report: BatteryDiagnosisReport): SummaryFact[] {
   const facts: SummaryFact[] = report.signals.map((signal) => fact(`signal-${signal.id}`, signal.name, formatNumber(signal.value), { unit: signal.unit, tier: signal.tier, status: "available" }));
   if (report.cellSpread) facts.push(fact("cell-spread", "Cell spread", formatNumber(report.cellSpread.volts), { unit: "volts", tier: report.cellSpread.tier, status: "available" }));
@@ -67,11 +66,9 @@ export function reportFacts(report: BatteryDiagnosisReport): SummaryFact[] {
   return facts;
 }
 
-/** Four roll-ups over the modules, so the codes area cites a few facts instead of one per module. Each value states how many modules were read, so "none" never hides a module that was not. */
 function codeRollups(report: BatteryDiagnosisReport): SummaryFact[] {
   const modules = report.codes.modules;
   const rolled = (kind: "stored" | "pending" | "permanent", label: string) => {
-    // A missing entry counts as not read, as in codeFacts.
     const reads = modules.flatMap((module) => { const read = module[kind] as BatteryDiagnosisReport["codes"]["modules"][number][typeof kind] | undefined; return read?.status === "read" ? [read.dtcs] : []; });
     const codes = [...new Set(reads.flat())];
     return fact(`codes-${kind}`, label, `${reads.length === 0 ? "not read" : codes.length ? codes.join(", ") : "none"} (${String(reads.length)} of ${String(modules.length)} modules read)`, { status: reads.length === 0 ? "not-read" : "available" });
@@ -86,14 +83,12 @@ function codeRollups(report: BatteryDiagnosisReport): SummaryFact[] {
 const statusFactIds: ReadonlySet<string> = new Set(["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared"]);
 const reasonFactIds: ReadonlySet<string> = new Set(["capacity-reason", "health-reason", "twelve-volt-reason"]);
 
-/** Display form for the summary only: the report's status tokens as plain words, and its reasons as clauses that read mid-sentence. `status` keeps the raw token. */
 function displayFact(item: SummaryFact): SummaryFact {
   if (statusFactIds.has(item.id)) return { ...item, value: item.value.replaceAll("-", " ") };
   if (reasonFactIds.has(item.id)) return { ...item, value: `${item.value.charAt(0).toLowerCase()}${item.value.slice(1)}`.replace(/\.$/, "") };
   return item;
 }
 
-/** Produce the only report projection that may be sent to a summary provider: the report's facts, then the app's rating for each area as context the model may not cite. */
 export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRequest {
   const ratings = reportRatings(report);
   const ratingFacts = SUMMARY_AREAS.flatMap(({ area, title, prefix }) => [
@@ -103,7 +98,6 @@ export function prepareSummaryRequest(report: BatteryDiagnosisReport): SummaryRe
   return { version: 1, promptVersion: "t2.10-v4", facts: [...reportFacts(report).filter((item) => !/^(codes|readiness)-\d/.test(item.id)).map(displayFact), ...codeRollups(report), ...ratingFacts] };
 }
 
-/** Rebuild the local allowlist so server-supplied facts cannot be trusted. */
 export function checkSummary(report: BatteryDiagnosisReport, response: unknown): AreaSummary {
   return checkSummaryFacts(prepareSummaryRequest(report), response);
 }
@@ -111,7 +105,6 @@ export function checkSummary(report: BatteryDiagnosisReport, response: unknown):
 export async function summarize(report: BatteryDiagnosisReport, client: LlmClient, options: { model: string; effort: "none" | "low" }): Promise<{ kind: "llm"; text: string; summary: AreaSummary } | { kind: "template"; text: string; reason: string }> {
   try {
     const response = await client.generate(prepareSummaryRequest(report), options);
-    // Rebuilt after the call, never the object handed to the client: the rendered numbers come only from this projection.
     const local = prepareSummaryRequest(report);
     const summary = checkSummaryFacts(local, response);
     return { kind: "llm", text: renderSummary(local.facts, summary), summary };

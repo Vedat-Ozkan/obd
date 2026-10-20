@@ -1,6 +1,3 @@
-// docs/specs/T2.4-charge-logger.md Stage B2: the charge log runs in react-native-background-actions' foreground
-// service. The library declares the service without a type; Android 14+ needs connectedDevice declared here
-// (with its permission) before startForeground may use it. The manifest merger joins this <service> with the library's.
 const { withAndroidManifest } = require("expo/config-plugins");
 
 const PERMISSIONS = [

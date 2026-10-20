@@ -11,7 +11,6 @@ import { useTokens } from "../ui/theme.js";
 type Section = "soc" | "cells" | "capacity" | "twelveVolt";
 const SECTION_TITLES: Record<Section, string> = { soc: "State of charge", cells: "Cell balance", capacity: "Capacity", twelveVolt: "12 V battery" };
 
-/** The rating card: the chip and the basis that backs it (spec §Design Rating rules). */
 function RatingCard({ rating }: { rating: RatingView }) {
   const tokens = useTokens();
   return <Card>
@@ -20,7 +19,6 @@ function RatingCard({ rating }: { rating: RatingView }) {
   </Card>;
 }
 
-/** Section detail (spec §Screens 4). `history` is this car's saved reports, for the scan-history chart on State of charge. */
 function SectionScreen({ report, section, history, canCheck, busy, openCharge }: {
   report: BatteryDiagnosisReport; section: Section; history: readonly BatteryDiagnosisReport[]; canCheck: boolean; busy: boolean; openCharge: () => void;
 }) {
@@ -59,12 +57,10 @@ function SectionScreen({ report, section, history, canCheck, busy, openCharge }:
 
 const VERDICT = { indicated: "Yes", "not-indicated": "No", unknown: "Unknown" };
 
-/** Codes (spec §Screens 5): summary, rating, the expandable recently-cleared card, and the modules list. */
 function CodesScreen({ codes, busy, openModule }: { codes: CodesReport; busy: boolean; openModule: (ecu: string) => void }) {
   const tokens = useTokens();
   const [open, setOpen] = useState(false);
   const view = codesView(codes);
-  // Not rated means no module answered a code read (codesView), so there is no count to show.
   const read = view.rating.rating !== "not-rated";
   const answered = `${String(view.modules.length)} module${view.modules.length === 1 ? "" : "s"} answered${read ? "" : "; none answered a code read"}`;
   return <>
@@ -93,7 +89,6 @@ function CodesScreen({ codes, busy, openModule }: { codes: CodesReport; busy: bo
   </>;
 }
 
-/** Module detail (spec §Screens 5): each per-mode row as the module reported it. */
 function ModuleScreen({ codes, ecu }: { codes: CodesReport; ecu: string }) {
   const tokens = useTokens();
   const rows = moduleRows(codes, ecu);

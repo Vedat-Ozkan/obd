@@ -18,8 +18,6 @@ function listJsonl(dir: string, suffix = ".jsonl"): string[] {
     .sort();
 }
 
-// Does a `timeout waiting for '>'` meta line sit between lines[from] and the next tx?
-// (docs/specs/T0.2-hardware-spike.md `--timeout` behavior; the late '>' may then arrive after the next tx.)
 function timedOut(lines: ReturnType<typeof parseRecording>, from: number): boolean {
   for (let i = from + 1; i < lines.length; i++) {
     const line = lines[i];
@@ -31,8 +29,6 @@ function timedOut(lines: ReturnType<typeof parseRecording>, from: number): boole
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-// Known recorder defect, keyed by repo-relative path -> 1-based tx line whose '>' was recorded on the line just
-// before it (discover.py wrote tx after the BLE write returned; fixed in T2.3b). Only this line of this exact file.
 const EARLY_PROMPT: Readonly<Record<string, number>> = {
   "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-23-discovery.jsonl": 49776,
 };
@@ -64,7 +60,6 @@ async function replay(lines: RecordingLine[], earlyPrompt?: number): Promise<voi
 }
 
 function replayTest(file: string): void {
-  // Timeout: discovery recordings hold ~18k tx lines at ~1.15 ms per tx, well above vitest's 5 s default.
   it(`replays ${relative(repoRoot, file)}`, async () => {
     const bytes = readFileSync(file);
     await replay(parseRecording(bytes.toString("latin1")), EARLY_PROMPT[relative(repoRoot, file)]);
@@ -84,7 +79,6 @@ describe("fixtures/recordings", () => {
 });
 
 describe("replay early-prompt exemption (in-memory, synthetic)", () => {
-  // tx 4 (ATRV) has its reply recorded on line 3, before the tx: the T2.3b recorder defect.
   const defect: RecordingLine[] = [
     { t: 0, dir: "tx", data: "ATE0\r" },
     { t: 0.01, dir: "rx", data: "OK\r\r>" },

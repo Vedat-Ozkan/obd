@@ -1,7 +1,3 @@
-// T2.9 Stage C2: docs/specs/T2.9-beta-data-upload.md Verification "Stage C2" (the full-chain E2E and I1–I7; failure
-// modes listed in docs/task-runs/T2.9.md before any code), plus the orchestrator's ruling (3) on a redact failure (I8).
-// Chain: outbox (Stage B) -> createBetaClient (C1) -> handleRequest over an in-memory bucket -> runIntake into a temp
-// repoRoot. Artifact: /tmp/t2.9-c2-intake.txt (runIntake's log lines). Nothing is written under the real fixtures/.
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -19,9 +15,6 @@ import { codesReportFromRecording } from "../../packages/obd-core/src/report/rep
 import { handleRequest } from "../beta-backend/handler.js";
 import { runIntake, uvRedact, type IntakeDeps } from "./intake.js";
 
-// Repair 2 crash snapshots: while `hook.on`, every fs mutation calls hook.after, so a test can copy the temp repo at
-// each point a run could be killed. Off, the wrappers are plain pass-throughs.
-// C2b: a write for which `hook.fails` holds writes its first 40 bytes, then throws EIO (a disk error mid-write).
 const hook = vi.hoisted(() => {
   const fails: (path: string, options: unknown) => boolean = () => false;
   return { on: false, after: () => {}, fails };
@@ -57,17 +50,14 @@ const BASE = "https://beta.test";
 const ARTIFACT = "/tmp/t2.9-c2-intake.txt";
 const OTHER = "0000ffff-0000-4000-8000-000000000000";
 
-// Synthetic (tools/spike/test_redact_vin.py): the repo's synthetic VIN, whose serial is "CVIN00".
 const VIN = "1C4SYNTHETICVIN00";
 const SERIAL = VIN.slice(11);
-/** ISO-TP frames as the ELM prints them with ATH1 (tools/spike/test_redact_vin.py `frames`). */
 function frames(header: string, payload: number[]): string[] {
   const hex = (bytes: number[]) => bytes.map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join("");
   const out = [`${header}1${payload.length.toString(16).padStart(3, "0").toUpperCase()}${hex(payload.slice(0, 6))}`];
   for (let i = 6, n = 1; i < payload.length; i += 7, n++) out.push(`${header}2${(n & 0xf).toString(16).toUpperCase()}${hex(payload.slice(i, i + 7))}`);
   return out;
 }
-/** A synthetic capture: 0902 answered by two ECUs, interleaved, cut into 11-character rx chunks. Python json.dumps form. */
 function syntheticCapture(): string {
   const vin = [0x49, 0x02, 0x01, ...Array.from(VIN, (c) => c.charCodeAt(0))];
   const a = frames("18DAF117", vin);
@@ -83,7 +73,6 @@ const idSource = (base: number) => {
   return () => `${(++n).toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`;
 };
 
-/** One Worker over one bucket; each phone() is an install talking to it through the real client. */
 function world() {
   const bucket = new MemoryBucket(() => NOW);
   const env = { BETA_BUCKET: bucket, ADMIN_TOKEN: ADMIN };
@@ -116,7 +105,6 @@ function tempRepo(): string {
   copyFileSync(new URL("tools/spike/redact_vin.py", REPO), join(root, "tools/spike/redact_vin.py"));
   return root;
 }
-/** Isolated tests: a stand-in for redact_vin.py that writes the .redacted.jsonl beside the original. */
 const fakeRedact = (path: string) => {
   writeFileSync(path.replace(/\.jsonl$/, ".redacted.jsonl"), readFileSync(path), { flag: "wx" });
   return Promise.resolve();
@@ -124,7 +112,6 @@ const fakeRedact = (path: string) => {
 function deps(w: ReturnType<typeof world>, repoRoot: string, log: string[], extra: Partial<IntakeDeps> = {}): IntakeDeps {
   return { fetch: w.serverFetch, baseUrl: BASE, adminToken: ADMIN, repoRoot, now: NOW, redact: fakeRedact, log: (line) => { log.push(line); }, ...extra };
 }
-/** Every file under <root>/fixtures, relative to root. */
 function written(root: string): string[] {
   const dir = join(root, "fixtures");
   if (!existsSync(dir)) return [];
@@ -136,7 +123,6 @@ const index = (root: string) => JSON.parse(readFileSync(join(root, "fixtures/bet
 const manifestKeys = (bucket: MemoryBucket) => bucket.keys("files/").filter((key) => key.endsWith("/manifest.json"));
 const manifestAt = (bucket: MemoryBucket, key: string) => JSON.parse(bucket.text(key) ?? "") as BetaManifest;
 
-/** One install uploads the committed phone-console recording as codes-scan; returns its server keys. */
 async function uploaded(w: ReturnType<typeof world>, base = 0, month?: { value: string }) {
   const outbox = w.phone(base, month);
   await outbox.decide(true);
@@ -177,11 +163,9 @@ describe("Stage C2 full chain", () => {
       expect(existsSync(join(root, path))).toBe(true);
       expect(existsSync(join(root, redacted(path)))).toBe(true);
     }
-    // The redacted copy replays green into the same codes report as the committed input.
     const copy = parseRecording(readFileSync(join(root, redacted(codes)), "latin1"));
     await replayRecording(copy);
     expect(await codesReportFromRecording(copy)).toEqual(await codesReportFromRecording(parseRecording(PHONE)));
-    // No written file holds the synthetic serial, in ASCII or hex.
     const hexSerial = Buffer.from(SERIAL, "latin1").toString("hex");
     const all = written(root);
     expect(all).toHaveLength(5);
@@ -255,7 +239,6 @@ describe("Stage C2 intake failure modes", () => {
     expect(result.refused).toHaveLength(1);
     expect(readFileSync(join(root, path), "utf8")).toBe("keep");
     expect(recordingFiles(root)).toEqual([path]);
-    // Repair 1: the refused file's index entry is dropped, so a later run never deletes a file intake did not write.
     expect((await runIntake(deps(w, root, []))).refused).toHaveLength(1);
     expect(readFileSync(join(root, path), "utf8")).toBe("keep");
   });
@@ -263,7 +246,6 @@ describe("Stage C2 intake failure modes", () => {
   describe("I3: a manifest or provenance line that fails zod, or disagrees with the other, is not written", () => {
     const cases: [string, (m: BetaManifest, part: string) => { manifest: unknown; part: string }][] = [
       ["manifest fails zod (extra top-level key)", (m, part) => ({ manifest: { ...m, note: "x" }, part })],
-      // Both copies name the other file, so only the key check can catch it.
       ["manifest and provenance line name another fileId than the key", (m, part) => ({
         manifest: { ...m, provenance: { ...m.provenance, fileId: OTHER } }, part: part.replace(m.provenance.fileId, OTHER),
       })],
@@ -284,7 +266,6 @@ describe("Stage C2 intake failure modes", () => {
       expect(recordingFiles(root)).toEqual([]);
     });
 
-    // Repair 2: valid JSON that is not {t: number} is refused, not thrown out of runIntake.
     const lastLines: [string, (rows: string[]) => string[]][] = [
       ["last line is the number 5", (rows) => [...rows, "5"]],
       ['last line is {"t":"x"}', (rows) => [...rows.slice(0, -1), '{"t":"x"}']],
@@ -381,7 +362,6 @@ describe("Stage C2 intake failure modes", () => {
     expect((await runIntake(deps(w, root, []))).added).toHaveLength(1);
   });
 
-  /** A run killed while redact_vin.py writes: a partial .redacted.jsonl is left and the run never returns. */
   async function interrupted(w: ReturnType<typeof world>, root: string): Promise<void> {
     let reached = () => {};
     const inRedact = new Promise<void>((resolve) => { reached = resolve; });
@@ -449,7 +429,6 @@ describe("Stage C2 intake failure modes", () => {
     await expect(runIntake(deps(w, root, []))).rejects.toThrow("EIO");
     hook.fails = () => false;
     expect(recordingFiles(root)).toHaveLength(1);
-    // The pending entry saved before the write stays, so the next run removes the partial original and pulls again.
     const second = await runIntake(deps(w, root, []));
     expect([second.added.length, second.refused.length]).toEqual([1, 0]);
     expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");
@@ -458,8 +437,6 @@ describe("Stage C2 intake failure modes", () => {
     expect(index(root).files).toEqual([]);
   });
 
-  // Repair 2: a local file intake did not write survives a kill at any fs mutation of a run, and the run after it.
-  // A second upload keeps the run busy, so there are save points on both sides of the occupied file.
   describe("I2 (repair 2): crash snapshots never remove a pre-existing original or .redacted.jsonl", () => {
     const occupied: [string, (path: string) => string][] = [
       ["original", (path) => path],
@@ -481,7 +458,6 @@ describe("Stage C2 intake failure modes", () => {
         cpSync(join(root, "fixtures"), join(copy, "fixtures"), { recursive: true });
         snapshots.push(copy);
       };
-      // A redact that writes its output in two steps, so a snapshot can land on a partial file.
       const twoStep = (path: string) => {
         const out = path.replace(/\.jsonl$/, ".redacted.jsonl");
         writeFileSync(out, readFileSync(path, "latin1").slice(0, 50), { flag: "wx" });

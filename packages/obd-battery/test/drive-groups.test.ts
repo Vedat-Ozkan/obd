@@ -8,7 +8,6 @@ import { driveCaptureSummary } from "../scripts/drive-capture.js";
 import { GROUP_EXCESS_LIMIT_MOHM as L, MARGIN, groupsUnderLoad } from "../src/driveGroups.js";
 import { chargeLogFromRecording } from "../src/session.js";
 
-// Spec: docs/specs/T2.13-drive-check.md §Verification, A1 (G1-G3) and A2 (G4). Drive 2 is held out: only G4 reads it, through the committed rule.
 const root = new URL("../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "latin1");
 const signals = importObdbMode22(JSON.parse(read("packages/obd-core/vehicles/chevrolet-equinox-ev/default.json")));
@@ -18,7 +17,6 @@ const lines = parseRecording(read(drive1));
 const save = (name: string, text: string) => { writeFileSync(join(tmpdir(), `t2.13-${name}.md`), text); };
 const section = (summary: string) => summary.slice(summary.indexOf("## Groups under load"), summary.indexOf("## Context"));
 
-// By construction drive 1 passes its own rule (lb <= e <= max < L): G1 shows the code ran, not that the rule works.
 describe("groups under load, drive 1", () => {
   it("G1: real drive 1 is checked, nothing flagged, and L is the pre-registered formula of its max excess", async () => {
     const summary = await driveCaptureSummary(lines, drive1);
@@ -33,7 +31,6 @@ describe("groups under load, drive 1", () => {
     expect(L).toBe(Math.ceil(100 * MARGIN * Math.max(...result.groups.map((g) => g.excessMohm))) / 100);
   }, 60_000);
 
-  // Synthetic: a weak group injected into drive 1 in memory. Not mixed with the real results above.
   it.each([
     ["G2", "inject-4L", 4 * L, true],
     ["G3", "inject-0.5L", 0.5 * L, false],
@@ -49,7 +46,6 @@ describe("groups under load, drive 1", () => {
   }, 60_000);
 });
 
-// Held out: drive 2 never set or tuned anything. A flag here is a FAIL to escalate, never a reason to change a constant.
 describe("groups under load, drive 2", () => {
   it("G4: real drive 2 flags no group; checked or not-checked is recorded as found", async () => {
     const summary = await driveCaptureSummary(parseRecording(read(drive2)), drive2);

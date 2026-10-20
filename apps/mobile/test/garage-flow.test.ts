@@ -1,4 +1,3 @@
-// Vitest runs in Node; Expo's mobile typecheck intentionally omits Node typings.
 // @ts-expect-error Node built-in types are not part of the mobile compilation target.
 import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

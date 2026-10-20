@@ -5,11 +5,6 @@ import { genericProfile, scanMode22Profile, type ObdbMode22Signal } from "obd-co
 import { bridgedRecoveries, CHARGE_CURRENT_A, CHARGE_LOG_PROFILE, ChargeLogBuilder, chargePhases, CYCLE_S, gateFailures, isRecoveryGap, MAX_GAP_S, POST_REST_S, PRE_REST_S, REST_CURRENT_A, span, TRANSITION_S, type ChargePhases, type Point, type Window } from "obd-battery/session";
 import type { RecordingBuffer } from "./recording.js";
 
-// Behavior: docs/specs/T2.4-charge-logger.md §Interfaces (Stage B1), §Policy values, §Sources (init, per-cycle
-// setup and reply handling), Decisions 3 and 9. Read-only: the only commands are genericProfile's init and
-// scanMode22Profile(CHARGE_LOG_PROFILE), both through Elm327Session's allowlist.
-
-// Policy values (spec §Policy values; Decision 3). CYCLE_S lives in obd-battery/session, which Decision 22's group-set limit uses.
 export const FLUSH_S = 30;
 export const RECOVERY_WAIT_S = 5;
 export const SILENT_STOP_S = 600;
@@ -17,46 +12,33 @@ export const WAIT_FOR_CHARGE_S = 3600;
 export const MAX_RUN_S = 16 * 3600;
 
 export interface ChargeLogDeps {
-  /** First call returns the connected transport; later calls reconnect to the same device (B2 wraps connectVeepeak). Rejects on failure. */
   connect(): Promise<Transport>;
-  /** Already started (meta line written by the caller). */
   recording: RecordingBuffer;
   signals: readonly ObdbMode22Signal[];
-  /** Seconds, same clock as recording. */
   now(): number;
   sleep(ms: number): Promise<void>;
-  /** One plain sentence, e.g. "Resting 4:12 of 10:00. Do not plug in yet." */
   onStatus(line: string): void;
   stream: StreamTargets;
-  /** True once the caller wants the run to end now (Disconnect pressed). */
   stopRequested(): boolean;
 }
 
 export interface StreamTargets {
-  /** Creates captures/<date>-charge-log[-N].jsonl in app storage, never overwriting; returns its name. Throws on failure. */
   create(): string;
-  /** Appends to that file. Throws on failure. */
   append(name: string, text: string): void;
-  /** Copies the private file into the already remembered capture folder. Never shows a picker. Rejects when no folder is remembered or the copy fails. */
   copyToFolder(name: string): Promise<void>;
 }
 
 export interface ChargeLogResult {
-  /** Private name. */
   file: string;
-  /** True only when a post-charge rest of POST_REST_S was logged and the replay gate's conditions pass (Decision 24). */
   complete: boolean;
   stopReason: string;
-  /** One status sentence: saved to folder, or NOT SAVED to folder with the private path. */
   saved: string;
 }
 
-/** Decision 9 lists start, lv-reset, timeout and disconnect; "elm-error" covers any other final ELM error reply. */
 type SessionReason = "start" | "lv-reset" | "timeout" | "disconnect" | "elm-error";
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
-/** A final error reply, after core's own retry (spec §Sources: CAN ERROR once inside Elm327Session, LV RESET re-init). */
 export class ReplyError extends Error {
   constructor(readonly response: Extract<ElmResponse, { kind: "error" }>, command: string) {
     super(`${response.error.line} at ${command}`);
@@ -65,13 +47,10 @@ export class ReplyError extends Error {
 
 export class StopRequested extends Error {}
 
-/** transport.write rejected: the link is gone (Decision 16: only these, not any error, are a disconnect). */
 export class LinkError extends Error {}
 
-/** Each Mode 22 reply goes to the builder; an error reply ends the cycle; a stop request ends it before the next command. */
 export class CycleSession extends Elm327Session {
   private target = "";
-  /** resendNrc21: T2.13, a `22 <DID>` answered 7F 22 21 is sent once more and only the second reply reaches the builder. */
   constructor(transport: Transport, private readonly deps: ChargeLogDeps, private readonly builder: ChargeLogBuilder, private readonly lastTx: () => number, private readonly resendNrc21 = false) {
     super(transport);
   }
@@ -86,13 +65,11 @@ export class CycleSession extends Elm327Session {
       if (response.kind === "error") throw new ReplyError(response, command);
     }
     if (command.startsWith("ATSH DA")) this.target = command.slice(7, 9);
-    // The tx t of the attempt that was answered (after any core retry), as chargeLogFromRecording uses (Decision 15).
     if (did !== undefined) this.builder.add(this.lastTx(), this.target, did, response.frames);
     return response;
   }
 }
 
-/** Only ELM replies, session errors and link errors start a new session; any other error stops the run (Decision 16). */
 export function reasonFor(error: ReplyError | ElmSessionError | LinkError): Exclude<SessionReason, "start"> {
   const response = error instanceof ReplyError || error instanceof ElmSessionError ? error.response : undefined;
   if (response?.kind === "error" && response.error.kind === "lv-reset") return "lv-reset";
@@ -103,7 +80,6 @@ export function reasonFor(error: ReplyError | ElmSessionError | LinkError): Excl
 
 export const clock = (seconds: number) => `${String(Math.floor(seconds / 60))}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
-/** Never rejects. Ends with a final flush, the copy to the folder, and a last meta line naming the stop reason. */
 export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult> {
   const { recording, stream } = deps;
   let file: string;
@@ -123,28 +99,21 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     try { stream.append(file, pending); pending = ""; writeError = undefined; }
     catch (error) { writeError = message(error); }
   };
-  // Called before every write, so a flush always ends after a complete exchange (spec failure mode 10).
   const maybeFlush = () => { if (deps.now() - lastFlush >= FLUSH_S) flush(); };
 
   const builder = new ChargeLogBuilder(file, false, deps.signals);
   let seen = 0;
   let previous: Point | undefined;
   let restRun: Window | undefined;
-  // Sample times are recording times (Decision 15), so the checks against them use recording.elapsed().
   let lastCurrent = recording.elapsed();
   let preRestDoneAt: number | undefined;
   let phases: ChargePhases | undefined;
   let complete = false;
-  /** Decision 25: the time of the last charging-class current sample. */
   let lastCharging: number | undefined;
-  /** Decision 25: why the post-charge rest cannot pass as the log stands, once a charge window exists. */
   let unpassable: string | undefined;
-  /** Decision 24: the gate's failed conditions once the post-charge rest is logged; a logged rest with any is partial. */
   let gateFailed: string[] = [];
-  // A function, not the variable inline: TypeScript keeps the declaration's narrowing across the closures that set it.
   const isComplete = (): boolean => complete;
 
-  /** After each cycle, also one a failure cut short (Decision 22): the newest current samples, the phases, and the status line. */
   const update = (): string => {
     const log = builder.log();
     const bridged = bridgedRecoveries(log.current, log.recoveries);
@@ -162,7 +131,6 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     const logged = post !== undefined && span(post.start, post.end) >= POST_REST_S;
     gateFailed = logged ? gateFailures(phases) : [];
     complete = logged && gateFailed.length === 0;
-    // Decision 25: stopFor acts on this only TRANSITION_S after the last charging sample, while the windows can still move.
     const last = log.current.at(-1);
     unpassable = phases.charge === undefined ? undefined
       : post === undefined
@@ -190,8 +158,6 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
     return undefined;
   };
 
-  // One recorded link per connected transport: rx is recorded even between sessions; each session gets a view
-  // whose close() leaves the transport open for the next session.
   let link: { view: Transport; close(): Promise<void> } | undefined;
   let lastTx = 0;
   const open = (transport: Transport) => {
@@ -208,7 +174,7 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
       onData(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
       close: () => Promise.resolve(),
     };
-    return { view, async close() { unsubscribe(); try { await transport.close(); } catch { /* the link is already gone */ } } };
+    return { view, async close() { unsubscribe(); try { await transport.close(); } catch { } } };
   };
 
   let reason: SessionReason = "start";
@@ -224,12 +190,10 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
           continue;
         }
       }
-      // A fresh session writes only ATZ or ATI until one is answered cleanly (docs/ELM327.md §Write safety).
       const session = new CycleSession(link.view, deps, builder, () => lastTx);
       let failure: unknown;
       try {
         const boundary = recording.meta({ event: "charge-log session", reason });
-        // Decision 19: the live log knows the boundary as replay does, so a short recovery gap does not end a run.
         if (reason !== "start") builder.recovery(boundary);
         deps.onStatus("Starting the ELM327.");
         await session.init(genericProfile, {
@@ -251,12 +215,10 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
       }
       if (failure === undefined || failure instanceof StopRequested) continue;
       if (!(failure instanceof ReplyError || failure instanceof ElmSessionError || failure instanceof LinkError)) {
-        // Not a link error (a callback or the decoder threw): stop as partial, then save as usual (Decision 16).
         stopReason = message(failure);
         complete = false;
         break;
       }
-      // Decision 22: the samples decoded before the failure count, so "no current for 10 min" never fires while current is read.
       update();
       reason = reasonFor(failure);
       if (reason === "disconnect") { await link.close(); link = undefined; }
@@ -264,7 +226,6 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
       await deps.sleep(RECOVERY_WAIT_S * 1000);
     }
   } catch (error) {
-    // A callback outside a session threw (Decision 16), handled as above.
     stopReason = message(error);
     complete = false;
   }
@@ -276,7 +237,6 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
   try { await stream.copyToFolder(file); saved = `Saved ${file} to the capture folder.`; }
   catch (error) { saved = `NOT SAVED to the capture folder: ${message(error)}. The log is in app storage (captures/${file}).`; }
   if (writeError !== undefined) saved = `Lines missing from captures/${file}: ${writeError}. ${saved}`;
-  // Never rejects (Decision 17): the result carries the same sentence.
-  try { deps.onStatus(`Charge log stopped: ${stopReason}. ${saved}`); } catch { /* the caller still gets the result */ }
+  try { deps.onStatus(`Charge log stopped: ${stopReason}. ${saved}`); } catch { }
   return { file, complete: isComplete(), stopReason, saved };
 }

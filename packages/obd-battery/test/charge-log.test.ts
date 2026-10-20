@@ -7,7 +7,6 @@ import { bmsEnergyCapacity, integratedCurrentCapacity } from "../src/capacity.js
 import { groupImbalance } from "../src/imbalance.js";
 import { chargeLogFromRecording, chargePhases, largestGap } from "../src/session.js";
 
-// Spec: docs/specs/T2.4-charge-logger.md §Verification, Stage A.
 const root = new URL("../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "latin1");
 const readUtf8 = (path: string) => readFileSync(new URL(path, root), "utf8");
@@ -81,7 +80,6 @@ describe("synthetic charge log (labeled synthetic)", () => {
     expect(largestGap(log.groups)).toEqual(label.planted.group_gap);
     expect(label.planted.current_gap.at + label.planted.current_gap.seconds).toBeLessThanOrEqual(start);
     expect(label.planted.group_gap.at + label.planted.group_gap.seconds).toBeLessThanOrEqual(start);
-    // Decision 8: a count other than 80 drops that cycle's set and is reported, never guessed.
     const planted = label.planted.not_80_group_set;
     expect(planted.valid).not.toBe(80);
     expect(planted.at).toBeLessThan(start);
@@ -94,7 +92,6 @@ describe("synthetic charge log (labeled synthetic)", () => {
     expect(phases.groupGap.at).toBeGreaterThanOrEqual(start);
   });
 
-  // Decision 19: a gap with a session boundary inside and at most RECOVERY_GAP_S long does not end the charge run or fail the gate.
   it("bridges the planted recovery gap in the charge, counts it in the gate line, and adds its band term", async () => {
     const { lines, summary } = await load(synthetic);
     const log = await chargeLogFromRecording(lines, synthetic, signals);
@@ -114,7 +111,6 @@ describe("synthetic charge log (labeled synthetic)", () => {
     expect(integrated.terms.filter((t) => t.name.startsWith("recovery gap")).map((t) => [t.value, t.unit])).toEqual([[term, "Ah"]]);
   });
 
-  // Decision 10: a post-charge rest shorter than POST_REST_S (a partial run) must not pass.
   it.each([[1720, 0], [1760, 40], [3510, 1790]])("fails the gate and BM2 selection when the log stops before t=%i (post-charge rest %i s)", async (cutoff, rest) => {
     const lines = parseRecording(read(synthetic)).filter((line) => line.t < cutoff);
     const summary = await chargeLogSummary(lines, synthetic);
@@ -123,8 +119,6 @@ describe("synthetic charge log (labeled synthetic)", () => {
     expect(summary).not.toContain("BM2 selection: pass");
   });
 
-  // Decision 10 (reworded): the gate tests the uncut rest run, so millisecond jitter at the 1800 s clip cannot fail a complete log.
-  // No +4 ms case: the fixture's 2414 cadence is exactly 10 s, so +4 ms makes a 10.004 s gap (> MAX_GAP_S), which ends the run.
   it.each([[-0.004]])("passes the gate and BM2 selection when the lines from t=3510 on are shifted by %f s", async (shift) => {
     const lines = parseRecording(read(synthetic)).map((line) => (line.t >= 3510 ? { ...line, t: line.t + shift } : line));
     const summary = await chargeLogSummary(lines, synthetic);
@@ -152,7 +146,6 @@ describe("P1 recording (real): the scaling check", () => {
       expect(p.value).toBeLessThanOrEqual(329.5);
     }
 
-    // §7.3: plugged in a few seconds before the line 44553 mark, so 74.76 is the last reading before it.
     const before = (line: number) => log.energyKwh.filter((p) => p.t < lines[line - 1].t).at(-1)?.value;
     expect([before(44553), before(74351)]).toEqual([74.76, 75.52]);
 
@@ -163,7 +156,6 @@ describe("P1 recording (real): the scaling check", () => {
       expect(figure.value).toBeLessThanOrEqual(88.7 + figure.band);
     }
 
-    // Decision 8: an exact-equality statistic, regenerated, never a gate.
     const { agreement } = groupImbalance(log, phases);
     expect(agreement.of).toBeGreaterThan(0);
     expect([agreement.matching, agreement.of]).toEqual([27, 111]);

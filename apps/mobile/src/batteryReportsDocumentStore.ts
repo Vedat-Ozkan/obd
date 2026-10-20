@@ -16,7 +16,6 @@ export const batteryReportsDocumentStore: ReportTextStore = {
   },
 };
 
-/** Keeps the scan in app-private Documents before its report is added to history. */
 export function keepPrivateBatteryScan(garageVehicleId: string, scannedAt: string, jsonl: string): string {
   if (!/^[1-9]\d*$/.test(garageVehicleId)) throw new Error("Invalid garage vehicle ID.");
   const stamp = new Date(scannedAt);

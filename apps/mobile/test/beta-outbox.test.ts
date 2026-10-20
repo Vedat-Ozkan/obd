@@ -1,8 +1,3 @@
-// T2.9 Stage B: docs/specs/T2.9-beta-data-upload.md Verification "Stage B" (E2E, E2E charge log, O1–O15), driven through
-// createBetaOutbox and finishRun with the in-memory fakes. Artifacts: /tmp/t2.9-b-codes.jsonl, /tmp/t2.9-b-charge-log.jsonl.
-// Stage C1: the same E2E over createBetaClient -> handleRequest in process (artifacts /tmp/t2.9-c1-*.jsonl), the client's
-// status mapping, and the orchestrator's C1-a/b/c and Stage B survivors X1/X2 (failure modes in docs/task-runs/T2.9.md).
-// Vitest runs in Node; Expo's mobile typecheck intentionally omits Node typings.
 // @ts-expect-error Node built-in types are not part of the mobile compilation target.
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -31,7 +26,6 @@ import { FakeTargets } from "./fakeTargets.js";
 const readText = readFileSync as (path: URL, encoding: "latin1") => string;
 const write = writeFileSync as (path: string, text: string) => void;
 const PHONE = readText(new URL("../../../fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl", import.meta.url), "latin1");
-// Synthetic full scan (labeled synthetic in its first meta note); battery-diagnosis-flow.test.ts replays the same file.
 const FULL_SCAN = parseRecording(readText(new URL("../../../fixtures/synthetic/battery-diagnosis-full-scan.jsonl", import.meta.url), "latin1"));
 class TextStoreMemory {
   value?: string;
@@ -44,7 +38,6 @@ const CHECKED: GarageVehicle = { id: "2", catalogId: "chevrolet-equinox-ev-2024"
 const QUEUED = "Queued for beta upload.";
 const T0 = 1_000_000;
 
-/** Deterministic UUID v4s. */
 const idSource = () => {
   let n = 0;
   return () => `${(++n).toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`;
@@ -66,12 +59,9 @@ function setup(options: { files?: MemoryBetaFiles; backend?: FakeBetaBackend; pa
 }
 
 const NOW = new Date("2026-10-03T12:00:00Z");
-/** Stage C1: createBetaClient over handleRequest and an in-memory bucket, in process. The call log and the received
- *  files are read back the way the fake backend exposes them, so the Stage B E2E runs unchanged over it. */
 class WorkerBackend implements BetaBackend {
   readonly log: string[] = [];
   readonly bucket = new MemoryBucket(() => NOW);
-  /** When set, each HTTP request waits for the test to resolve it. */
   held?: (() => void)[];
   private readonly client: BetaBackend;
 
@@ -83,7 +73,6 @@ class WorkerBackend implements BetaBackend {
     };
     this.client = createBetaClient("https://beta.test", {
       fetch: (input, init) => send(new Request(input, init)),
-      // As the phone's UploadTask: the file's bytes, with the Content-Length the transport adds.
       putFile: (url, path, headers) => {
         const body = files.read(path);
         return send(new Request(url, { method: "PUT", headers: { ...headers, "Content-Length": String(body.length) }, body }));
@@ -112,10 +101,7 @@ class WorkerBackend implements BetaBackend {
     return this.settle("deleteFile", undefined, () => this.client.deleteFile(auth, fileId));
   }
 
-  /** Repair round 1: `fail` stands in for the network (the request never reaches the Worker); `settled` counts the
-   *  calls that have answered, so a test can act right after one returns. */
   fail?: (call: keyof BetaBackend, index?: number) => BackendError | undefined;
-  /** Repair round 2 (D4): the Worker processes the request, then the phone gets a network error (the answer is lost). */
   lose?: (call: keyof BetaBackend, index?: number) => boolean;
   settled = 0;
   private settle(call: keyof BetaBackend, index: number | undefined, request: () => Promise<void>): Promise<void> {
@@ -144,7 +130,6 @@ const stored = (files: MemoryBetaFiles) => JSON.parse(files.state ?? "{}") as {
   deleting: { installId: string; nextTry: number; fileId?: string }[];
 };
 const lines = (text: string) => text.split("\n").slice(0, -1);
-/** The uploaded file split into its recording (with "\n") and its provenance line. */
 function split(uploaded: string): { body: string; provenance: BetaProvenance } {
   const all = lines(uploaded);
   const last = all.pop() ?? "";
@@ -154,12 +139,10 @@ async function* asyncLines(text: string): AsyncIterable<string> {
   for (const line of lines(text)) { await Promise.resolve(); yield line; }
 }
 const tick = () => new Promise((resolve) => { setTimeout(resolve, 0); });
-/** Waits until the fake backend holds a call (FakeBetaBackend.held) and returns that call's log entry. */
 async function waitHeld(backend: FakeBetaBackend, calls: readonly (() => void)[]): Promise<string> {
   while (calls.length === 0) await tick();
   return backend.log.at(-1) ?? "";
 }
-/** Yields the first line, then waits for `open()` before the rest, so a test can act while the file is scrubbed. */
 function gatedLines(text: string) {
   const gate = { reached: false, open: (): void => undefined };
   const opened = new Promise<void>((resolve) => { gate.open = resolve; });
@@ -238,7 +221,6 @@ describe.each(BACKENDS)("E2E over $name", ({ artifact, make }) => {
     write(`/tmp/t2.9-${artifact}-charge-log.jsonl`, uploaded);
   }, 120_000);
 
-  // X-2026-09-27-power-state-meta E1: the app's battery-scan start line keeps its powerState through scrub and upload.
   it.each([true, false])("a battery scan with Ready confirmed = %s keeps its powerState through the upload and replays into the same 12 V observations", async (ready) => {
     const state = ready ? "ready" : "unknown";
     const recording = new RecordingBuffer(() => 1);
@@ -381,7 +363,6 @@ describe("outbox failure modes", () => {
       const calls = backend.log.length;
       clock.s += BACKOFF_MAX_S;
       await outbox.drain();
-      // No retry; the one later call is the C1-b delete of the parts the server had accepted.
       expect(backend.log.slice(calls)).toEqual([`deleteFile:${backend.log[1].split(":")[1]}`]);
     }
   });
@@ -394,7 +375,6 @@ describe("outbox failure modes", () => {
     expect(outcome.status).toMatch(/ Not queued for beta upload: line 55: not in Python json\.dumps form\.$/);
     expect(files.parts.size).toBe(0);
     expect(await outbox.status()).toMatchObject({ queued: 0 });
-    // Pass 2 (safety net): the synthetic 0902 serial of the Stage A tests survives in a later note, after every part was written.
     const vin = [0x49, 0x02, 0x01, ...Array.from("1C4SYNTHETICVIN00", (c) => c.charCodeAt(0))];
     const reply = [`18DAF1171014${hex(vin.slice(0, 6))}`, `18DAF11721${hex(vin.slice(6, 13))}`, `18DAF11722${hex(vin.slice(13))}`].join("\r");
     const leak = [`{"t": 5, "dir": "tx", "data": "0902\\r"}`, `{"t": 5.1, "dir": "rx", "data": ${JSON.stringify(`${reply}\r\r>`)}}`, `{"t": 6, "dir": "meta", "note": "serial CVIN00"}`];
@@ -545,7 +525,6 @@ describe("outbox failure modes", () => {
     calls.shift()?.();
     await drained;
     await deleted;
-    // C1-c, D3: a register was attempted, so Delete my data sends the install delete after it.
     const install = backend.log[0]?.split(":")[1] ?? "";
     expect(backend.log).toEqual([`register:${install}:beta-1`, `delete:${install}`]);
     expect(backend.installs.size).toBe(0);
@@ -565,7 +544,6 @@ describe("outbox failure modes", () => {
     const drained = outbox.drain();
     expect(await waitHeld(backend, calls)).toMatch(/^part:/);
     const deleted = outbox.deleteMyData();
-    // Let deleteMyData reach its first drain(), which joins the held one.
     while (files.parts.size > 0) await tick();
     await tick();
     backend.held = undefined;
@@ -613,7 +591,6 @@ describe("outbox failure modes", () => {
   it("O10 register-once, 409: a register that finds the install already there counts as registered", async () => {
     const { outbox, backend, files } = setup();
     await outbox.decide(true);
-    // An earlier register succeeded but its state write was lost: the server has the install and answers 409.
     backend.installs.add(stored(files).auth.installId);
     backend.fail = (call) => (call === "register" ? new BackendError(409, "exists") : undefined);
     await outbox.queue("capture", MINE, PHONE);
@@ -751,7 +728,6 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
       const before = stored(files).auth;
       await outbox.queue("codes-scan", MINE, PHONE);
       const [item] = stored(files).outbox;
-      // The server no longer knows the install: after part 0 (or at the manifest) it answers 401.
       backend.fail = (call, index) => (call === failing && (index ?? 1) >= 1 ? new BackendError(401, "unknown install") : undefined);
       backend.log.length = 0;
       await outbox.drain();
@@ -823,7 +799,6 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
   });
 
   it("B1 (C1-b): a file stopped after an accepted part, or with its first part in flight, is deleted on the server by the next drain", async () => {
-    // After parts 0-1 were accepted and part 2 failed.
     {
       const { outbox, backend, files, clock } = setup({ partBytes: 512 });
       await outbox.decide(true);
@@ -843,7 +818,6 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
       await outbox.drain();
       expect(backend.log).toHaveLength(1);
     }
-    // With part 0 in flight: it lands after the stop.
     {
       const { outbox, backend, files } = setup({ partBytes: 512 });
       await outbox.decide(true);
@@ -907,7 +881,6 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
     expect(backend.received.has(item.fileId)).toBe(false);
     expect(stored(files).deleting).toEqual([]);
 
-    // A second stopped file with a pending file delete, then Delete my data: only the install delete is sent.
     await outbox.decide(true);
     await outbox.queue("capture", MINE, PHONE);
     backend.fail = (call, index) => (call === "putPart" && index === 1 ? new BackendError("network", "offline") : undefined);
@@ -980,7 +953,6 @@ describe("Stage C1: outbox failure modes (C1-a, C1-b, C1-c, X1, X2)", () => {
   });
 });
 
-/** Holds every beta.json write from `hold()` until `open()`; `waiting` counts the writes held. */
 function holdWrites(files: MemoryBetaFiles) {
   const write = files.writeState.bind(files);
   let gate: Promise<void> | undefined;
@@ -997,7 +969,6 @@ function holdWrites(files: MemoryBetaFiles) {
   return writes;
 }
 
-/** An outbox over createBetaClient -> handleRequest, with one file queued. */
 async function workerSetup(partBytes?: number) {
   const files = new MemoryBetaFiles();
   const backend = new WorkerBackend(files);
@@ -1056,7 +1027,6 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
   });
 
   it("R1: a switch-off while the state write after a part is held sends no further part and no manifest", async () => {
-    // Several parts (the next call is a part) and one part (the next call is the manifest).
     for (const partBytes of [512, undefined]) {
       const { outbox, backend, files, auth, fileId } = await workerSetup(partBytes);
       const writes = holdWrites(files);
@@ -1086,7 +1056,6 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
     const { outbox, backend, files, clock, auth } = await workerSetup(512);
     await outbox.drain();
     const first = split(backend.uploaded(onlyFile(backend))).provenance;
-    // The owner deletes the install on the tester's request (by email).
     await backend.deleteAll(auth);
     await outbox.queue("codes-scan", MINE, PHONE);
     const [queued] = stored(files).outbox;
@@ -1117,13 +1086,13 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
     await outbox.drain();
     await backend.deleteAll(auth);
     await outbox.queue("codes-scan", MINE, PHONE);
-    await outbox.drain();                       // part 0: 401, backoff
+    await outbox.drain();
     clock.s = stored(files).outbox[0].nextTry;
     const calls: (() => void)[] = [];
     backend.held = calls;
     const drained = outbox.drain();
-    while (calls.length === 0) await tick();    // register (it will answer 410)
-    await outbox.decide(false);                 // queues the file delete
+    while (calls.length === 0) await tick();
+    await outbox.decide(false);
     expect(stored(files).deleting).toHaveLength(1);
     backend.held = undefined;
     calls.shift()?.();
@@ -1158,13 +1127,13 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
     await outbox.queue("codes-scan", MINE, PHONE);
     const [a, b] = stored(files).outbox;
     backend.fail = (call, index) => (call === "putPart" && index === 2 ? new BackendError("network", "offline") : undefined);
-    await outbox.drain();                       // a: parts 0-1, then offline
+    await outbox.drain();
     backend.fail = (call, index) => (call === "putPart" && index === 1 ? new BackendError("network", "offline") : undefined);
-    await outbox.drain();                       // a waits; b: part 0, then offline
+    await outbox.drain();
     expect(stored(files).outbox.map((item) => item.sent)).toEqual([2, 1]);
     clock.s = Math.max(...stored(files).outbox.map((item) => item.nextTry));
     backend.fail = (call) => (call === "putPart" ? new BackendError(401, "unknown install") : undefined);
-    await outbox.drain();                       // a: 401
+    await outbox.drain();
     expect(stored(files).outbox.map((item) => item.sent)).toEqual([0, 0]);
     backend.fail = undefined;
     backend.installs.clear();
@@ -1178,12 +1147,11 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
   it("R5, D1: a pending file delete still succeeds after a 401 and a re-register, which keeps the secret", async () => {
     const { outbox, backend, files, clock, auth, fileId } = await workerSetup(512);
     backend.fail = (call, index) => (call === "putPart" && index === 2 ? new BackendError("network", "offline") : undefined);
-    await outbox.drain();                       // parts 0-1 on the server
+    await outbox.drain();
     expect(backend.bucket.keys(`files/${auth.installId}/${fileId}/`)).toHaveLength(2);
-    await outbox.decide(false);                 // queues the file delete
+    await outbox.decide(false);
     backend.fail = (call) => (call === "deleteFile" ? new BackendError("network", "offline") : undefined);
-    await outbox.drain();                       // offline: backoff
-    // The server loses the install record (no tombstone), so the next upload gets 401 and re-registers.
+    await outbox.drain();
     await backend.bucket.delete(`installs/${auth.installId}.json`);
     await outbox.decide(true);
     await outbox.queue("codes-scan", MINE, PHONE);
@@ -1191,7 +1159,7 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
     await outbox.drain();
     expect(stored(files).auth).toEqual(auth);
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // the delete is still offline; register (201, same secret), upload
+    await outbox.drain();
     expect(stored(files).outbox).toEqual([]);
     backend.fail = undefined;
     clock.s = stored(files).deleting[0].nextTry;
@@ -1215,10 +1183,10 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     const [queued] = stored(files).outbox;
     backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
     backend.log.length = 0;
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     backend.fail = undefined;
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // register, same installId and secret: 409
+    await outbox.drain();
     expect(backend.log).toEqual([`part:${queued.fileId}:0`, `register:${auth.installId}:beta-1`]);
     expect(stored(files)).toMatchObject({ auth, consent: { version: "beta-1", share: true } });
     expect(await outbox.status()).toMatchObject({ sharing: true, queued: 1, failed: 0, betaId, line: `Uploads paused. Beta ID ${betaId ?? ""}.` });
@@ -1257,16 +1225,16 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     await outbox.drain();
     await backend.deleteAll(auth);
     await outbox.queue("codes-scan", MINE, PHONE);
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // register: 410, wipe
+    await outbox.drain();
     await outbox.decide(true);
     await outbox.queue("capture", MINE, PHONE);
     backend.lose = (call) => call === "register";
-    await outbox.drain();                       // the new install is stored, its answer lost
+    await outbox.drain();
     backend.lose = undefined;
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // 409: the earlier register succeeded
+    await outbox.drain();
     expect(await outbox.status()).toMatchObject({ sharing: true, queued: 0, line: "Beta data sharing is on; nothing waiting to upload." });
   });
 
@@ -1275,7 +1243,7 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     const calls: (() => void)[] = [];
     backend.held = calls;
     const drained = outbox.drain();
-    while (calls.length === 0) await tick();    // the old identity's register
+    while (calls.length === 0) await tick();
     const deleted = outbox.deleteMyData();
     while ((await outbox.status()).sharing) await tick();
     await outbox.decide(true);
@@ -1328,10 +1296,10 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     backend.held = calls;
     void outbox.drain();
     while (calls.length === 0) await tick();
-    calls.shift()?.();                          // register
+    calls.shift()?.();
     while (backend.log.length < 2 || calls.length === 0) await tick();
     expect(backend.log.at(-1)).toBe(`part:${fileId}:0`);
-    backend.held = undefined;                   // the held part never returns: the app was killed
+    backend.held = undefined;
     const restarted = outboxOver(files, backend, clock, 512);
     await restarted.decide(false);
     await restarted.drain();
@@ -1344,7 +1312,7 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     const calls: (() => void)[] = [];
     backend.held = calls;
     void outbox.drain();
-    while (calls.length === 0) await tick();    // register held and never returns: the app was killed
+    while (calls.length === 0) await tick();
     backend.held = undefined;
     const restarted = outboxOver(files, backend, clock);
     expect(await restarted.deleteMyData()).toBe("Your beta data was deleted.");
@@ -1374,7 +1342,6 @@ describe("Stage C1 repair round 2 (D1-D4, docs/task-runs/T2.9.md)", () => {
     expect(backend.log).toEqual([`register:${auth.installId}:beta-1`, `delete:${auth.installId}`]);
     expect(backend.bucket.keys()).toEqual([]);
     expect(await outbox.status()).toMatchObject({ deletePending: false, needsConsent: true, sharing: false });
-    // A new identity starts with no register attempted, so its Delete my data calls no server.
     await outbox.decide(true);
     expect(await outbox.deleteMyData()).toBe("Your beta data was deleted.");
     expect(backend.log).toHaveLength(2);
@@ -1429,9 +1396,9 @@ describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
     backend.held = calls;
     const drained = outbox.drain();
     while (calls.length === 0) await tick();
-    calls.shift()?.();                          // register
+    calls.shift()?.();
     while (backend.log.length < 2 || calls.length === 0) await tick();
-    await outbox.decide(false);                 // part 0 in flight: queues the file delete
+    await outbox.decide(false);
     backend.held = undefined;
     calls.shift()?.();
     await drained;
@@ -1454,15 +1421,15 @@ describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
     await outbox.drain();
     await outbox.queue("codes-scan", MINE, PHONE);
     backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     backend.fail = undefined;
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // register: 409, paused
+    await outbox.drain();
     const { betaId } = await outbox.status();
     expect((await outbox.status()).line).toBe(`Uploads paused. Beta ID ${betaId ?? ""}.`);
     await outbox.decide(false);
     await outbox.decide(true);
-    await outbox.drain();                       // the file delete: 204
+    await outbox.drain();
     expect(backend.log.at(-1)).toMatch(/^deleteFile:/);
     expect(stored(files).deleting).toEqual([]);
     expect(await outbox.status()).toMatchObject({ sharing: true, queued: 0, line: NOTHING_WAITING });
@@ -1474,13 +1441,13 @@ describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
     await outbox.drain();
     await outbox.queue("codes-scan", MINE, PHONE);
     backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     backend.fail = (call) => (call === "deleteFile" ? new BackendError("network", "offline") : undefined);
     clock.s = stored(files).outbox[0].nextTry;
     const calls: (() => void)[] = [];
     backend.held = calls;
     const drained = outbox.drain();
-    while (calls.length === 0) await tick();    // the re-register, which will answer 409
+    while (calls.length === 0) await tick();
     await outbox.decide(false);
     backend.held = undefined;
     calls.shift()?.();
@@ -1496,7 +1463,7 @@ describe("Stage C1b (docs/task-runs/T2.9.md)", () => {
       const writes = holdWrites(files);
       writes.hold();
       const drained = outbox.drain();
-      while (writes.waiting === 0) await tick();   // the registerAttempted save
+      while (writes.waiting === 0) await tick();
       const acted = act === "stop" ? outbox.decide(false) : outbox.deleteMyData();
       writes.open();
       await drained;
@@ -1519,9 +1486,7 @@ describe("Stage D carried items (docs/task-runs/T2.9.md, 2026-09-27 Stage D scop
     const { outbox, backend, files, clock } = setup();
     await outbox.decide(true);
     expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
-    // An app killed after writing a file's parts, before beta.json listed it.
     files.appendPart("orphan", 0, '{"t": 0.0, "dir": "tx", "data": "0100"}\n');
-    // Small parts, so the file being scrubbed has a finished part on disk halfway (parts are written whole, repair 1 (3)).
     const restarted = outboxOver(files, backend, clock, 512);
     const all = lines(PHONE);
     let open = (): void => undefined;
@@ -1579,16 +1544,15 @@ describe("Stage D carried items (docs/task-runs/T2.9.md, 2026-09-27 Stage D scop
     await outbox.drain();
     await backend.deleteAll(auth);
     await outbox.queue("codes-scan", MINE, PHONE);
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     clock.s = stored(files).outbox[0].nextTry;
-    await outbox.drain();                       // register: 410, wipe
+    await outbox.drain();
     expect((await outbox.status()).line).toBe(SERVER_DELETED);
     const restarted = outboxOver(files, backend, clock, 512);
     expect(await restarted.status()).toMatchObject({ needsConsent: true, sharing: false, line: SERVER_DELETED });
     await restarted.decide(false);
     expect(await restarted.status()).toMatchObject({ needsConsent: false, line: "Beta data sharing is off." });
     expect(await outboxOver(files, backend, clock, 512).status()).toMatchObject({ line: "Beta data sharing is off." });
-    // The notice belongs to that wipe only: a later local wipe back to "no choice" does not repeat it.
     expect(await restarted.deleteMyData()).toBe("Your beta data was deleted.");
     expect(await restarted.status()).toMatchObject({ needsConsent: true, line: "Beta data sharing is off; no choice made yet." });
   });
@@ -1597,15 +1561,15 @@ describe("Stage D carried items (docs/task-runs/T2.9.md, 2026-09-27 Stage D scop
     const { outbox, backend, files, clock } = await workerSetup(512);
     await outbox.drain();
     backend.fail = (call) => (call === "deleteAll" ? offline : undefined);
-    await outbox.deleteMyData();                // the old install's delete, pending
+    await outbox.deleteMyData();
     await outbox.decide(true);
     await outbox.queue("codes-scan", MINE, PHONE);
     backend.fail = (call) => (call === "deleteAll" ? offline : call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
-    await outbox.drain();                       // register 201, then part 0: 401
+    await outbox.drain();
     expect(recheck(files)).toBe(true);
     backend.fail = undefined;
     clock.s = Math.max(stored(files).outbox[0].nextTry, stored(files).deleting[0].nextTry);
-    await outbox.drain();                       // the old delete: 204; the re-register: 409
+    await outbox.drain();
     expect(stored(files).deleting).toEqual([]);
     expect(recheck(files)).toBe(true);
     const { betaId } = await outbox.status();
@@ -1618,13 +1582,13 @@ describe("Stage D carried items (docs/task-runs/T2.9.md, 2026-09-27 Stage D scop
     await outbox.drain();
     await outbox.queue("codes-scan", MINE, PHONE);
     backend.fail = (call) => (call === "putPart" ? new BackendError(401, "not from the Worker") : undefined);
-    await outbox.drain();                       // part 0: 401
+    await outbox.drain();
     backend.fail = undefined;
     clock.s = stored(files).outbox[0].nextTry;
     const calls: (() => void)[] = [];
     backend.held = calls;
     const drained = outbox.drain();
-    while (calls.length === 0) await tick();    // the re-register, which will answer 409
+    while (calls.length === 0) await tick();
     await outbox.decide(false);
     await outbox.decide(true);
     expect(await outbox.queue("capture", MINE, PHONE)).toBe(QUEUED);
@@ -1642,9 +1606,9 @@ describe("Stage D repair round 1 (docs/task-runs/T2.9.md, 2026-09-27 repair deci
     const calls: (() => void)[] = [];
     backend.held = calls;
     const drained = outbox.drain();
-    while (calls.length === 0) await tick();    // register
+    while (calls.length === 0) await tick();
     calls.shift()?.();
-    while (calls.length === 0) await tick();    // part 0 of the first file
+    while (calls.length === 0) await tick();
     expect(backend.log.at(-1)).toBe(`part:${fileId}:0`);
     expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
     backend.held = undefined;
@@ -1655,8 +1619,6 @@ describe("Stage D repair round 1 (docs/task-runs/T2.9.md, 2026-09-27 repair deci
   });
 
   it("R-2b drain in the gap: a drain() called after the run's last outbox check, before the run ends, is not lost", async () => {
-    // A file that is not due at the run's last check becomes due (as a file queued then would be), and drain() is called
-    // before the run settles: the clock's read inside that check schedules both in the gap.
     let s = T0;
     let armed = false;
     const clock = {
@@ -1675,11 +1637,11 @@ describe("Stage D repair round 1 (docs/task-runs/T2.9.md, 2026-09-27 repair deci
     await outbox.decide(true);
     expect(await outbox.queue("capture", MINE, PHONE)).toBe(QUEUED);
     backend.fail = (call) => (call === "putPart" ? new BackendError("network", "offline") : undefined);
-    await outbox.drain();                       // the first file backs off
+    await outbox.drain();
     backend.fail = undefined;
     expect(await outbox.queue("codes-scan", MINE, PHONE)).toBe(QUEUED);
     armed = true;
-    await outbox.drain();                       // the second file uploads; the first is not due at the last check
+    await outbox.drain();
     expect(armed).toBe(false);
     expect(backend.manifests.size).toBe(2);
     expect((await outbox.status()).queued).toBe(0);
@@ -1705,14 +1667,11 @@ describe("Stage D repair round 1 (docs/task-runs/T2.9.md, 2026-09-27 repair deci
   });
 });
 
-// ---- The charge-log input: runChargeLog's own RecordingBuffer output (spec Decision 15) ------------------------------
-
 const CHARGE_FILE = "2026-10-03-charge-log.jsonl";
 const META = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready, Park; dash SOC 61%, 12 C", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 const hex = (bytes: readonly number[]) => bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join("");
 
 const u16 = (value: number) => [(value >> 8) & 0xff, value & 0xff];
-/** ISO-TP frames as the ELM prints them with ATH1 and ATS0: apps/mobile/test/charge-logger.test.ts frames(). */
 function frames(module: string, did: string, data: readonly number[]): string {
   const header = `18DAF1${module}`;
   const payload = [0x62, parseInt(did.slice(0, 2), 16), parseInt(did.slice(2), 16), ...data];
@@ -1721,7 +1680,6 @@ function frames(module: string, did: string, data: readonly number[]): string {
   for (let i = 6, n = 1; i < payload.length; i += 7, n++) out.push(`${header}${hex([0x20 | (n & 0x0f), ...payload.slice(i, i + 7)])}`);
   return `${out.join("\r")}\r\r>`;
 }
-// apps/mobile/test/charge-logger.test.ts GROUP_RECORDS: 80 records [u16 x 0.0001 V][module 1-10] plus 4 zero records.
 const GROUP_RECORDS = (() => {
   const records = Array.from({ length: 80 }, (_, i) => [...u16(39000 + (i % 5) * 2), Math.floor(i / 8) + 1]).flat();
   while (records.length < 7 * 36) records.push(0, 0, 0);
@@ -1729,9 +1687,6 @@ const GROUP_RECORDS = (() => {
 })();
 const GROUP_DIDS = ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7"];
 
-/** The T2.4 B1 fake ELM (apps/mobile/test/charge-logger.test.ts FakeElm) with its happy-path plan fixed: the same init
- *  and DID replies as sourced there. Each reply advances the run clock 20 ms. One LV RESET at about 1500 s adds a
- *  second session boundary (T2.4 failure mode 3). */
 class HappyElm implements Transport {
   private target = "";
   private reset = false;

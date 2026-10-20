@@ -27,11 +27,9 @@ export async function removeGarageVehicleWithReports(
   await garage.remove(id);
 }
 
-/** The CB response header and decoded SOC are required before attaching a report to a selected Equinox. */
 export function hasEquinoxSocFingerprint(report: BatteryDiagnosisReport): boolean {
   return report.signals.some((signal) =>
     (signal.source.command === "22 27C6" || signal.source.command === "22 2B43") &&
-    // The public decoder normalizes the 18DAF1CB frame source to its CB module ID.
     signal.source.ecu === "CB" && signal.id.includes("SOC"),
   );
 }
@@ -39,13 +37,11 @@ export function hasEquinoxSocFingerprint(report: BatteryDiagnosisReport): boolea
 class StopOnElmErrorSession extends Elm327Session {
   override async send(command: string): Promise<ElmResponse> {
     const response = await super.send(command);
-    // NO DATA is a valid unsupported read; every classified ELM error needs a stopped scan.
     if (response.kind === "error") throw new Error(`${response.error.line} at ${command}`);
     return response;
   }
 }
 
-/** Runs on a fresh, already-started RecordingBuffer. The wrapper records bytes before the session sees them. */
 export async function runBatteryDiagnosisScan(
   transport: Transport,
   recording: RecordingBuffer,
@@ -82,7 +78,6 @@ export async function runBatteryDiagnosisScan(
         if (response.kind === "error") throw new Error(`${response.error.line} at ${command}`);
       },
     });
-    // init already sent 0100. The remaining post-init list is the sourced T0.9 codes sequence.
     for (const command of CODES_SCAN_COMMANDS.slice(CODES_SCAN_COMMANDS.indexOf("0100") + 1)) {
       onProgress(`Reading ${command}`);
       await session.send(command);

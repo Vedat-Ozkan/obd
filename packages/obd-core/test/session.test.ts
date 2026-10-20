@@ -14,7 +14,6 @@ import { ReplayMismatchError, ReplayTransport } from "../src/transport/replay.js
 import type { Transport } from "../src/transport/types.js";
 import { genericProfile, type VehicleProfile } from "../src/vehicles/profile.js";
 
-// Equinox tests read the tracked redacted spike recordings by explicit path (X-2026-09-23-vin-redaction).
 function load(rel: string): RecordingLine[] {
   return parseRecording(readFileSync(fileURLToPath(new URL(`../../../${rel}`, import.meta.url)), "latin1"));
 }
@@ -36,7 +35,6 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
 
 /** init() then send every tx after the first 0100, in file order; responses keyed by command. */
 async function runEquinox(rec: RecordingLine[]) {
-  // No startsIdle: the session starts in the unknown state, as on a live transport (X-2026-09-24-first-write A2).
   const inner = new ReplayTransport(rec);
   const transport: Transport = {
     write: (bytes) => inner.write(bytes),
@@ -60,7 +58,6 @@ afterEach(() => {
 });
 
 describe("Elm327Session on the Equinox spike recordings", () => {
-  // spike lines 2-41 / spike-2 lines 2-41 (init), 72-171 (Stage A cases)
   it.each([
     ["spike", spike, "12.7V", ["45", "CB", "40", "28", "17"], ["18DAF117", "18DAF140", "18DAF128", "18DAF1CB"]],
     ["spike-2", spike2, "13.1V", ["45", "40", "17", "28", "CB"], ["18DAF1CB", "18DAF140", "18DAF128", "18DAF117"]],
@@ -109,7 +106,6 @@ describe("Elm327Session on the Equinox spike recordings", () => {
     for (const [cmd, r] of responses) if (cmd.startsWith("AT")) expect(r.kind, cmd).toBe("ok");
   });
 
-  // spike lines 3-5, spike-2 lines 3-4: clone reset garbage (docs/ELM327.md §Clone quirks)
   it.each([
     ["spike", spike],
     ["spike-2", spike2],
@@ -161,7 +157,6 @@ describe("Elm327Session on fixtures/synthetic/session-branches.jsonl (synthetic)
     held = undefined;
     expect(late.map((b) => latin1Decode(b))).toEqual(["7E806410080000001\r\r>"]);
 
-    // Spec amendment 2026-09-23 (review round 2): after a timeout, the next write waits for a '>'.
     const writes = write.mock.calls.length;
     const canError = session.send("0101");
     await vi.advanceTimersByTimeAsync(RESYNC_MS - 1);
@@ -189,7 +184,6 @@ describe("Elm327Session on fixtures/synthetic/session-branches.jsonl (synthetic)
   });
 });
 
-// Inline scripted transports: synthetic. Reply strings are copied from the spike recording or the synthetic fixture.
 const initReplies: Record<string, string> = {
   ATZ: "\r\rELM327 v1.5\r\r>",
   ATI: "ELM327 v1.5\r\r>",
@@ -238,6 +232,15 @@ class ScriptedTransport implements Transport {
 }
 
 describe("Elm327Session with scripted transports (synthetic)", () => {
+  it("T2.16 sends exact Mode 19 once and blocks variants with zero writes", async () => {
+    const transport = new ScriptedTransport({ "19 02 FF": "18DAF117035902FF\r>" });
+    const session = new Elm327Session(transport);
+    await expect(session.send("190200")).rejects.toMatchObject({ kind: "blocked" });
+    expect(transport.writes).toEqual([]);
+    await session.send("19 02 FF");
+    expect(transport.writes).toEqual(["19 02 FF"]);
+    await session.close();
+  });
   it("1. auto protocol and 0100 UNABLE TO CONNECT rejects init without ATSP0", async () => {
     const transport = new ScriptedTransport({ ...initReplies, "0100": "UNABLE TO CONNECT\r\r>" });
     const err = await rejection(new Elm327Session(transport).init(genericProfile));
@@ -334,17 +337,13 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(transport.close).toHaveBeenCalledTimes(1);
   });
 
-  // AGENTS.md hard rule 5; ADR-008; ADR-013
   it("9. the write guard blocks anything off the read-only allowlist before any byte is written", async () => {
     const transport = new ScriptedTransport({ ATZ: "\r\rELM327 v1.5\r\r>", "0104": "NO DATA\r\r>" });
     const session = new Elm327Session(transport);
     const write = vi.spyOn(transport, "write");
-    // Spec amendment 2026-09-23: a CR ends a command (docs/ELM327.md §Framing), so any non-printable is blocked.
-    // X-2026-09-23-write-safety: empty (a bare CR repeats), CAF, PP, monitoring and non-read services (§Write safety).
     for (const cmd of [
       "04", "2E F1 90 00", "2f", "31 01 00", "0100\r04", "\r04", "01\n00",
       "", " ", "ATCAF0", "at caf 0", "08 01", "11 01", "14 FF FF FF", "10 03", "3E 00", "ATPP 24 SV FF", "ATMA",
-      // Spec amendment 2026-09-23 (review round 2): exact request lengths per service.
       "014FFFFFF1", "011011", "02EF190ABCD1", "0100FF", "2233E5FF",
     ]) {
       expect(await rejection(session.send(cmd))).toMatchObject({ kind: "blocked", command: cmd });
@@ -358,7 +357,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(transport.writes).toEqual(["ATZ", "0104"]);
   });
 
-  // Synthetic: frames copied from fixtures/synthetic/session-branches.jsonl 0902 (FF, 21, 22); FF then 22 is a sequence drop.
   const vinFF = "7E81014490201314334";
   const vinCF1 = "7E82153594E54484554";
   const vinCF2 = "7E822494356494E3030";
@@ -382,7 +380,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 
-  // Spec amendment 2026-09-23 (review round 2): without a '>' the next command is rejected, not written.
   it("11. a rejected transport.write propagates unchanged and nothing is written until a '>' arrives", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const transport = new ScriptedTransport({ "0100": "7E806410080000001\r\r>" });
@@ -402,7 +399,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 
-  // Round-2 finding 1: init() reads profile.protocol once; a later mutation or getter cannot reach the wire.
   function expectCleanInitWrites(writes: string[]): void {
     expect(writes).toContain("ATSP0");
     for (const w of writes) {
@@ -432,7 +428,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expectCleanInitWrites(transport.writes);
   });
 
-  // docs/ELM327.md §Write safety: headers only after ATSP7 OK; after a header, no other protocol until ATZ.
   const headerReplies = { ...initReplies, ATSP6: "OK\r\r>", ATSP7: "OK\r\r>", "ATSH DA1DF1": "OK\r\r>" };
 
   it("14. header and protocol commands follow the sequence rule", async () => {
@@ -461,7 +456,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const silentReset = new ScriptedTransport({ ...headerReplies, ATZ: undefined });
     const s2 = new Elm327Session(silentReset);
-    // The first ATZ is answered by hand so a header is really set before the second ATZ times out.
     const firstReset = s2.send("ATZ");
     await vi.advanceTimersByTimeAsync(0);
     silentReset.emit(initReplies.ATZ);
@@ -474,7 +468,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(silentReset.writes).toEqual(["ATZ", "ATSP7", "ATSH DA1DF1", "ATZ"]);
   });
 
-  // Spec amendment 2026-09-23: a busy ELM answers ATZ with STOPPED and does not reset (datasheet rev J p.9, p.48).
   it.each(["STOPPED", "?"])("16. an ATZ answered %s leaves the header flag set", async (reply) => {
     const replies: Record<string, string> = { ...headerReplies };
     const transport = new ScriptedTransport(replies);
@@ -486,8 +479,6 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(transport.writes).toEqual(["ATZ", "ATSP7", "ATSH DA1DF1", "ATZ"]);
   });
 
-  // Spec amendment 2026-09-23 (review round 2): a busy ELM discards the first character it receives
-  // (datasheet rev J p.9, p.48), so after a timeout nothing, not even init()'s ATZ, is written before a '>'.
   it("17. after a timeout with no '>', send() and init() write nothing until a late '>' arrives", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const transport = new ScriptedTransport(initReplies);
@@ -504,18 +495,15 @@ describe("Elm327Session with scripted transports (synthetic)", () => {
     expect(await reinit).toMatchObject({ kind: "timeout", command: "ATZ" });
     expect(transport.writes).toEqual(["0101"]);
 
-    // Reply copied from fixtures/synthetic/session-branches.jsonl (0101).
     transport.emit("7E806410100040000\r\r>");
     expect(await session.init(genericProfile)).toMatchObject({ protocol: "0" });
     expect(transport.writes.slice(0, 2)).toEqual(["0101", "ATZ"]);
   });
 });
 
-// X-2026-09-24-first-write F1-F7: a fresh session (no startsIdle) writes only ATZ or ATI until one is answered
-// cleanly; STOPPED starts that state again (docs/ELM327.md §Write safety, DS p.9, p.48). Synthetic scripted replies.
 describe("Elm327Session unknown state (synthetic)", () => {
   const stopped = "STOPPED\r\r>";
-  const reply0101 = "7E806410100040000\r\r>"; // fixtures/synthetic/session-branches.jsonl (0101)
+  const reply0101 = "7E806410100040000\r\r>";
 
   it("F1. a fresh session refuses everything but ATZ and ATI before any byte is written", async () => {
     const transport = new ScriptedTransport({ ...initReplies, "0131": "NO DATA\r\r>" }, false);
@@ -644,7 +632,6 @@ describe("replayRecording", () => {
     expect(out.some((l) => l.endsWith("negative service=0A code=11"))).toBe(true);
     expect(out.at(-1)).toMatch(/^summary: .*timeout 0;/);
 
-    // The VIN bytes as the session sees them, never as a literal here.
     const { responses } = await runEquinox(spike);
     const vinBytes = hex(responses.get("0902")?.frames[0].data.slice(3) ?? []);
     expect(vinBytes).toHaveLength(17);
@@ -653,11 +640,8 @@ describe("replayRecording", () => {
     expect(joined).not.toContain(vinBytes.join(""));
   });
 
-  // Spec amendment 2026-09-23: 22 4193 carries the VIN (ADR-017: 62 41 93, then the VIN four times from index 3).
-  // Synthetic: the VIN is the fixture's obviously fake 1C4SYNTHETICVIN00, framed here as 29-bit ISO-TP from ECU 17.
   const syntheticVin = Array.from(latin1Encode("1C4SYNTHETICVIN00"));
   const packed = (bytes: number[]) => hex(bytes).join("");
-  /** ISO-TP lines (FF + CFs) for a payload longer than 7 bytes, headers on. */
   function isotpLines(header: string, payload: number[]): string[] {
     const frames = [`${header}${packed([0x10, payload.length, ...payload.slice(0, 6)])}`];
     for (let i = 6, seq = 1; i < payload.length; i += 7, seq = (seq + 1) & 0x0f) {
@@ -692,8 +676,6 @@ describe("replayRecording", () => {
     expectNoVin(out);
   });
 
-  // Spec amendment 2026-09-23 (review finding 4): a VIN reply cut short leaves consecutive frames that the next
-  // response reports as no-first-frame drops. Synthetic VIN; 0100 reply from fixtures/synthetic/session-branches.jsonl.
   it.each([
     ["0902", "7E8", [0x49, 0x02, 0x01, ...syntheticVin]],
     ["22 4193", "18DAF117", [0x62, 0x41, 0x93, ...syntheticVin, ...syntheticVin]],
@@ -712,8 +694,6 @@ describe("replayRecording", () => {
     expectNoVin(out);
   });
 
-  // The synthetic fixture's late '>' replays as an immediate reply (ReplayTransport ignores t), so the
-  // timeout is inline. Spec amendment 2026-09-23 (review round 2): the command after it is not written.
   it("prints a timeout for an unanswered command and for the command after it (synthetic)", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const rec: RecordingLine[] = [

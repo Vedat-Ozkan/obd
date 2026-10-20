@@ -3,8 +3,6 @@ import type { Frame } from "../src/elm/isotp.js";
 import { decodeCalIds, decodeEcuName, decodeVin, vinCheckDigit } from "../src/obd/vin.js";
 import { latin1Encode } from "../src/recording/format.js";
 
-// VIN privacy (ADR-014, ADR-017): only synthetic VINs appear as literals here (the 49 CFR 565.15 Table VI sample,
-// and variants of it).
 function frame(...bytes: number[]): Frame {
   return { header: "7E8", ecu: "7E8", data: Uint8Array.from(bytes) };
 }
@@ -13,7 +11,7 @@ const ascii = (s: string) => Array.from(latin1Encode(s));
 const vinFrame = (vin: string, count = 1) => frame(0x49, 0x02, count, ...ascii(vin));
 const reason = (r: { ok: boolean; reason?: string }) => (r.ok ? undefined : r.reason);
 
-const CFR_SAMPLE = "1G4AH59H45G118341"; // 49 CFR 565.15(c) Table VI
+const CFR_SAMPLE = "1G4AH59H45G118341";
 
 describe("vinCheckDigit and decodeVin, synthetic", () => {
   it("position 9 changed -> check-digit-mismatch", () => {

@@ -5,7 +5,6 @@ import type { Frame } from "../src/elm/isotp.js";
 import { decodePid, MODE01_PIDS, OBD_STANDARDS, type Unit } from "../src/obd/j1979.js";
 import { checkEcho } from "../src/obd/response.js";
 
-// The vendored OBDb signalset (packages/obd-core/vehicles/saej1979/, CC-BY-SA-4.0), read by this test only.
 interface ObdbFmt {
   bix?: number;
   len: number;
@@ -28,7 +27,6 @@ function obdbMode01(pid: number): ObdbCommand | undefined {
   return obdb.commands.find((c) => c.cmd["01"] === key);
 }
 
-// Spec Verification Stage A, j1979 item 1: OBDb unit -> ours.
 const UNITS: Readonly<Record<string, Unit>> = {
   percent: "percent",
   celsius: "degC",
@@ -38,7 +36,6 @@ const UNITS: Readonly<Record<string, Unit>> = {
   scalar: "count",
 };
 
-// Synthetic frames (ecu 7E8), built inline.
 function frame(...bytes: number[]): Frame {
   const f: Frame = { header: "7E8", ecu: "7E8", data: Uint8Array.from(bytes) };
   if (bytes[0] === 0x7f && bytes.length >= 3) f.negative = { service: bytes[1], code: bytes[2] };
@@ -64,7 +61,6 @@ describe("MODE01_PIDS against the vendored OBDb SAEJ1979 signalset", () => {
 });
 
 describe("decodePid (synthetic vectors)", () => {
-  // Only PID 46 has a nonzero offset (add -40); the replay of standard-decoding.jsonl covers the mul/div paths.
   it.each([
     [0x46, [0x3c], 20, "degC"],
     [0x46, [0x00], -40, "degC"],

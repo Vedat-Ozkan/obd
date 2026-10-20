@@ -11,12 +11,10 @@ export type SavedSummaryCase = { name: string; response?: unknown; providerFailu
 
 export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSummaryCase): BatteryDiagnosisReport {
   if (item.report === "synthetic-negative-signal-no-recording" || item.report === "synthetic-zero-signal-no-recording") {
-    // Lexical controls copied from a replayed signal, not hardware observations.
     return { ...report, signals: report.signals.map((signal) => signal.id === "EQUINOXEV_HVBAT_C_V_AVG"
       ? { ...signal, value: item.report === "synthetic-zero-signal-no-recording" ? 0 : -signal.value } : signal) };
   }
   if (item.report === "synthetic-not-indicated-no-recording") {
-    // The spike's codes with the recently-cleared verdict set to not-indicated, as a counter read at or above policy would make it (mirrors apps/mobile/test/report-view.test.ts).
     return { ...report, codes: { ...report.codes, recentlyCleared: { ...report.codes.recentlyCleared, verdict: "not-indicated" } } };
   }
   if (item.report !== "synthetic-multi-dtc-no-recording") return report;
@@ -31,7 +29,6 @@ export function reportForSavedCase(report: BatteryDiagnosisReport, item: SavedSu
 
 type ReplayArtifact = { fixture: string; promptVersion: "t2.10-v4"; cases: { name: string; kind: string; text: string }[] };
 
-/** Saved v1 claim sets, run through the shared claim checker and renderer only (no v2 reply shape, no verdict rule, no rating lines). */
 export function createClaimReplayArtifact(report: BatteryDiagnosisReport, saved: { cases: readonly SavedSummaryCase[] }): Promise<ReplayArtifact> {
   const cases = saved.cases.map((item) => {
     const caseReport = reportForSavedCase(report, item);

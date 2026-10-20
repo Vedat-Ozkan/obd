@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/require-await */
-// T0.9 Stage A: docs/specs/T0.9-codes-report-flow.md Verification "Stage A". The real runner and console run over a fake
-// that answers from a tracked redacted recording; the app's markdown must equal the heading plus that recording's block
-// in the committed T0.7 artifact. T0.9b E1-E3 (docs/specs/T0.9b-one-and-done-captures.md) then save the run with finishRun.
-// Vitest runs in Node; Expo's mobile typecheck intentionally omits Node typings.
 // @ts-expect-error Node built-in types are not part of the mobile compilation target.
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,7 +87,6 @@ describe("codes scan E2E", () => {
       const markdown = await codesReportMarkdown(recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result });
       const expected = `# Codes report: ${VEHICLE}\n\nScanned ${DATE} with the phone app. Scan complete: 19 of 19 commands sent.\n\n` + artifactBlock(source);
       expect(markdown).toBe(expected);
-      // E1: both files reach the folder, the recording first.
       const targets = new FakeTargets();
       const outcome = await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
       expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()], [MD, expected]]);
@@ -111,7 +106,6 @@ describe("codes scan failures", () => {
     expect(result.stoppedEarly?.startsWith("UNABLE TO CONNECT")).toBe(true);
     expect(recording.lines().at(-1)).toEqual({ t: 0, dir: "meta", note: expect.stringMatching(/^capture stopped /) as unknown });
     expect(await codesReportMarkdown(recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result })).toBeUndefined();
-    // E2: the recording alone is saved, ending with the stop meta.
     const targets = new FakeTargets();
     const outcome = await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
     expect([...targets.folderFiles.entries()]).toEqual([[JSONL, recording.toJsonl()]]);
@@ -130,7 +124,6 @@ describe("codes scan failures", () => {
     expect(markdown).toContain("Scan stopped early after 10 of 19 commands: disconnected.");
     expect(markdown).toContain("Observed data from 5 modules: 17, 28, 40, 45, CB.");
     expect(markdown?.match(/- Readiness \(PID 01\): not read/g)).toHaveLength(5);
-    // E3: both files are saved; the recording says why it ends.
     const targets = new FakeTargets();
     await finishRun("codes", recording.toJsonl(), { vehicle: VEHICLE, date: DATE, result }, targets);
     expect([...targets.folderFiles.keys()]).toEqual([JSONL, MD]);

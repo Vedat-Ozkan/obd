@@ -22,7 +22,7 @@ from go import ask, find_dongle, next_out_path
 from spike import CARS, CHUNK, CODEC, SERVICE, Recorder
 
 CAR = CARS[2]
-MODULES = ("17", "28", "40", "45", "CB")  # T0.2 EV recording line 84 (090A replies)
+MODULES = ("17", "28", "40", "45", "CB")
 INIT = ["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV"]
 MODE01_BITMAPS = [0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0]
 SCAN = [("CB", 0x2000, 0x2FFF), ("CB", 0x4000, 0x43FF), ("CB", 0x8300, 0x83FF),
@@ -32,12 +32,12 @@ WATCH_MODULES = ("CB", "17")
 STATES = ("idle baseline", "heater max on", "heater off", "plugged in and charging", "unplugged")
 SCAN_BUDGET_S = 15 * 60
 WATCH_CYCLE_S = 15
-CMD_TIMEOUT_S = 5  # longest seen: 2.3 s, 0100 with SEARCHING...
+CMD_TIMEOUT_S = 5
 ALLOWED_AT = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATSP7", "ATDPN", "ATRV",
               "ATCP 18", "ATFCSD 300000", "ATFCSM 1",
               *(f"ATSH DA{m}F1" for m in MODULES), *(f"ATCRA 18DAF1{m}" for m in MODULES),
               *(f"ATFCSH 18DA{m}F1" for m in MODULES)}
-_VIN = ("0902", "22 F190", "22 4193")  # user decision: no VIN reads (spec Non-goals; 4193: X-2026-09-23-vin-redaction)
+_VIN = ("0902", "22 F190", "22 4193")
 _INSTRUCTIONS = (
     "HVAC off, car in Ready, Park. After about 60 s set the heater to max (hot, fan high) and press Enter once hot air flows.",
     "After about 60 s turn the heater off and press Enter.",
@@ -49,7 +49,6 @@ _INSTRUCTIONS = (
 
 
 def check_allowed(cmd: str) -> None:
-    """The single allowlist: every byte sent to the dongle passes here first."""
     if cmd in ALLOWED_AT:
         return
     if cmd not in _VIN and re.fullmatch(r"01[0-9A-F]{2}|09[0-9A-F]{2}|22 [0-9A-F]{4}", cmd):
@@ -67,7 +66,6 @@ def flagged(base: int, bits: int) -> list[int]:
 
 
 def _any_line(reply: str, pat: str) -> bool:
-    # ELM separates lines with "\r"; stray CFs or 7F 22 78 may precede the real reply
     return any(re.match(pat, line.strip()) for line in reply.split("\r"))
 
 
@@ -89,7 +87,7 @@ class Elm:
         self.client, self.write_char, self.notify_char = client, write_char, notify_char
         self.without_response, self.rec = without_response, rec
         self.buf, self.prompt = [], asyncio.Event()
-        self.fatal = False  # set after phase A step 2: LV RESET / UNABLE TO CONNECT then abort
+        self.fatal = False
 
     def _on_rx(self, _: object, data: bytearray) -> None:
         text = bytes(data).decode(CODEC)
@@ -104,7 +102,7 @@ class Elm:
     async def send(self, cmd: str) -> str:
         check_allowed(cmd)
         reply = await self._once(cmd)
-        if "CAN ERROR" in reply:  # docs/ELM327.md §Responses: retry once after 500 ms
+        if "CAN ERROR" in reply:
             await asyncio.sleep(0.5)
             reply = await self._once(cmd)
         if self.fatal and ("LV RESET" in reply or "UNABLE TO CONNECT" in reply):
@@ -116,7 +114,7 @@ class Elm:
         self.buf.clear()
         self.prompt.clear()
         payload = (cmd + "\r").encode(CODEC)
-        self.rec.event("tx", cmd + "\r")  # first: a reply can arrive while write_gatt_char awaits (T2.3b)
+        self.rec.event("tx", cmd + "\r")
         try:
             for i in range(0, len(payload), CHUNK):
                 await self.client.write_gatt_char(self.write_char, payload[i:i + CHUNK],
@@ -156,7 +154,7 @@ async def sweep(elm: Elm, rec: Recorder) -> None:
         if not any(bits & 1 for bits in maps.values()):
             break
     elm.fatal = True
-    mode01 = sorted(p for p in pids if p % 0x20)  # multiples of 0x20 are the bitmap PIDs
+    mode01 = sorted(p for p in pids if p % 0x20)
     rec.meta(phase="A", mode01_pids=[f"{p:02X}" for p in mode01])
     for pid in mode01:
         await elm.send(f"01{pid:02X}")
@@ -217,7 +215,7 @@ async def scan(elm: Elm, rec: Recorder) -> dict[str, list[tuple[int, float, bool
 async def watch(elm: Elm, rec: Recorder, positives: dict[str, list[tuple[int, float, bool]]],
                 marks: "asyncio.Queue[str]") -> None:
     ordered = [(m, did, ms, single) for m in WATCH_MODULES for did, ms, single in positives.get(m, [])]
-    ordered.sort(key=lambda x: not x[3])  # stable: single-frame first, discovery order kept
+    ordered.sort(key=lambda x: not x[3])
     kept, dropped, total = {m: [] for m in WATCH_MODULES}, [], 0.0
     for m, did, ms, _ in ordered:
         if dropped or total + ms > WATCH_CYCLE_S * 1000:
@@ -230,7 +228,7 @@ async def watch(elm: Elm, rec: Recorder, positives: dict[str, list[tuple[int, fl
         rec.meta(phase="C", state=state)
         print(f"\nC state: {state}\n  {text}\n  Hold each state at least 60 s and 3 cycles.")
         entered, cycles = time.monotonic(), 0
-        while not cycles or marks.empty():  # marks are taken between cycles only
+        while not cycles or marks.empty():
             await elm.send("ATRV")
             for m in WATCH_MODULES:
                 await select(elm, m)

@@ -1,6 +1,3 @@
-// X-2026-09-28-app-redesign C4 (spec §Verification, isolated failures 5–9): the consent sections and the privacy note
-// formatting keep the pinned beta-1 text verbatim (§Decisions 5); the licenses list matches the installed packages;
-// a missing or corrupt theme.txt falls back to System default (§Decisions 10).
 // @ts-expect-error Node built-ins are outside the mobile compilation target.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -29,7 +26,6 @@ describe("noteBlocks", () => {
     const markdown = noteBlocks(PRIVACY_NOTE).map((block) => (block.kind === "bullet" ? "- " : "")
       + block.spans.map((span) => span.bold ? `**${span.text}**` : span.italic ? `*${span.text}*` : span.text).join(""));
     expect(markdown).toEqual(PRIVACY_NOTE.split("\n").filter((line) => line !== ""));
-    // The markers themselves are consumed, never shown as text.
     expect(noteBlocks(PRIVACY_NOTE).flatMap((block) => block.spans).filter((span) => span.text.includes("*"))).toEqual([]);
     expect(noteBlocks(PRIVACY_NOTE).map((block) => block.kind)).toEqual(PRIVACY_NOTE.split("\n").filter((line) => line !== "")
       .map((line) => line.startsWith("- ") ? "bullet" : /^\*\*[^*]+\*\*$/.test(line) ? "heading" : "para"));
@@ -39,8 +35,6 @@ describe("noteBlocks", () => {
 describe("licenses", () => {
   type Manifest = { dependencies?: Record<string, string>; license?: string };
   const manifest = (dir: URL) => JSON.parse(read(new URL("package.json", dir), "utf8")) as Manifest;
-  // Runtime dependencies that ship in the app, each with the folder it is installed from: apps/mobile's own, then those of
-  // its workspace:* packages, transitively (pnpm installs each next to the package that declares it).
   const shipped = new Map<string, URL>();
   const walk = (dir: URL) => {
     for (const [name, spec] of Object.entries(manifest(dir).dependencies ?? {})) {
@@ -66,7 +60,6 @@ describe("licenses", () => {
 });
 
 describe("theme preference", () => {
-  // Failure 10 (spec §Verification, added after the C4 review).
   it("reads the three stored choices", () => {
     expect(["system", "light", "dark"].map(parseThemePreference)).toEqual(["system", "light", "dark"]);
     expect(parseThemePreference("dark\n")).toBe("dark");

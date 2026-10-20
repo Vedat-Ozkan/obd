@@ -8,8 +8,6 @@ import { askAssistant, type AssistantClient, type AssistantTurnRequest } from ".
 import { buildDatasets, row, scoreExpectation, type QuestionSet, type SavedRound } from "../../packages/obd-assist/scripts/replay-assistant.js";
 import { consentFor, pins, prepareAssistantTurn, type AssistantModel } from "./openrouter.js";
 
-// Design: docs/specs/T2.11b-assistant-backend-live-eval.md, Eval CLI. Runs the frozen T2.11a question set once per arm against the local Worker.
-// It never retries, and never prints or writes the development token or any provider key.
 
 const root = new URL("../../", import.meta.url);
 const openRouterBase = "https://openrouter.ai/api/v1";
@@ -33,7 +31,6 @@ function parseArgs(args: readonly string[]): Options {
   const capsUsd = need("max-spend-usd").split(",").map(Number);
   if (capsUsd.length !== models.length || capsUsd.some((cap) => !Number.isFinite(cap) || cap <= 0)) throw new Error("--max-spend-usd needs one positive number per model");
   const syntheticMetadataBase = flags.get("synthetic-metadata-base");
-  // A synthetic label on real OpenRouter metadata would mislabel a run, so refuse it before anything is requested.
   if (syntheticMetadataBase !== undefined && new URL(syntheticMetadataBase).hostname === "openrouter.ai") throw new Error("--synthetic-metadata-base must not point at openrouter.ai");
   return { url: need("url").replace(/\/$/, ""), questions: need("questions"), models, capsUsd, out: need("out"), saveReplies: flags.get("save-replies"), syntheticMetadataBase };
 }
@@ -46,11 +43,9 @@ const statusResponse = z.object({ headroomMicroUsd: z.number() });
 interface Round {
   returnedProvider: string | null; inputTokens: number | null; cachedInputTokens: number | null; reasoningTokens: number | null; outputTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number | null; reservationMicroUsd: number; providerLatencyMs: number | null; serverReason?: string;
-  // The Worker's upstreamStatus for a provider-error round; null for every other round, including transport errors.
   upstreamStatus: number | null;
 }
 
-// Closed copy of the Worker's FailedCheck: anything else is dropped, so a stray value never reaches the artifact.
 const failedChecks: readonly unknown[] = ["envelope", "bounds", "provider", "json", "shape", "facts"];
 
 async function spentMicroUsd(url: string): Promise<number> {
@@ -59,7 +54,6 @@ async function spentMicroUsd(url: string): Promise<number> {
   return 1000000 - statusResponse.parse(await response.json()).headroomMicroUsd;
 }
 
-/** One client per question: every round is one POST with a fresh request ID; a server fallback throws so askAssistant falls back, and is kept for the record. */
 function questionClient(url: string, model: AssistantModel) {
   const rounds: Round[] = [];
   const saved: SavedRound[] = [];
@@ -114,7 +108,6 @@ interface RunRow {
 }
 interface Captured { requests: AssistantTurnRequest[]; trace: { tool: string; sessionId: string | null }[] }
 
-/** q10 vs q04: the model inputs must be deep-equal at every round where the tool traces coincide, and the traces must be equal. */
 function injection(clean: Captured | undefined, injected: Captured | undefined) {
   if (clean === undefined || injected === undefined) return { verdict: "NOT RUN" };
   const calls = (request: AssistantTurnRequest) => request.steps.map((step) => step.call);
@@ -143,15 +136,12 @@ function comparison(model: AssistantModel, rows: readonly RunRow[], verdict: str
   const costs = ran.flatMap((item) => item.costUsd === null || item.costUsd === undefined ? [] : [item.costUsd]);
   const wall = ran.flatMap((item) => item.wallLatencyMs === undefined ? [] : [item.wallLatencyMs]);
   const provider = ran.flatMap((item) => item.providerLatencyMs === null || item.providerLatencyMs === undefined ? [] : [item.providerLatencyMs]);
-  // Rounds that came back with usage either report a provider or report none; a round with no response says nothing.
   const answered = roundList.filter((item) => item.inputTokens !== null);
   const reported = answered.flatMap((item) => item.returnedProvider === null ? [] : [item.returnedProvider]);
   return {
     model, real: group(rows.filter((item) => item.dataTag === "real")), synthetic: group(rows.filter((item) => item.dataTag !== "real")), injection: verdict,
     reasoningRounds: { ...rate(roundList.filter((item) => (item.reasoningTokens ?? 0) > 0).length, roundList.length), unreported: roundList.filter((item) => item.reasoningTokens === null).length },
-    // A difference from the pin's provider_name is a flag for the owner to read, not a rejection: the response spelling is unsourced.
     returnedProvider: { mismatched: rate(reported.filter((name) => name !== pins[model].providerName).length, reported.length), none: answered.length - reported.length, distinct: [...new Set(reported)] },
-    // The spec's owner targets: about US$0.01 per cheap answer and US$0.05 per thorough one.
     cost: { answers: ran.length, unknown: ran.length - costs.length, medianUsd: rounded(median(costs)), maxUsd: costs.length ? Math.max(...costs) : null, totalUsd: rounded(costs.reduce((sum, value) => sum + value, 0)),
       overCheapTarget: costs.filter((value) => value > 0.01).length, overThoroughTarget: costs.filter((value) => value > 0.05).length },
     latency: { medianMs: median(wall), maxMs: wall.length ? Math.max(...wall) : null, providerMedianMs: median(provider), providerMaxMs: provider.length ? Math.max(...provider) : null },
@@ -166,7 +156,7 @@ async function snapshots(models: readonly AssistantModel[], base: string) {
   try {
     const raw = await (await fetch(`${base}/models`, { signal: AbortSignal.timeout(60000) })).text();
     catalog = { raw, entries: z.object({ data: z.array(z.record(z.string(), z.unknown())) }).parse(JSON.parse(raw)).data };
-  } catch { /* A missing snapshot is recorded as such here; main() stops a LIVE run for it before anything is sent. */ }
+  } catch { }
   for (const model of models) {
     const pin = pins[model];
     try {
@@ -198,7 +188,6 @@ async function main(args: readonly string[]): Promise<void> {
   const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim().length > 0;
   const runDate = new Date().toISOString();
   const metadata = await snapshots(options.models, options.syntheticMetadataBase ?? openRouterBase);
-  // The LIVE label rests on more than the absence of the flag: every arm's OpenRouter snapshot must have been fetched and must contain the pinned host and slug. Otherwise nothing is sent or written.
   if (!synthetic) {
     for (const model of options.models) {
       const snapshot = z.object({ endpointFound: z.boolean(), catalogCanonicalSlug: z.unknown() }).safeParse(metadata[model]);
@@ -247,7 +236,6 @@ async function main(args: readonly string[]): Promise<void> {
     const after = await spentMicroUsd(options.url);
     let repliesFile: string | null = null;
     if (options.saveReplies !== undefined && rows.every((item) => item.status === "RUN")) {
-      // Only a complete arm is written: CI replays every scripted question, so a partial file would break it. The file is never hand-edited.
       mkdirSync(options.saveReplies, { recursive: true });
       repliesFile = join(options.saveReplies, `t2.11-live-${model.split("/")[1]}.json`);
       writeFileSync(repliesFile, `${JSON.stringify({

@@ -1,6 +1,3 @@
-// Upload scrubber for beta data (ADR-019): docs/specs/T2.9-beta-data-upload.md §Scrub rules, every rule sourced in
-// that spec's §Sources table. The VIN rules, ISO-TP spots and safety net port tools/spike/redact_vin.py (ADR-017).
-// Pure TypeScript: it runs on the phone before upload and again at intake.
 import { vinCheckDigit } from "../obd/vin.js";
 import { recordingLineSchema } from "./format.js";
 
@@ -10,10 +7,8 @@ export const SCRUB_RULES = [
   "odometer-01a6", "user-note", "date-in-note", "meta-key",
 ] as const;
 export type ScrubRule = (typeof SCRUB_RULES)[number];
-/** Messages or lines touched per rule. */
 export interface ScrubReport { version: typeof SCRUB_VERSION; masked: Record<ScrubRule, number> }
 
-/** 1-based input line; the message never contains a VIN or serial. */
 export class ScrubRefusal extends Error {
   readonly line: number;
   constructor(line: number, reason: string) {
@@ -23,25 +18,18 @@ export class ScrubRefusal extends Error {
   }
 }
 
-// redact_vin.py MASK: ASCII "0", so each masked byte's hex digits become "30" (ADR-017).
 const MASK_HI = "3";
 const MASK_LO = "0";
 const MASKED_SERIAL = "000000";
-// redact_vin.py RULES: normalized tx -> reply prefix and the payload indices where a 17-byte VIN starts.
 const VIN_RULES: Readonly<Record<string, { rule: ScrubRule; prefix: readonly number[]; offsets: readonly number[] }>> = {
   "0902": { rule: "vin-0902", prefix: [0x49, 0x02, 0x01], offsets: [3] },
   "224193": { rule: "vin-4193", prefix: [0x62, 0x41, 0x93], offsets: [3, 20, 37, 54] },
 };
-// Mode 09 infotypes with a layout in docs/ELM327.md §J1979 conventions (supported bitmap, VIN, CAL IDs, ECU name).
 const MODE09_KEPT = new Set([0x00, 0x02, 0x04, 0x0a]);
-// apps/mobile/src/recording.ts RecordingMeta plus t and dir, and the T2.4 charge-log session boundary (T2.4 Decisions
-// 9 and 13, this spec's Decision 15); everything else is dropped (fail-closed).
 const META_KEYS = new Set(["t", "dir", "car", "dongle", "note", "writeChar", "notifyChar", "mtu", "event", "reason", "powerState"]);
 const SESSION_EVENT = "charge-log session";
 const SESSION_REASONS = new Set(["start", "lv-reset", "timeout", "disconnect", "elm-error"]);
-// apps/mobile/src/batteryDiagnosisFlow.ts batteryScanMeta; docs/specs/X-2026-09-27-power-state-meta.md.
 const POWER_STATES = new Set(["ready", "unknown"]);
-// Decision 16: tx and rx lines are fail-closed too.
 const LINE_KEYS = new Set(["t", "dir", "data"]);
 const USER_NOTE = "removed before upload";
 const DATE = /\d{4}-\d{2}-\d{2}(?:[T ][0-9:.]+Z?)?/g;
@@ -53,11 +41,9 @@ interface Message { header: string; length: number; payload: number[]; spots: [S
 interface Held { n: number; out: string; data?: string; entries?: Entry[] }
 interface Exchange { tx: Held; cmd: string; lines: Held[] }
 
-/** Python json.dumps string form (ensure_ascii): the same escapes as apps/mobile/src/recording.ts pythonJsonLine. */
 export const pyString = (s: string) =>
   JSON.stringify(s).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 
-/** Python repr(float): shortest round-trip digits, scientific below 1e-4 or from 1e16, always a "." or exponent. */
 function pyFloat(x: number): string | undefined {
   if (!Number.isFinite(x)) return undefined;
   if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
@@ -83,11 +69,9 @@ function pyScalar(token: string): string | undefined {
 
 const TOKEN = /\s+|"(?:[^"\\]|\\.)*"|[-+.\w]+|[{}[\],:]/y;
 
-/** The line's top-level [key, value text] pairs if json.dumps(json.loads(line)) == line in Python, else undefined.
- *  Token-based so Python floats such as 5.0 keep their form (JSON.parse would lose it). */
 function pythonEntries(line: string): Entry[] | undefined {
   const entries: Entry[] = [];
-  const stack: (Set<string> | undefined)[] = []; // key set per open object, undefined per open array
+  const stack: (Set<string> | undefined)[] = [];
   let canonical = "";
   let expectKey = false;
   let topKey: string | undefined;
@@ -120,7 +104,7 @@ function pythonEntries(line: string): Entry[] | undefined {
       const s = JSON.parse(token) as string;
       if (expectKey) {
         const keys = stack.at(-1);
-        if (keys === undefined || keys.has(s)) return undefined; // Python keeps only the last duplicate
+        if (keys === undefined || keys.has(s)) return undefined;
         keys.add(s);
         if (stack.length === 1) topKey = s;
         expectKey = false;
@@ -137,10 +121,8 @@ function pythonEntries(line: string): Entry[] | undefined {
 
 const pyObject = (entries: readonly Entry[]) => `{${entries.map(([k, v]) => `${pyString(k)}: ${v}`).join(", ")}}`;
 
-/** redact_vin.py _norm. */
 const normCommand = (data: string) => data.replace(/\r$/, "").replace(/ /g, "").toUpperCase();
 
-/** redact_vin.py _frames: hex-only pieces between "\r" or ">", spaces skipped, each char with its spot. */
 function* hexFrames(rx: readonly string[]): Generator<{ text: string; spots: Spot[] }> {
   let text = "";
   let spots: Spot[] = [];
@@ -162,7 +144,6 @@ function* hexFrames(rx: readonly string[]): Generator<{ text: string; spots: Spo
   yield* cut();
 }
 
-/** redact_vin.py messages() for one exchange: ISO-TP SF/FF/CF per header. A bad CF refuses only in a VIN reply. */
 function messages(cmd: string, rx: readonly string[], txLine: number): Message[] {
   const started: Message[] = [];
   const open = new Map<string, Message>();
@@ -204,11 +185,10 @@ function messages(cmd: string, rx: readonly string[], txLine: number): Message[]
 }
 
 const startsWith = (payload: readonly number[], prefix: readonly number[]) => prefix.every((b, i) => payload[i] === b);
-const isVinByte = (b: number) => (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a); // redact_vin.py [0-9A-Z]
+const isVinByte = (b: number) => (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a);
 const ascii = (payload: readonly number[]) => String.fromCharCode(...payload);
 const hexOf = (s: string) => Array.from(s, (c) => c.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase()).join("");
 
-/** One instance per file. Lines are passed without their "\n". */
 export class UploadScrubber {
   private readonly masked = Object.fromEntries(SCRUB_RULES.map((r) => [r, 0])) as Record<ScrubRule, number>;
   private readonly serials = new Set<string>();
@@ -218,7 +198,6 @@ export class UploadScrubber {
   private verifyLine = 0;
   private verifyExchange: { line: number; cmd: string; rx: string[] } | undefined;
 
-  /** Pass 1. Returns the output lines that are final (it holds back at most one exchange). Throws ScrubRefusal. */
   push(line: string): string[] {
     const n = ++this.line;
     let value: unknown;
@@ -246,12 +225,10 @@ export class UploadScrubber {
     return [];
   }
 
-  /** Pass 1 end: the held-back lines and the report. */
   end(): { lines: string[]; report: ScrubReport } {
     return { lines: this.flush(), report: { version: SCRUB_VERSION, masked: { ...this.masked } } };
   }
 
-  /** Pass 2 (safety net, redact_vin.py _safety_net) over the complete pass-1 output, in order. */
   verify(line: string): void {
     const n = ++this.verifyLine;
     if (this.serials.size === 0) return;
@@ -307,7 +284,6 @@ export class UploadScrubber {
     return changed ? pyObject(kept) : line;
   }
 
-  /** Applies the message rules to the held exchange and returns its lines. */
   private flush(): string[] {
     const ex = this.exchange;
     this.exchange = undefined;
@@ -355,7 +331,6 @@ export class UploadScrubber {
       for (let i = 0; i + 17 <= text.length; i++) {
         const w = text.slice(i, i + 17);
         if (!VIN_WINDOW.test(w) || w[8] !== vinCheckDigit(w)) continue;
-        // Decision 11: chance hits on digit runs are common, so check-digit serials mask but never feed the safety net.
         hit = true;
         mask(m.spots.slice(i + 11, i + 17));
       }
@@ -379,7 +354,6 @@ export class UploadScrubber {
 
 const survives = (line: number) => new ScrubRefusal(line, "a VIN serial survives masking");
 
-/** Both passes over a whole text (small files, intake, tests). Throws ScrubRefusal. */
 export function scrubRecording(text: string): { text: string; report: ScrubReport } {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();

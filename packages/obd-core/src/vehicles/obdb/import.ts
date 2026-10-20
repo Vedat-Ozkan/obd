@@ -37,7 +37,6 @@ const command = z.object({
 });
 const signalset = z.object({ commands: z.array(command) });
 
-/** Bounded OBDb v3 Mode 22 subset used by the vendored Equinox file. */
 export function importObdbMode22(input: unknown): readonly ObdbMode22Signal[] {
   const parsed = signalset.safeParse(input);
   if (!parsed.success) throw new Error(`OBDb Mode 22 import: ${z.prettifyError(parsed.error)}`);

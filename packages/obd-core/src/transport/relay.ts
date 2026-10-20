@@ -5,9 +5,6 @@ export type RelayCommand =
   | { command: string; confirmation: "none" }
   | { command: "04"; confirmation: "on-phone" };
 
-// The allowlist is Elm327Session's (docs/ELM327.md §Write safety), plus two relay deltas: exact 04 goes to
-// the phone for on-phone confirmation (AGENTS.md hard rule 5, ADR-013), and Mode 06 is refused until T0.7
-// sources its request length. Spec: docs/specs/T0.6a-node-relay-mcp.md, amendment 2026-09-24, decision 1.
 export function authorizeRelayCommand(input: string): RelayCommand {
   const refused = new Error("relay: refused, not on the read-only allowlist");
   if (NON_PRINTABLE.test(input)) throw refused;

@@ -26,16 +26,13 @@ export class ConsoleSession {
   private readonly reader = new ElmLineReader();
   private readonly unsubscribe: () => void;
   private pending?: { command: string; resolve: (response: string) => void; reject: (reason: Error) => void; timer: ReturnType<typeof setTimeout> };
-  // After a timeout or failed write the ELM may still be busy; a write then would be cut short (docs/ELM327.md §Write safety).
   private stale = false;
   private isClosed = false;
-  // A fresh session cannot tell whether the ELM is idle; a byte reaching a busy ELM is dropped (docs/ELM327.md §Write safety).
   private unknown: boolean;
   private readonly promptWaiters = new Set<(prompted: boolean) => void>();
 
   constructor(private readonly transport: Transport, private readonly recording: RecordingBuffer, private readonly timeoutMs = 20_000) {
     this.unknown = transport.startsIdle !== true;
-    // Every notification is recorded, including late ones after a timeout, so the file shows what the dongle sent.
     this.unsubscribe = transport.onData((bytes) => {
       this.recording.rx(bytes);
       const responses = this.reader.push(bytes);
@@ -50,12 +47,10 @@ export class ConsoleSession {
     return this.isClosed;
   }
 
-  /** true until an ATZ or ATI gets a '>'-terminated reply without an error line; true again after a STOPPED reply. */
   get stateUnknown(): boolean {
     return this.unknown;
   }
 
-  /** Resolves true at once when no timeout/write failure is outstanding; otherwise true on the next '>', false after `ms` or on close(). */
   waitForPrompt(ms: number): Promise<boolean> {
     if (!this.stale) return Promise.resolve(true);
     if (this.isClosed) return Promise.resolve(false);
@@ -72,7 +67,6 @@ export class ConsoleSession {
     if (this.isClosed) throw new Error("Console session closed");
     if (this.stale) throw new Error("Waiting for '>' after a timeout or failed write");
     if (this.unknown && command !== "ATZ" && command !== "ATI") throw new Error("ELM state unknown; send ATZ or ATI first");
-    // tx is recorded before the write starts so a fast reply can never precede it in the file.
     this.recording.tx(`${command}\r`);
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -85,7 +79,6 @@ export class ConsoleSession {
       const pending = { command, resolve, reject, timer };
       this.pending = pending;
       void this.transport.write(latin1Encode(`${command}\r`)).catch((error: unknown) => {
-        // A late write rejection must not fail a later command.
         if (this.pending !== pending) return;
         const name = error instanceof Error ? error.name : "Error";
         this.recording.meta(`write failed after ${command}: ${name}`);

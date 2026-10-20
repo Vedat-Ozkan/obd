@@ -1,4 +1,3 @@
-// docs/specs/X-2026-09-28-persistent-dongle.md Stage A. K1 is the E2E; L1-L8, V1-V5 and M1-M4 are the listed isolated failures.
 // @ts-expect-error Node built-ins are outside the mobile compilation target.
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -24,7 +23,6 @@ class Store {
   async write(value: string) { await Promise.resolve(); if (this.failWrites) throw new Error("disk full"); this.value = value; }
 }
 
-// A fake BLE side: every connect makes a transport that counts its closes; the disconnect listeners are kept so a test can fire them.
 function rig() {
   const events: string[] = [];
   const closes = new Map<string, number>();
@@ -135,7 +133,6 @@ describe("dongle link failure modes", () => {
   });
 });
 
-// A transport whose writes and listeners are observable.
 function fakeLink(startsIdle?: boolean) {
   const writes: string[] = []; const subscribers = new Set<(bytes: Uint8Array) => void>(); let closed = 0;
   const transport: Transport = {
@@ -214,8 +211,6 @@ describe("dongle memory failure modes", () => {
   });
 });
 
-// K1: the kept link end to end. One replay of the synthetic full scan played twice is the link; each run gets its own view.
-// Synthetic: no phone battery-scan recording is committed. The second run's first write must be ATZ, and the replay rejects any other.
 describe("kept link E2E", () => {
   it("K1: two battery diagnoses run back to back on one kept link", async () => {
     const fixture = parseRecording(read(new URL("fixtures/synthetic/battery-diagnosis-full-scan.jsonl", root), "latin1"));

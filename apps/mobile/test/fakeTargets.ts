@@ -1,5 +1,3 @@
-// In-memory SaveTargets for docs/specs/T0.9b-one-and-done-captures.md Verification: an ordered call log, the folder's
-// files, and switchable failures.
 import type { RunFile, SaveTargets } from "../src/runFiles.js";
 
 const DATE = "2026-09-25";
@@ -9,16 +7,12 @@ export class FakeTargets implements SaveTargets {
   readonly kept = new Map<string, string>();
   readonly folderFiles = new Map<string, string>();
   folderRejects?: Error;
-  /** A file name; its folder write throws `writeError`. */
   writeThrowsFor?: string;
   readonly writeError = new Error("permission revoked");
-  /** A file name; its share rejects `shareError`. */
   shareRejectsFor?: string;
   readonly shareError = new Error("share already pending");
-  /** A slug; its keep throws `keepError`. */
   keepThrowsFor?: string;
   readonly keepError = new Error("disk full");
-  /** When set, each share stays open until the test calls the resolver pushed here. */
   heldShares?: (() => void)[];
 
   keep(file: RunFile): string {

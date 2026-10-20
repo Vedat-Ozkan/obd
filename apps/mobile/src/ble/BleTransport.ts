@@ -6,12 +6,10 @@ export const VEEPEAK_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
 export const VEEPEAK_CHARACTERISTIC_UUIDS: readonly string[] = ["0000fff1-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb"];
 export const REQUESTED_MTU = 185;
 
-// serviceUuids are the advertised ones, kept from an earlier advertisement when a later one omits them.
 export interface ScannedDevice { id: string; name?: string; rssi?: number; serviceUuids?: string[] }
 
 export function scanDevices(manager: BleManager, onDevice: (device: ScannedDevice) => void, onError: (error: Error) => void): () => void {
   const devices = new Map<string, ScannedDevice>();
-  // No service filter: the dongle is not assumed to advertise FFF0.
   manager.startDeviceScan(null, null, (error, device) => {
     if (error) { onError(error); return; }
     if (!device) return;
@@ -27,12 +25,10 @@ export function scanDevices(manager: BleManager, onDevice: (device: ScannedDevic
   return () => { void manager.stopDeviceScan(); };
 }
 
-// The name pattern is a UI heuristic, not an OBD constant; FFF0 is the adapter signal (docs/ELM327.md §BLE specifics).
 const OBD_NAME = /obd|elm327|veepeak/i;
 const isRelevant = (device: ScannedDevice, rememberedId: string | undefined) =>
   device.id === rememberedId || (device.serviceUuids ?? []).some((uuid) => normalizeUuid(uuid) === VEEPEAK_SERVICE_UUID) || OBD_NAME.test(device.name ?? "");
 
-/** Picker order: the remembered device, then other relevant devices, then the rest; each by signal, strongest first, a missing signal last, then name, then id. */
 export function orderDevices(devices: readonly ScannedDevice[], rememberedId: string | undefined, showAll: boolean): { shown: ScannedDevice[]; hidden: number } {
   const rank = (device: ScannedDevice) => device.id === rememberedId ? 0 : isRelevant(device, rememberedId) ? 1 : 2;
   const sorted = [...devices].sort((a, b) =>
@@ -51,8 +47,7 @@ export async function connectVeepeak(manager: BleManager, deviceId: string): Pro
   try {
     return await setUpVeepeak(connected);
   } catch (error) {
-    // Leaving the dongle GATT-connected stops it advertising and leaves the app nothing to disconnect.
-    try { await connected.cancelConnection(); } catch { /* the setup error is the one to report */ }
+    try { await connected.cancelConnection(); } catch { }
     throw error;
   }
 }
@@ -65,14 +60,13 @@ async function setUpVeepeak(connected: Device): Promise<BleConnection> {
   const withoutResponse = candidates.filter((item) => item.isWritableWithoutResponse);
   const withResponse = candidates.filter((item) => item.isWritableWithResponse);
   const notify = candidates.filter((item) => item.isNotifiable || item.isIndicatable);
-  // More than one write-without-response candidate is ambiguous; it must not fall through to write-with-response.
   const write = withoutResponse.length === 1 ? withoutResponse[0] : withoutResponse.length === 0 && withResponse.length === 1 ? withResponse[0] : undefined;
   if (!write || notify.length !== 1) {
     const summary = candidates.map((item) => `${item.uuid}: writeWithoutResponse=${String(item.isWritableWithoutResponse)}, writeWithResponse=${String(item.isWritableWithResponse)}, notify=${String(item.isNotifiable)}, indicate=${String(item.isIndicatable)}`).join("; ");
     throw new Error(`Veepeak GATT roles are missing or ambiguous: ${summary || "no FFF1/FFF2 characteristics"}`);
   }
   const notifyCharacteristic = notify[0];
-  try { device = await device.requestMTU(REQUESTED_MTU); } catch { /* reported MTU remains the fallback */ }
+  try { device = await device.requestMTU(REQUESTED_MTU); } catch { }
   const transport = new BleTransport(device, service.uuid, write.uuid, notifyCharacteristic.uuid, write.isWritableWithoutResponse);
   return { transport, deviceId: device.id, ...(device.name ? { deviceName: device.name } : {}), mtu: device.mtu, writeCharacteristicUuid: write.uuid, notifyCharacteristicUuid: notifyCharacteristic.uuid };
 }

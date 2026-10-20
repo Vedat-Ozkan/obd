@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElmLineReader } from "obd-core/elm";
 import { latin1Decode, latin1Encode, parseRecording } from "obd-core/recording";
-// obd-core exports only transport types, the reader, and the recording format; the replay transport is read from source.
 import { ReplayTransport } from "../../../packages/obd-core/src/transport/replay.js";
 import type { Transport } from "obd-core/transport";
 import { ALLOWED_AT_COMMANDS, ConsoleSession, normalizeReadOnlyCommand, READ_ONLY_SERVICES } from "../src/console.js";
@@ -16,10 +15,9 @@ class FakeTransport implements Transport {
   startsIdle = true;
   async write(bytes: Uint8Array): Promise<void> { this.onWrite?.(); this.writes.push(latin1Decode(bytes)); if (this.fail) throw this.fail; }
   onData(callback: (bytes: Uint8Array) => void): () => void { this.callbacks.add(callback); return () => { this.callbacks.delete(callback); }; }
-  async close(): Promise<void> { /* nothing to release */ }
+  async close(): Promise<void> { }
   data(text: string): void { this.callbacks.forEach((callback) => { callback(latin1Encode(text)); }); }
 }
-// Verbatim rx chunks after tx "0100\r": fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl lines 25-41.
 const EQUINOX_0100_RX = ["SEAR", "CH", "I", "NG", ".", "..", "\r", "18DAF14506410080", "000001\r18DAF1CB0", "6410080000001\r18", "DAF1400641008000", "0001\r18DAF128064", "100BFFFF997\r18DA", "F117064100800800", "13\r", "\r", ">"];
 const EQUINOX_0100_RESPONSE = EQUINOX_0100_RX.join("").slice(0, -1);
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
@@ -118,7 +116,6 @@ describe("ConsoleSession", () => {
     transport.data("4100>"); expect(recording.lines().filter((line) => line.dir === "rx")).toHaveLength(0);
   });
 
-  // docs/specs/X-2026-09-24-first-write.md Verification, isolated tests 8-11.
   const UNKNOWN = "ELM state unknown; send ATZ or ATI first";
   const fresh = (timeoutMs?: number) => {
     const recording = new RecordingBuffer(() => 1); recording.start(meta); const transport = new FakeTransport(); transport.startsIdle = false;
@@ -175,8 +172,6 @@ describe("RecordingBuffer", () => {
 
   it("R1: toJsonl writes each line byte for byte in Python json.dumps form", () => {
     const recording = new RecordingBuffer(() => 1); recording.start(meta); recording.rx(Uint8Array.from({ length: 256 }, (_, index) => index));
-    // Generated with: python3 -c 'import json; print(json.dumps({"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "Ready", "writeChar": "fff1", "notifyChar": "fff2", "mtu": 23})); print(json.dumps({"t": 0, "dir": "rx", "data": "".join(map(chr, range(256)))}))'
-    // (the rx line is pasted as a JSON string literal of that output, from json.dumps(json.dumps(...))).
     const expected = '{"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "Ready", "writeChar": "fff1", "notifyChar": "fff2", "mtu": 23}\n' + "{\"t\": 0, \"dir\": \"rx\", \"data\": \"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\\u007f\\u0080\\u0081\\u0082\\u0083\\u0084\\u0085\\u0086\\u0087\\u0088\\u0089\\u008a\\u008b\\u008c\\u008d\\u008e\\u008f\\u0090\\u0091\\u0092\\u0093\\u0094\\u0095\\u0096\\u0097\\u0098\\u0099\\u009a\\u009b\\u009c\\u009d\\u009e\\u009f\\u00a0\\u00a1\\u00a2\\u00a3\\u00a4\\u00a5\\u00a6\\u00a7\\u00a8\\u00a9\\u00aa\\u00ab\\u00ac\\u00ad\\u00ae\\u00af\\u00b0\\u00b1\\u00b2\\u00b3\\u00b4\\u00b5\\u00b6\\u00b7\\u00b8\\u00b9\\u00ba\\u00bb\\u00bc\\u00bd\\u00be\\u00bf\\u00c0\\u00c1\\u00c2\\u00c3\\u00c4\\u00c5\\u00c6\\u00c7\\u00c8\\u00c9\\u00ca\\u00cb\\u00cc\\u00cd\\u00ce\\u00cf\\u00d0\\u00d1\\u00d2\\u00d3\\u00d4\\u00d5\\u00d6\\u00d7\\u00d8\\u00d9\\u00da\\u00db\\u00dc\\u00dd\\u00de\\u00df\\u00e0\\u00e1\\u00e2\\u00e3\\u00e4\\u00e5\\u00e6\\u00e7\\u00e8\\u00e9\\u00ea\\u00eb\\u00ec\\u00ed\\u00ee\\u00ef\\u00f0\\u00f1\\u00f2\\u00f3\\u00f4\\u00f5\\u00f6\\u00f7\\u00f8\\u00f9\\u00fa\\u00fb\\u00fc\\u00fd\\u00fe\\u00ff\"}" + "\n";
     expect(recording.toJsonl()).toBe(expected);
   });

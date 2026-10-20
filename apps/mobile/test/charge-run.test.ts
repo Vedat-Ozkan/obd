@@ -1,9 +1,3 @@
-// T2.4 Decision 20 isolated failure modes: docs/specs/T2.4-charge-logger.md Decisions, item 20.
-// The run record outlives any one console, because Android can recreate the activity mid-run while JS keeps running.
-// R1 second-console: a console mounted after the one that started the run does not see it (no status, controls enabled).
-// R3 end: the end of the run notifies the mounted console and clears the record (X-2026-09-28-persistent-dongle: R2 deleted, the record owns no manager).
-// R4 stop-any-console: Disconnect in a console other than the starter does not reach the run's stop flag.
-// R5 final-line (Decision 21): a console mounted after the run ended, with no console mounted at its end, does not see the final line.
 import { describe, expect, it } from "vitest";
 import { createChargeRunRecord } from "../src/chargeRun.js";
 

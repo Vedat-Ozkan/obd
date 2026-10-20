@@ -6,7 +6,6 @@ import type { Frame } from "../src/elm/isotp.js";
 import { decodeFreezeDtc, decodeFreezePid } from "../src/obd/freeze.js";
 import { parseRecording } from "../src/recording/format.js";
 
-// Mode 02 freeze frame: docs/specs/T0.5-standard-decoding.md Stage C; failure list in docs/task-runs/T0.5.md.
 const recording = parseRecording(
   readFileSync(
     fileURLToPath(
@@ -19,7 +18,6 @@ const recording = parseRecording(
   ),
 );
 
-/** Output lines of the block whose header starts with `L<line> `. */
 function block(out: string[], line: number): string[] {
   const start = out.findIndex((l) => l.startsWith(`L${String(line)} `));
   const end = out.findIndex((l, i) => i > start && !l.startsWith("  "));
@@ -33,11 +31,9 @@ function frame(...bytes: number[]): Frame {
 describe("replayRecording, 2026-09-24-phone-console.redacted.jsonl", () => {
   it("decodes module 17's freeze frame 0 replies", async () => {
     const out = await replayRecording(recording);
-    // L38: 18DAF117 42 00 00 40 08 00 03
     expect(block(out, 38).filter((l) => l.startsWith("  decoded "))).toEqual([
       "  decoded 17 freeze 0 supported 02 0D 1F 20",
     ]);
-    // L42: 18DAF117 42 02 00 00 00 (no snapshot stored)
     expect(block(out, 42).filter((l) => l.startsWith("  decoded "))).toEqual(["  decoded 17 freeze 0 dtc none"]);
   });
 });

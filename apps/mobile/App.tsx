@@ -27,7 +27,6 @@ import { ReportHistory, ReportSummary } from "./src/screens/ReportScreens.js";
 import { CodesScreen, ModuleScreen, SECTION_TITLES, SectionScreen } from "./src/screens/SectionScreens.js";
 import { BetaScreen, LicensesScreen, PrivacyScreen, SaveFolderScreen, SettingsScreen, ThemeScreen } from "./src/screens/SettingsScreens.js";
 
-/** Top app bar: back arrow below the first route, a wrapping h1 title (never truncated at large font scales), and an optional action. */
 function TopBar({ title, onBack, action }: { title: string; onBack?: () => void; action?: ReactNode }) {
   const tokens = useTokens();
   return <View style={[styles.row, { minHeight: 56 }]}>
@@ -42,7 +41,6 @@ export function App() {
   const [state, setState] = useState<GarageState>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // X-2026-09-28-app-redesign C1: a plain route stack (ADR-021); the top route is on screen.
   const [stack, setStack] = useState<readonly Route[]>([{ name: "garage" }]);
   const [historyReports, setHistoryReports] = useState<readonly BatteryDiagnosisReport[]>([]);
   const [make, setMake] = useState("");
@@ -55,13 +53,11 @@ export function App() {
   const [consentShare, setConsentShare] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [betaMessage, setBetaMessage] = useState("");
-  // C3: set by the console (onLockChange) while a diagnosis or a charge log runs; system back is blocked only then.
   const [locked, setLocked] = useState(false);
   const route: Route = stack[stack.length - 1] ?? { name: "garage" };
   const push = (next: Route) => { setError(""); setStack((current) => [...current, next]); };
   const pop = () => { setError(""); setStack((current) => current.length > 1 ? current.slice(0, -1) : current); };
   const refreshBeta = () => { void betaOutbox.status().then(setBeta); };
-  // T2.9: uploads resume by themselves on start and whenever the app comes to the foreground.
   useEffect(() => {
     const drain = () => { refreshBeta(); void betaOutbox.drain().then(refreshBeta); };
     drain();
@@ -84,7 +80,6 @@ export function App() {
       } },
     ]);
   };
-  // Garage rows no longer show report counts (the Car screen counts its own list), so this only loads the history.
   const refreshReports = async () => { await batteryHistory.load(); };
   const load = () => { setError(""); void garageFlow.load().then(async (garage) => { await refreshReports(); setState(garage); }, (cause: unknown) => { setError(`Saved data load error: ${cause instanceof Error ? cause.message : String(cause)}`); }).catch((cause: unknown) => { setError(`Saved data load error: ${cause instanceof Error ? cause.message : String(cause)}`); }); };
   useEffect(load, []);
@@ -106,7 +101,6 @@ export function App() {
     catch (cause) { setError(`Battery report history error: ${cause instanceof Error ? cause.message : String(cause)}`); return false; }
   };
   const openCar = async (id: string) => { setError(""); if (await listReports(id)) push({ name: "car", entryId: id }); };
-  // Returns to this car's history if it is already on the stack, else opens it.
   const openHistory = async (id: string) => {
     setError("");
     if (!await listReports(id)) return;
@@ -121,19 +115,15 @@ export function App() {
     const persisted = reports.find((item) => item.scannedAt === report.scannedAt && item.recording === report.recording);
     if (!persisted) throw new Error("Saved diagnosis could not be reopened from private history.");
     await refreshReports();
-    // The saved report replaces the check screen, so back returns to the car, whose hero now shows this check.
     setHistoryReports(reports);
     setStack((current) => [...current.filter((item) => item.name !== "check"), { name: "report", entryId: persisted.garageVehicleId, scannedAt: persisted.scannedAt, recording: persisted.recording }]);
   };
 
-  // The consent screen covers Garage (first run, or a newer consent version) and the Beta page (switching sharing on).
   const consentVisible = beta !== undefined && (route.name === "garage" || route.name === "beta") && (beta.needsConsent || consentOpen);
-  // Every appearance of the consent screen starts unticked, even after an async view change left it mid-choice.
   useEffect(() => { if (consentVisible) setConsentShare(false); }, [consentVisible]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // Consent opened by the Beta switch closes without a decision; sharing stays as it was.
       if (consentVisible && !beta.needsConsent) { setConsentOpen(false); return true; }
       const next = back(stack, locked);
       if (next === "exit") return false;
@@ -145,7 +135,6 @@ export function App() {
 
   if (beta && consentVisible) return <ConsentScreen beta={beta} betaMessage={betaMessage} consentShare={consentShare} setConsentShare={setConsentShare} busy={busy} decideBeta={decideBeta} />;
 
-  // Until the beta status is known, nothing that starts a run is shown: the consent screen may still be due.
   if (!beta) return <Screen>
     <Text style={title}>Garage</Text><Text style={normal}>Loading beta sharing…</Text>
   </Screen>;
@@ -170,7 +159,6 @@ export function App() {
 
   if (route.name === "car" && selectedEntry && selectedVehicle) return page(vehicleName, <CarScreen entry={selectedEntry} vehicle={selectedVehicle} reports={historyReports} busy={busy} change={change}
     openReport={openReport} openCheck={(intent) => { push({ name: "check", entryId: selectedEntry.id, intent }); }} openHistory={() => { void openHistory(selectedEntry.id); }} onRemoved={pop} />);
-  // C2: report routes resolve their report from the route's scannedAt and recording, never from shared state.
   const routeReport = "scannedAt" in route ? findReport(historyReports, route) : undefined;
   if (routeReport && selectedEntry && selectedVehicle) {
     const key = { entryId: selectedEntry.id, scannedAt: routeReport.scannedAt, recording: routeReport.recording };
@@ -181,7 +169,6 @@ export function App() {
     if (route.name === "section") return page(SECTION_TITLES[route.section], <SectionScreen report={routeReport} section={route.section} history={historyReports} canCheck={canCheck} busy={busy} openCharge={() => { openCheck("charge"); }} />);
     if (route.name === "codes") return page("Diagnostic codes", <CodesScreen codes={routeReport.codes} busy={busy} openModule={(ecu) => { push({ name: "module", ...key, ecu }); }} />);
     if (route.name === "module") return page(`Module ${route.ecu}`, <ModuleScreen codes={routeReport.codes} ecu={route.ecu} />);
-    // T2.10d's component, hosted unchanged; the route is only reachable from the development row.
     if (route.name === "aiSummary" && __DEV__) return page("AI summary (development)", <DevelopmentSummary key={`${routeReport.scannedAt}-${routeReport.recording}`} report={routeReport} />);
   }
   if (route.name === "history") return page("Report history", <ReportHistory historyReports={historyReports} openReport={openReport} />);
@@ -194,19 +181,15 @@ export function App() {
   if (route.name === "saveFolder") return page("Save folder", <SaveFolderScreen />);
   if (route.name === "privacy") return page("Privacy note", <PrivacyScreen />);
   if (route.name === "licenses") return page("Open-source licenses", <LicensesScreen />);
-  // Garage, and the fallback for a route whose car is gone.
   return page("Garage", <GarageScreen state={state} busy={busy} openCar={(id) => { void openCar(id); }} addVehicle={clearPicker} />,
     <IconButton icon="cog-outline" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Settings" onPress={() => { push({ name: "settings" }); }} />);
 }
 
-/** Providers, fonts, the saved theme choice and a status bar that follows the scheme; App renders below them. */
 export function Root() {
   const scheme = useScheme();
   const [fontsLoaded, fontError] = useFonts({ [FONTS.medium]: Manrope_500Medium, [FONTS.semibold]: Manrope_600SemiBold, [FONTS.bold]: Manrope_700Bold, [FONTS.extrabold]: Manrope_800ExtraBold, [FONTS.mono]: JetBrainsMono_600SemiBold });
-  // C4: the theme.txt choice is applied before the first frame, so a Light or Dark override never flashes the system scheme.
   const [themeLoaded, setThemeLoaded] = useState(false);
   useEffect(() => { void loadThemePreference().then((preference) => { setThemePreference(preference); setThemeLoaded(true); }); }, []);
-  // A font that fails to load falls back to the system font rather than blocking the app.
   if ((!fontsLoaded && !fontError) || !themeLoaded) return null;
   return <SafeAreaProvider>
     <PaperProvider theme={paperTheme(scheme)}>

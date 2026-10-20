@@ -15,10 +15,6 @@ export interface Tokens {
   chart: { data: string; highlight?: string };
 }
 
-// Every value: docs/specs/X-2026-09-28-app-redesign.md §Design (Tokens, provenance tags, rating chips);
-// the dark chart highlight is §Decisions item 9 (validator PASS against #3FA884 on #242A26).
-// error is react-native-paper 5.15.3's MD3 error40 (light) and error80 (dark), src/styles/themes/v3/tokens.tsx;
-// WCAG contrast on bg/surface: light 5.91/6.30, dark 9.57/8.58 (the old #B00020 was 2.23/2.00 in dark).
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
     bg: "#F2F4F1", surface: "#FAFBF9", container: "#DFE7E1", onContainer: "#24302A", containerMuted: "#4C5B53", track: "#C6D3CA",
@@ -42,10 +38,8 @@ const TOKENS: Record<Scheme, Tokens> = {
   },
 };
 
-// Family names are the keys App.tsx registers with useFonts; each weight is its own family, so no synthetic bold.
 const FONTS = { medium: "Manrope_500Medium", semibold: "Manrope_600SemiBold", bold: "Manrope_700Bold", extrabold: "Manrope_800ExtraBold", mono: "JetBrainsMono_600SemiBold" };
 
-// Settings › Theme (C4): one choice per JS runtime, read from theme.txt at start (runtime.ts); every useScheme follows it.
 let themePreference: ThemePreference = "system";
 const themeListeners = new Set<() => void>();
 function setThemePreference(preference: ThemePreference) {

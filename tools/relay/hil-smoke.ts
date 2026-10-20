@@ -6,11 +6,8 @@ import { parseRecording } from "../../packages/obd-core/src/recording/format.js"
 import { ReplayTransport } from "../../packages/obd-core/src/transport/replay.js";
 import { RelayBroker } from "./broker.js";
 
-// A new relay connection admits only ATI or ATZ first, so start from the reset this phone already captured:
-// 2026-09-24-phone-console.redacted.jsonl lines 3–37; docs/ELM327.md §Init sequence.
 const sequence = ["ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "0100"];
 function pathForToday(root: string): string { const date = new Date().toLocaleDateString("en-CA"); const base = `fixtures/recordings/chevrolet-equinox-ev-2024/${date}-relay-smoke`; let n = 0; while (existsSync(resolve(root, `${base}${n === 0 ? "" : `-${String(n)}`}.jsonl`))) n++; return `${base}${n === 0 ? "" : `-${String(n)}`}.jsonl`; }
-// The broker is injectable so the failure path can be tested with a fake phone (server.test.ts).
 export async function main(broker = new RelayBroker()): Promise<void> {
   const until = Date.now() + 300_000;
   while (!broker.isConnected() && Date.now() < until) await new Promise((resolveWait) => setTimeout(resolveWait, 100));
@@ -19,10 +16,8 @@ export async function main(broker = new RelayBroker()): Promise<void> {
   const live: string[] = [];
   try {
     await broker.startRecording(path);
-    // A disconnect already ended the recording; its cause, not stopRecording's "no recording active", is the failure.
     try { for (const command of sequence) live.push(Buffer.from((await broker.send(command)).bytes).toString("latin1")); }
     catch (error) { await broker.stopRecording().catch(() => undefined); throw error; }
-    // A disconnect between the last reply and the stop already ended the recording; report it, never PASS.
     try { await broker.stopRecording(); } catch (error) { throw broker.isConnected() ? error : new Error("relay: disconnected"); }
   } finally { await broker.close(); }
   const raw = live.at(-1) ?? "";

@@ -14,6 +14,7 @@ import { keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
 import { RecordingBuffer } from "../recording.js";
+import { runModuleDtcCapture } from "../moduleDtcCapture.js";
 import { RelayClient, type RelayWebSocket } from "../relay/RelayClient.js";
 import { parseRelayAddress } from "../relay/parseRelayAddress.js";
 import { finishRun } from "../runFiles.js";
@@ -25,7 +26,6 @@ import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui
 import { DonglePicker } from "./DonglePicker.js";
 import { useTokens } from "../ui/theme.js";
 
-/** The cap of the test drive now running (T2.13). Module-level because the run outlives this screen and the running card is read again on a remount. */
 let driveMinutes: 10 | 20 = 20;
 
 function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
@@ -35,27 +35,22 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const tokens = useTokens();
   const inputColors = { backgroundColor: tokens.surface, borderColor: tokens.outline, color: tokens.text };
   const [recording] = useState(() => new RecordingBuffer());
-  // Mirrors the app-wide kept link (dongleLink), which outlives this screen; this screen never closes it except through dongleLink.
   const [connection, setConnection] = useState<BleConnection | undefined>(() => dongleLink.current());
   const [remembered, setRemembered] = useState<RememberedDongle>();
   const session = useRef<ConsoleSession | undefined>(undefined);
-  // Manual Send uses its own unsaved session: two sessions on one transport would both record every rx.
   const debugSession = useRef<ConsoleSession | undefined>(undefined);
   const errorSubscription = useRef<(() => void) | undefined>(undefined);
-  // The running diagnosis's view of the link: Cancel check and unmount close it, and the link stays open.
   const diagnosisView = useRef<Transport | undefined>(undefined);
+  const moduleCaptureView = useRef<Transport | undefined>(undefined);
   const [permitted, setPermitted] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  // The picker sheet scans only while open; it opens by itself the first time a car has no remembered dongle.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [status, setStatus] = useState("Requesting Bluetooth permission…");
-  // Prefilled so Run capture is one tap (T0.8d Decision 4); the owner can edit it and must never type a VIN.
   const [note, setNote] = useState("Equinox Ready, Park; one-button capture");
   const [diagnosisReady, setDiagnosisReady] = useState(false);
   const [command, setCommand] = useState("0100");
   const [transcript, setTranscript] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
-  // The capture's async closure sees stale React state; teardown's freeze is read from here instead.
   const frozenRef = useRef<string | undefined>(undefined);
   const [capturing, setCapturing] = useState(false);
   const [captureStep, setCaptureStep] = useState("");
@@ -67,32 +62,24 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const diagnosisInterruption = useRef<"cancelled" | "disconnected" | undefined>(undefined);
   const diagnosisCloseExpected = useRef(false);
   const [canCancelDiagnosis, setCanCancelDiagnosis] = useState(false);
-  // A charge log outlives this screen: its foreground-service task uses the kept link until it ends (chargeRun).
   const [chargeLogging, setChargeLogging] = useState(() => chargeRun.current() !== undefined);
   const mounted = useRef(true);
-  // Decision 21: set while the notification permission and the picker are open, before the run record is begun.
   const chargeStarting = useRef(false);
-  // T0.6b: the one synchronous BLE gate. React state (pending, capturing) lags a tap; these refs and the module-level chargeRun do not.
-  const bleOwner = useRef<"send" | "capture" | "relay" | undefined>(undefined);
+  const bleOwner = useRef<"send" | "capture" | "module-codes" | "relay" | undefined>(undefined);
   const bleBusy = () => bleOwner.current !== undefined || chargeStarting.current || diagnosingRef.current || chargeRun.current() !== undefined;
   const relayRef = useRef<{ client: RelayClient; socket: RelayWebSocket } | undefined>(undefined);
-  // The command the relay client has not answered yet (an open Mode 04 alert counts); undefined when idle.
   const relayCommand = useRef<string | undefined>(undefined);
   const [relayUrl, setRelayUrl] = useState("");
   const [relayToken, setRelayToken] = useState("");
   const [relayStatus, setRelayStatus] = useState("Disconnected");
   const [relaying, setRelaying] = useState(false);
-  // X-2026-09-28-app-redesign C3, presentation only: the developer tools card, and the last timeline step (1–4) this run reached.
   const [devOpen, setDevOpen] = useState(false);
   const [reached, setReached] = useState<ChargeStep>();
-  // The one sanctioned hook: App blocks system back only while a diagnosis or a charge log runs; unmounting releases it.
   useEffect(() => { onLockChange(diagnosing || chargeLogging); }, [diagnosing, chargeLogging, onLockChange]);
   useEffect(() => () => { onLockChange(false); }, [onLockChange]);
-  // reachedStep keeps the previous step on retry, recovery and starting lines, and never moves back.
   useEffect(() => { setReached((previous) => reachedStep(previous, status)); }, [status]);
   useEffect(() => { if (chargeLogging) setReached(undefined); }, [chargeLogging]);
 
-  // A session exists only while a run records, so closing it freezes the buffer: no rx lands after the run or a disconnect.
   const endRecording = (): string | undefined => {
     if (!session.current) return undefined;
     session.current.close(); session.current = undefined;
@@ -100,7 +87,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     return jsonl;
   };
   const closeDebugSession = () => { debugSession.current?.close(); debugSession.current = undefined; };
-  // Relay closes before BLE is reused: its reader comes off the transport and the socket closes, then ownership is released.
   const closeRelay = () => {
     const active = relayRef.current; if (!active) return;
     relayRef.current = undefined; relayCommand.current = undefined;
@@ -119,14 +105,13 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       if (diagnosisInterruption.current === "disconnected") setStatus(`${message} Keeping the private battery scan…`);
       return;
     }
-    // A file cut short by a disconnect says why.
     if (session.current) recording.meta(message);
     endRecording(); closeDebugSession();
+    if (moduleCaptureView.current) void moduleCaptureView.current.close();
     setTranscript((current) => [...current, `-- ${message}`]);
     setStatus(message);
   };
 
-  // Notification errors from the kept link show here; one listener at a time, removed on unmount.
   const watchErrors = (link: BleConnection) => {
     errorSubscription.current?.();
     errorSubscription.current = link.transport.onError((error) => { setStatus(`Notification error: ${error.message}`); });
@@ -138,7 +123,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       setStatus(`Connecting to ${shown}…`);
       const next = await dongleLink.connect(device.id);
       const name = next.deviceName ?? device.name;
-      // A failed write is ignored: the link works, the dongle is just not remembered.
       void dongleMemory.remember(entry.id, { id: next.deviceId, ...(name === undefined ? {} : { name }) })
         .then(() => dongleMemory.get(entry.id)).then((saved) => { if (mounted.current) setRemembered(saved); }, () => undefined);
       if (!mounted.current) return;
@@ -156,16 +140,13 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     const unmountRun = chargeRun.mount((line, running) => { runLine = true; setStatus(line); setChargeLogging(running); });
     const unsubscribeLink = dongleLink.subscribe((next, lost) => {
       setConnection(next);
-      // During a charge log the logger's writes fail and it reconnects by itself (T2.4 Decisions 19-22); only a lost idle link ends things here.
       if (!lost || chargeRun.current()) return;
       teardown(`Disconnected${lost.error ? `: ${lost.error.message}` : ""}.`);
     });
     const savedDongle = dongleMemory.get(entry.id);
     void savedDongle.then((dongle) => { if (mounted.current) setRemembered(dongle); });
-    // The running log's status, or its final line, stays on screen; the connection lines below then leave it alone.
     const say = (line: string) => { if (!runLine) setStatus(line); };
     const isMounted = () => mounted.current;
-    // Auto-connect (spec §Auto-connect on mount): the first matching case applies.
     void (async () => {
       let granted: boolean;
       try { granted = await requestBlePermission(); }
@@ -175,7 +156,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       if (!granted) { say("Bluetooth permission was denied; scanning is disabled. Grant it in Android settings and reopen the app."); return; }
       if (chargeRun.current()) return;
       const dongle = await savedDongle;
-      if (!isMounted()) return; // a call, so TypeScript does not keep the check above across the await
+      if (!isMounted()) return;
       const live = dongleLink.current();
       if (live) {
         const name = live.deviceName ?? (dongle?.id === live.deviceId ? dongle.name : undefined) ?? live.deviceId;
@@ -194,8 +175,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       mounted.current = false;
       unsubscribeLink(); closeRelay();
       errorSubscription.current?.(); errorSubscription.current = undefined;
-      session.current?.close(); debugSession.current?.close(); void diagnosisView.current?.close();
-      // The kept link stays open, and so does a running charge log's use of it.
+      session.current?.close(); debugSession.current?.close(); void diagnosisView.current?.close(); void moduleCaptureView.current?.close();
       unmountRun();
     };
   }, []);
@@ -204,7 +184,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox console unavailable for this model year."); return undefined; }
     if (!connection || !note.trim()) { setStatus("Connect and enter a non-empty vehicle-state note before recording."); return undefined; }
     recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
-    // A fresh session per recording: its reader starts empty and every notification lands in the started buffer.
     session.current = new ConsoleSession(connection.transport, recording);
     setTranscript([]); frozenRef.current = undefined; setReport(undefined);
     return session.current;
@@ -215,7 +194,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     if (!debugSession.current) {
       const scratch = new RecordingBuffer();
       scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
-      // A new session starts in the unknown state, so its first command must be ATZ or ATI (X-2026-09-24-first-write).
       debugSession.current = new ConsoleSession(connection.transport, scratch);
     }
     const debug = debugSession.current;
@@ -242,17 +220,48 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         const response = progress.response;
         setTranscript((current) => response === undefined ? [...current, `-- ${outcome}`] : [...current, `> ${progress.command}`, `${response}>`]);
       }, kind === "codes" ? { commands: CODES_SCAN_COMMANDS, stopAfter: codesScanStop } : undefined);
-      // If teardown already froze the recording, its JSONL is in the ref; an early stop still exports the partial file.
       const jsonl = endRecording() ?? frozenRef.current;
       const summary = result.stoppedEarly === undefined
         ? `Capture complete: ${String(result.sent)} of ${String(result.total)} sent.`
         : `Capture stopped at step ${String(step)} of ${String(result.total)} (${stepCommand}): ${result.stoppedEarly}.`;
       setStatus(summary);
       if (!jsonl) return;
-      // Saved before capturing ends, so no new run can replace the buffer while a file is unsaved (the 2026-09-24 loss).
       const outcome = await finishRun(kind, jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result }, phoneTargets,
         (text) => queueForBeta(kind === "codes" ? "codes-scan" : "capture", entry, text));
       setReport(outcome.report); setStatus(`${summary} ${outcome.status}`);
+    } finally { bleOwner.current = undefined; setCapturing(false); }
+  };
+
+  const captureModuleCodes = async () => {
+    const active = dongleLink.current();
+    if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
+    closeDebugSession();
+    bleOwner.current = "module-codes";
+    setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus("Recording module codes…");
+    const dedicated = new RecordingBuffer();
+    dedicated.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    const view = runView(active.transport); moduleCaptureView.current = view;
+    let jsonl: string;
+    let summary: string;
+    try {
+      const result = await runModuleDtcCapture(view, dedicated, (message) => { setCaptureStep(message); setCaptureLast(message); });
+      jsonl = result.jsonl;
+      const outcomes = result.outcomes.join("; ");
+      const finish = result.status === "complete" ? "Module codes capture complete." : `Module codes capture partial: ${result.stopReason ?? "unknown reason"}.`;
+      summary = `${outcomes}${outcomes ? ". " : ""}${finish}`;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      dedicated.meta(`module codes capture partial: ${reason}`);
+      jsonl = dedicated.toJsonl();
+      summary = `Module codes capture partial: ${reason}.`;
+    } finally {
+      moduleCaptureView.current = undefined;
+      await view.close();
+    }
+    try {
+      const sent = dedicated.lines().filter((line) => line.dir === "tx" && line.data === "19 02 FF\r").length;
+      const saved = await finishRun("recording", jsonl, { vehicle: `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`, date: localDate(), result: { sent, total: 5, ...(sent === 5 ? {} : { stoppedEarly: summary }) } }, phoneTargets);
+      setStatus(`${summary} ${saved.status}`);
     } finally { bleOwner.current = undefined; setCapturing(false); }
   };
 
@@ -293,23 +302,18 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       await view.close();
     }
   };
-  // docs/specs/T2.4-charge-logger.md Stage B2: one tap; the run stops and saves by itself.
   const chargeLog = async () => {
     const active = dongleLink.current();
     if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
     const notStarted = (line: string) => { chargeStarting.current = false; setStatus(line); };
     chargeStarting.current = true; setStatus("Starting the charge log…");
-    // A denial only hides the notification; the run still starts.
     if (Platform.OS === "android" && Platform.Version >= 33) await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
-    // Resolved now, in the foreground, so the run never needs a picker at its end.
     try { await phoneTargets.folder(); }
     catch (error) {
       notStarted(`Charge log not started: no capture folder (${error instanceof Error ? error.message : String(error)}).`);
       return;
     }
-    // Decision 21: begun only now; a picker that never settles (activity destroyed) leaves no record behind.
-    // An unmounted console must not start a run; the kept link stays open.
     if (!mounted.current) { chargeStarting.current = false; return; }
     if (dongleLink.current() !== active) {
       notStarted("Charge log not started: the dongle disconnected. Connect and try again.");
@@ -317,7 +321,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     }
     const run = chargeRun.begin(active, "Starting the charge log…");
     chargeStarting.current = false;
-    // The link stays open when the run ends by itself; Disconnect during the run closes and holds it once the log is saved.
     const release = async (line: string) => {
       if (run.stop) await dongleLink.disconnect();
       chargeRun.end(line);
@@ -328,7 +331,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     let notified = 0;
     const task = async () => {
       const result = await runChargeLog({
-        // The logger closes its transport after a link loss and at the end; each is a view, so the kept link stays open.
         connect: async () => {
           if (!connected) { connected = true; return runView(active.transport); }
           return runView((await dongleLink.reconnect()).transport);
@@ -349,7 +351,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         if (result.file !== "" && result.saved.includes("NOT SAVED")) { deferShare(result.file); }
         let beta: string | undefined;
         if (result.file !== "") {
-          // Shown while the log is scrubbed into parts, so the scrub time on the phone can be read off the screen.
           if ((await betaOutbox.status()).sharing) chargeRun.status("Charge log stopped; preparing the beta upload…");
           beta = await queueForBeta("charge-log", entry, readLines(`captures/${result.file}`));
         }
@@ -362,8 +363,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       await release(`Charge log not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}).`);
     }
   };
-  // docs/specs/T2.12-test-drive-capture.md: the same start steps, gate and release as chargeLog(); one tap while parked, then it stops and saves by itself.
-  // T2.13: two buttons share this handler; `minutes` is the cap.
   const testDrive = async (minutes: 10 | 20) => {
     const active = dongleLink.current();
     if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
@@ -371,7 +370,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     const notStarted = (line: string) => { chargeStarting.current = false; setStatus(line); };
     chargeStarting.current = true; setStatus("Starting the test drive…");
     if (Platform.OS === "android" && Platform.Version >= 33) await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
-    // Resolved now, so no picker opens at the end of the drive.
     try { await phoneTargets.folder(); }
     catch (error) {
       notStarted(`Test drive not started: no capture folder (${error instanceof Error ? error.message : String(error)}).`);
@@ -385,7 +383,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     driveMinutes = minutes;
     const run = chargeRun.begin(active, "Starting the test drive…", "drive");
     chargeStarting.current = false;
-    // The link stays open when the run ends by itself; Disconnect during the run closes and holds it once the recording is saved.
     const release = async (line: string) => {
       if (run.stop) await dongleLink.disconnect();
       chargeRun.end(line);
@@ -412,7 +409,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         stream: driveTargets,
         stopRequested: () => run.stop,
       }, minutes);
-      // Nothing is queued for beta and no share sheet opens; a failed copy names the private file in the final line.
       try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}`); }
       finally { await foregroundService.stop(); }
     };
@@ -422,7 +418,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       await release(`Test drive not started: the foreground service failed (${error instanceof Error ? error.message : String(error)}).`);
     }
   };
-  // docs/specs/T0.6b-android-relay-mode.md: one alert per Mode 04 request; Cancel, back and a tap outside all deny.
   const confirmMode04 = () => new Promise<boolean>((resolve) => {
     Alert.alert("Clear trouble codes?", "The relay asks to clear diagnostic trouble codes. This also clears freeze-frame data. Confirm this one operation only.", [
       { text: "Cancel", style: "cancel", onPress: () => { resolve(false); } },
@@ -432,10 +427,8 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const connectRelay = () => {
     const active = dongleLink.current();
     if (!active || bleBusy()) return;
-    // Accepts host:port or the broker's printed ws://host:port/phone?token=... line; a token in the line is used when the token field is empty.
     const parsed = parseRelayAddress(relayUrl, relayToken);
     if (!parsed.ok) { if (parsed.clearAddress) setRelayUrl(""); setRelayStatus("Error: enter the ws://host:port address and the token."); return; }
-    // The query is built here and never shown, logged or stored; a pasted token leaves the address field and the token field is cleared once the socket opens.
     setRelayUrl(parsed.base);
     const url = `${parsed.base}/phone?${new URLSearchParams({ token: parsed.token }).toString()}`;
     bleOwner.current = "relay"; closeDebugSession(); setRelaying(true); setRelayStatus("Connecting"); setStatus("Connecting relay…");
@@ -443,17 +436,14 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     try { socket = new WebSocket(url); }
     catch { bleOwner.current = undefined; setRelaying(false); setRelayStatus("Error: could not open the relay socket."); return; }
     let opened = false;
-    // onTerminal can run inside the constructor, before relayRef is set; then closeRelay has nothing to release.
     let terminated = false as boolean;
     const client = new RelayClient(socket, active.transport, { vehicle: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu },
       confirmMode04, undefined, undefined,
       (uncertain) => {
-        // Fires for every end the client did not start itself.
         terminated = true;
         closeRelay();
         if (bleOwner.current === "relay") bleOwner.current = undefined;
         relayCommand.current = undefined; setRelaying(false);
-        // T0.6b rule 7: an uncertain end closes BLE.
         if (uncertain) { teardown("Relay ended mid-command; reconnect the dongle."); void dongleLink.drop(); }
         else { const line = opened ? "Relay disconnected." : "Relay connection failed; check the address and token."; setRelayStatus(line); setStatus(line); }
       },
@@ -461,7 +451,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     if (terminated) { socket.close(); return; }
     relayRef.current = { client, socket };
     socket.addEventListener("open", () => {
-      // RelayClient's own open listener runs first; if its hello failed, the relay is already closed.
       if (relayRef.current?.socket !== socket) return;
       opened = true; setRelayToken(""); setRelayStatus("Connected"); setStatus("Relay connected.");
     });
@@ -492,12 +481,10 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const stepView = (n: number) => { const mark = marks[n - 1]; return mark ? MARK[mark] : { icon: "circle-outline", color: tokens.muted, word: "" }; };
   const pane = [consoleStyle, { backgroundColor: tokens.surface, borderColor: tokens.outline }];
   const disconnect = <Button title="Disconnect" tonal disabled={!chargeLogging && (!connection || pending || diagnosing || capturing)} onPress={() => {
-    // During a charge log, Disconnect only asks the run to stop; the run saves the partial log, then closes and holds the link.
     if (chargeRun.current()) { chargeRun.requestStop(driving ? "Stopping the test drive after the current command…" : "Stopping the charge log after the current command…"); return; }
     teardown("Disconnected by user."); void dongleLink.disconnect();
   }} />;
 
-  // Spec §Screens 9 and the check screen: a scrolling page, so every control stays reachable with 52 dp buttons on a small phone.
   return <Screen scroll blocks>
     <View style={[styles.row, { minHeight: 56 }]}>
       <IconButton icon="arrow-left" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Back" disabled={diagnosing || chargeLogging} onPress={onBack} />
@@ -562,6 +549,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
+          <Button title="Record module codes" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void captureModuleCodes()} />
           {DRIVE_MINUTES.map((minutes) => <Button key={minutes} title={`Record test drive (${String(minutes)} min)`} tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive(minutes)} />)}
           <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive for the chosen length.</Text>
           {captureStep ? <Text>{captureStep}</Text> : null}
@@ -585,7 +573,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   </Screen>;
 }
 
-// Fixed-height panes that scroll inside the page (nestedScrollEnabled): the page itself scrolls, so a flex pane would have no height.
 const consoleStyle = { borderWidth: 1, borderRadius: 12, padding: 8, height: 220 };
 const inputStyle = { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, minHeight: 48 };
 

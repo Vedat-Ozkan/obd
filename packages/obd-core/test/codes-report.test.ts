@@ -1,5 +1,3 @@
-// T0.7 Stage B2 E2E: docs/specs/T0.7-codes-report.md Verification "Stage B2". Recordings and synthetic fixtures go
-// through Elm327Session (scripts/codes-report.ts) into buildCodesReport and renderCodesReport.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";

@@ -1,5 +1,3 @@
-"""Offline checks for discover.py (spec T2.3a, Verification "Here"). Fake BLE client; no bleak, no car."""
-
 import asyncio
 import json
 import os
@@ -9,22 +7,18 @@ import go
 import pytest
 from spike import Recorder
 
-# Reply texts from fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl (S1), joined rx
-# chunks after the tx on the cited line.
 S1_0100 = ("SEARCHING...\r18DAF14506410080000001\r18DAF1CB06410080000001\r18DAF14006410080000001\r"
-           "18DAF128064100BFFFF997\r18DAF11706410080080013\r\r>")  # S1 line 24
+           "18DAF128064100BFFFF997\r18DAF11706410080080013\r\r>")
 S1_0120 = ("18DAF14506412000000001\r18DAF14006412000000001\r18DAF11706412080018001\r"
-           "18DAF128064120801FE019\r18DAF1CB06412000000001\r\r>")  # S1 line 42
+           "18DAF128064120801FE019\r18DAF1CB06412000000001\r\r>")
 S1_0140 = ("18DAF14506414040000000\r18DAF1CB06414040000000\r18DAF14006414040000000\r"
-           "18DAF128064140FED04001\r18DAF11706414040000001\r\r>")  # S1 line 52
-S1_27C6 = "18DAF1CB056227C6B236\r\r>"  # S1 line 152
-S1_2AF5 = "18DAF1CB100D622AF5998199\r18DAF1CB2177999509022505\r\r>"  # S1 line 156
+           "18DAF128064140FED04001\r18DAF11706414040000001\r\r>")
+S1_27C6 = "18DAF1CB056227C6B236\r\r>"
+S1_2AF5 = "18DAF1CB100D622AF5998199\r18DAF1CB2177999509022505\r\r>"
 S1_2B43 = ("18DAF1CB101D622B43B200B2\r18DAF1CB21B2B2B2B3B2B2B2\r18DAF1CB22B2B20000000000\r"
-           "18DAF1CB2300000000000000\r18DAF1CB2400000000000000\r\r>")  # S1 line 162
-# Synthetic below: 0160 with no next-range bit, one-module Mode 01 PID replies, 0900 flagging 02/04/0A.
+           "18DAF1CB2300000000000000\r18DAF1CB2400000000000000\r\r>")
 SYN_0160 = "18DAF11706416000000000\r18DAF12806416000000000\r\r>"
 
-# Union of flagged non-bitmap PIDs from the S1 0100/0120/0140 bitmaps above (47, per the spec Sources).
 S1_MODE01_UNION = ["01", "03", "04", "05", "06", "07", "08", "09", "0A", "0B", "0C", "0D", "0E", "0F", "10", "11",
                    "12", "13", "14", "15", "18", "19", "1C", "1E", "1F", "21", "2C", "2D", "2E", "2F", "30", "31",
                    "32", "33", "3C", "3D", "41", "42", "43", "44", "45", "46", "47", "49", "4A", "4C", "52"]
@@ -34,7 +28,6 @@ SMALL_SCAN = [("CB", 0x27C4, 0x27C8), ("CB", 0x2AF5, 0x2AF5), ("CB", 0x2B43, 0x2
 
 
 class FakeCar:
-    """Scripted ELM327 + Equinox replies, keyed on the command and the current ATSH module."""
 
     def __init__(self) -> None:
         self.module = ""
@@ -64,7 +57,6 @@ class FakeClient:
     def __init__(self, silent: tuple[str, ...] = (), reply_during_write: bool = False,
                  raise_on: tuple[str, ...] = ()) -> None:
         self.car, self.silent, self.pending, self.writes, self.cb = FakeCar(), silent, b"", [], None
-        # reply_during_write: the whole reply is delivered before the last write_gatt_char returns (D line 49775).
         self.reply_during_write, self.raise_on, self.replies = reply_during_write, raise_on, []
 
     async def start_notify(self, char: object, cb: object) -> None:
@@ -113,7 +105,6 @@ async def full_run(path, client: FakeClient) -> None:
 
 
 def replay_ok(lines: list[dict], strict: bool) -> bool:
-    """Python mirror of packages/obd-core/test/recordings.test.ts: each tx gets a '>' or a timeout note."""
     for i, line in enumerate(lines):
         if line["dir"] != "tx":
             continue
@@ -182,10 +173,9 @@ def test_classify_22() -> None:
     assert discover.classify_22(S1_2AF5, "CB", 0x2AF5) == "positive"
     assert discover.classify_22(S1_2B43, "CB", 0x2B43) == "positive"
     assert discover.classify_22("NO DATA\r\r>", "CB", 0x2000) == "nodata"
-    assert discover.classify_22("18DAF1CB037F2231\r\r>", "CB", 0x2000) == "negative"  # synthetic
-    assert discover.classify_22(S1_27C6, "CB", 0x27C7) != "positive"  # late reply for another DID
-    assert discover.classify_22(S1_27C6, "17", 0x27C6) != "positive"  # other header
-    # synthetic: stray CF / response-pending line ahead of the real positive (lines split on "\r")
+    assert discover.classify_22("18DAF1CB037F2231\r\r>", "CB", 0x2000) == "negative"
+    assert discover.classify_22(S1_27C6, "CB", 0x27C7) != "positive"
+    assert discover.classify_22(S1_27C6, "17", 0x27C6) != "positive"
     assert discover.classify_22("18DAF1CB2300000000000000\r" + S1_27C6, "CB", 0x27C6) == "positive"
     assert discover.classify_22("18DAF1CB037F2278\r" + S1_27C6, "CB", 0x27C6) == "positive"
     assert discover._single("18DAF1CB037F2278\r" + S1_27C6, "CB", 0x27C6)
@@ -283,7 +273,6 @@ def test_write_error_leaves_interrupted_note(tmp_path, monkeypatch) -> None:
 
 def test_watch_list_cap(tmp_path, monkeypatch) -> None:
     path = tmp_path / "rec.jsonl"
-    # Synthetic phase-B times in ms: (did, ms, single_frame).
     positives = {"CB": [(0x2001, 6000.0, False), (0x2002, 5000.0, True), (0x2003, 4000.0, True)],
                  "17": [(0x2004, 5000.0, True), (0x2005, 100.0, False)]}
 

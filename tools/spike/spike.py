@@ -18,19 +18,15 @@ import sys
 import time
 
 CARS = ("chrysler-200-2013", "hyundai-elantra-2019", "chevrolet-equinox-ev-2024")
-SERVICE = "0000fff0-0000-1000-8000-00805f9b34fb"  # docs/ELM327.md §BLE specifics
-CODEC = "iso-8859-1"  # every byte 0-255 round-trips (spec: Recording format contract)
-CHUNK = 20  # docs/ELM327.md §BLE specifics: default MTU 23 -> 20 data bytes
+SERVICE = "0000fff0-0000-1000-8000-00805f9b34fb"
+CODEC = "iso-8859-1"
+CHUNK = 20
 
-# docs/PLAN.md T0.2 list, in order. ATI: PLAN only (spec Decisions 1). The rest:
-# docs/ELM327.md §Init sequence, §Standard modes used (Mode 01/09/03/07/0A), §Mode 01 PIDs (01).
 COMMANDS = [
     "ATZ", "ATI", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDPN", "ATRV",
     "0100", "0120", "0140", "0101", "0902", "090A", "03", "07", "0A",
 ]
 
-# docs/ELM327.md §Per-car notes, Equinox EV, verbatim spacing (spec Decisions 3). The DACB
-# headers follow the notation rule in that section with module 1D replaced by CB (spec Sources).
 EV_COMMANDS = [
     "ATSP7", "ATCP 18", "ATSH DA1DF1", "ATCRA 18DAF11D", "ATFCSH 18DA1DF1",
     "ATFCSD 300000", "ATFCSM 1", "22 33E5",
@@ -39,12 +35,8 @@ EV_COMMANDS = [
 
 
 class Recorder:
-    """Appends one JSON object per line; flushes after each line."""
-
     def __init__(self, path: str) -> None:
-        # A fresh clone has no fixtures/recordings/<car>/ dirs; laptop OS unknown, so no shell mkdir.
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        # "x": never overwrite (hard rule 2). Held open for the run; flushed per line so a crash keeps data.
         self._f = open(path, "x", encoding="utf-8", newline="\n")  # noqa: SIM115
         self.t0 = time.monotonic()
         self.lines = 0
@@ -117,7 +109,7 @@ async def main() -> None:
             buf.clear()
             prompt.clear()
             payload = (cmd + "\r").encode(CODEC)
-            rec.event("tx", cmd + "\r")  # first: a reply can arrive while write_gatt_char awaits (T2.3b)
+            rec.event("tx", cmd + "\r")
             line, sent = rec.lines, time.monotonic()
             try:
                 for i in range(0, len(payload), CHUNK):

@@ -1,4 +1,3 @@
-// T2.9 Stage A: docs/specs/T2.9-beta-data-upload.md Verification "Isolated provenance tests" P1-P5.
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";

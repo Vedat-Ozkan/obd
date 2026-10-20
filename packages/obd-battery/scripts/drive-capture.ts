@@ -8,22 +8,16 @@ import { importObdbMode22 } from "../../obd-core/src/vehicles/obdb/import.js";
 import { GROUP_EXCESS_LIMIT_MOHM, LOAD_A, groupsUnderLoad } from "../src/driveGroups.js";
 import { chargeLogFromRecording, num, span, type ChargeLog, type Point } from "../src/session.js";
 
-// Layout: docs/specs/T2.12-test-drive-capture.md §Design, Analysis script. Decoding is chargeLogFromRecording's (T2.4); this file only
-// measures the times and the steps around the decoded samples.
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
-/** Policy value, not a vehicle constant: just under the smallest step BM8 names, the ~26 A charger step (docs/ML.md §Methods). */
 export const STEP_MIN_A = 20;
-/** Skew: the two currents bracketing a group set count as "the same" within this many amps. */
 const BRACKET_SAME_A = 10;
 
 interface Tx { line: number; t: number; command: string; session: number; target: string }
 interface Sample { point: Point; tx: number; session: number }
 
-/** Nearest rank: the smallest value with at least p of the sample at or below it. */
 const rank = (sorted: readonly number[], p: number): number => sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)] ?? NaN;
 const sortedCopy = (values: readonly number[]) => [...values].sort((a, b) => a - b);
-/** The usual median (mean of the middle two when even), unlike `rank`, which is nearest rank. */
 const medianSorted = (sorted: readonly number[]): number => {
   const mid = sorted.length >> 1;
   return sorted.length % 2 === 1 ? sorted[mid] ?? NaN : ((sorted[mid - 1] ?? NaN) + (sorted[mid] ?? NaN)) / 2;
@@ -35,7 +29,6 @@ const stats = (values: readonly number[]): string => {
 };
 const gaps = (pairs: readonly (readonly [Sample, Sample])[]) => pairs.map(([a, b]) => span(a.point.t, b.point.t));
 
-/** Recorded reply text of the tx at `index` of the lines: the rx lines up to the next tx, cut at the first '>'. */
 function replyText(lines: readonly RecordingLine[], index: number): string {
   let text = "";
   for (let i = index + 1; i < lines.length; i++) {
@@ -47,13 +40,11 @@ function replyText(lines: readonly RecordingLine[], index: number): string {
   return end < 0 ? text : text.slice(0, end);
 }
 
-/** The 2AF1 payload after its 62 2A F1 echo, as printed hex, from the reassembled reply. */
 function rawHex(text: string): string {
   const frame = reassemble(parseElmResponse(text, "22 2AF1").lines).frames.find((f) => f.header === "18DAF1CB" && f.data[0] === 0x62 && f.data[1] === 0x2a && f.data[2] === 0xf1);
   return frame === undefined ? "none" : [...frame.data.subarray(3)].map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join("") || "empty";
 }
 
-/** Current at t, linearly interpolated from the samples; the nearest sample when there is one on only one side. */
 function currentAt(current: readonly Point[], t: number): number {
   const i = current.findIndex((p) => p.t >= t);
   const after = i < 0 ? undefined : current.at(i); const before = i < 0 ? current.at(-1) : i > 0 ? current.at(i - 1) : undefined;
@@ -61,7 +52,6 @@ function currentAt(current: readonly Point[], t: number): number {
   return before.value + (after.value - before.value) * (t - before.t) / (after.t - before.t);
 }
 
-/** Spec T2.13 §Synthetic weak group: a connection-resistance rise scales with current (docs/ML.md §BM3). Applies to every complete set. */
 function withWeakGroup(log: ChargeLog, inject: { group: number; excessMohm: number }): ChargeLog {
   const groups = log.groups.map((set) => {
     const drop = inject.excessMohm / 1000 * currentAt(log.current, set.t);
@@ -74,9 +64,8 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   const signals = importObdbMode22(JSON.parse(readFileSync(resolve(root, "packages/obd-core/vehicles/chevrolet-equinox-ev/default.json"), "utf8")));
   const log = await chargeLogFromRecording(lines, recording, signals);
 
-  // Every tx with its 1-based line number, its session (boundaries seen before it) and the module its 22 read went to.
   const txs: Tx[] = [];
-  const txLine: number[] = []; // index into `lines` of txs[i]
+  const txLine: number[] = [];
   let session = 0;
   let target = "";
   lines.forEach((line, i) => {
@@ -99,7 +88,6 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   const group1 = txs.flatMap((tx, i) => tx.command === "22 2AE1" ? [i] : []);
   const between = (a: number, b: number) => group1.some((g) => g > a && g < b);
 
-  // A "fast" pair of consecutive samples has no 22 2AE1 tx between them; the others read across a group set.
   const consecutive = (samples: readonly Sample[]) => samples.slice(1).flatMap((b, i) => {
     const a = samples.at(i);
     return a !== undefined && a.session === b.session ? [[a, b] as const] : [];
@@ -111,14 +99,12 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   const currentGaps = split(current);
   const voltGaps = split(volts);
 
-  // The 2885 read that follows its own 2414 read directly.
   const own = (sample: Sample): Sample | undefined => {
     const next = txs.at(sample.tx + 1);
     return next?.command === "22 2885" && next.session === sample.session ? voltAt.get(sample.tx + 1) : undefined;
   };
   const offsets = current.flatMap((c) => { const v = own(c); return v === undefined ? [] : [span(c.point.t, v.point.t)]; });
 
-  // Complete group sets: t is the 22 2AE1 tx; the span runs to the 22 2AE7 tx that follows it.
   const setTx = log.groups.map((g) => txAt("22 2AE1", g.t));
   const setSpans = setTx.map((first) => {
     const last = txs.findIndex((tx, i) => i > first && tx.command === "22 2AE7");
@@ -136,7 +122,6 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
     return [{ before, after, bracket: span(0, before + s.seconds + after), same: Math.abs(next.point.value - previous.point.value) <= BRACKET_SAME_A }];
   });
 
-  // Time from a tx to the next tx of the same session, by kind of command.
   const timing = new Map<string, number[]>();
   txs.forEach((tx, i) => {
     const next = txs.at(i + 1);
@@ -146,7 +131,6 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   });
   const median = (values: readonly number[] | undefined) => values === undefined || values.length === 0 ? "n=0" : `n=${String(values.length)}, median ${num(rank(sortedCopy(values), 0.5))} s`;
 
-  // Steps: consecutive fast current samples with |ΔI| >= STEP_MIN_A, each paired with the 2885 sample of its own pair.
   const steps = currentGaps.fast.flatMap(([a, b]) => {
     const dI = b.point.value - a.point.value;
     const va = own(a); const vb = own(b);
@@ -166,7 +150,6 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
   const raw = txs.flatMap((tx, i) => tx.command === "22 2AF1" ? [rawHex(replyText(lines, txLine[i] ?? 0))] : []);
   const amps = log.current.map((p) => p.value);
 
-  // T2.13 §The measure. Only this section sees the injected log.
   const under = groupsUnderLoad(inject === undefined ? log : withWeakGroup(log, inject));
   const excess = sortedCopy(under.groups.map((g) => g.excessMohm));
   const named = (index: number) => `group ${String(index + 1)} (module ${String(under.groups[index]?.module ?? "?")})`;
@@ -256,7 +239,6 @@ export async function driveCaptureSummary(lines: readonly RecordingLine[], recor
 async function main(paths: readonly string[]): Promise<string> {
   const sections: string[] = [];
   for (const path of paths) {
-    // As pnpm charge-log: only a redacted recording or a file under fixtures/synthetic.
     const underSynthetic = relative(resolve(root, "fixtures/synthetic"), resolve(path));
     if (!path.endsWith(".redacted.jsonl") && (underSynthetic.startsWith("..") || isAbsolute(underSynthetic))) {
       throw new Error(`expected a redacted or explicitly synthetic JSONL path: ${path}`);

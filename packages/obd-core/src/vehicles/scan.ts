@@ -25,7 +25,6 @@ function validatedModules(profile: VehicleProfile): Mode22Module[] {
   });
 }
 
-/** Setup and read sequence from the two committed Equinox spike tails and docs/ELM327.md §Per-car notes. */
 export async function scanMode22Profile(session: Elm327Session, profile: VehicleProfile): Promise<readonly Mode22Outcome[]> {
   const modules = validatedModules(profile);
   if (modules.length === 0) return [];

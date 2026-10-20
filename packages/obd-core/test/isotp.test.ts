@@ -12,7 +12,6 @@ const summary = (lines: string[]) => {
 };
 
 describe("reassemble", () => {
-  // Synthetic. §Multi-frame responses: sequence 0-F wrapping, 12-bit FF length
   it("8. sequence wraps F -> 0", () => {
     const seqs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1];
     const lines = ["7E8107D010203040506", ...seqs.map((s) => `7E82${s.toString(16).toUpperCase()}AAAAAAAAAAAAAA`)];
@@ -23,7 +22,6 @@ describe("reassemble", () => {
     expect(Array.from(r.frames[0].data.slice(0, 7))).toEqual([1, 2, 3, 4, 5, 6, 0xaa]);
   });
 
-  // Synthetic. §Multi-frame responses (CF sequence)
   it("9. wrong sequence drops the message; a later CF has no first frame", () => {
     const lines = ["7E81014490201314334", "7E82153594E54484554", "7E823494356494E3030", "7E822494356494E3030"];
     const r = reassemble(lines);
@@ -35,7 +33,6 @@ describe("reassemble", () => {
     ]);
   });
 
-  // Synthetic. §Multi-frame responses (FF)
   it("10. a second first frame drops the message in progress as incomplete", () => {
     const lines = ["7E81014490201314334", "7E81014490201314334", "7E82153594E54484554", "7E822494356494E3030"];
     const r = reassemble(lines);
@@ -44,7 +41,6 @@ describe("reassemble", () => {
     expect(r.frames[0].data).toHaveLength(20);
   });
 
-  // Synthetic. §Multi-frame responses (PCI nibbles 0/1/2/3)
   it("11. malformed single frames, flow control, unknown PCI", () => {
     expect(summary(["7E800410080"]).dropped).toEqual(["malformed 7E8"]);
     expect(summary(["7E8074100"]).dropped).toEqual(["malformed 7E8"]);
@@ -53,7 +49,6 @@ describe("reassemble", () => {
     expect(summary(["7E800410080"]).frames).toEqual([]);
   });
 
-  // §Multi-frame responses example (ATS1 spacing)
   it("13. spaced and unspaced lines parse the same", () => {
     const spaced = reassemble(["7E8 10 14 49 02 01 31 43 34"]);
     const packed = reassemble(["7E81014490201314334"]);

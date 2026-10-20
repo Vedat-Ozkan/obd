@@ -16,7 +16,6 @@ function checkedOn(scannedAt: string): string {
   return new Date(scannedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-/** One car (spec §Screens 2). `reports` is this car's saved history, newest first (batteryHistory.list). */
 function CarScreen({ entry, vehicle, reports, busy, change, openReport, openCheck, openHistory, onRemoved }: {
   entry: GarageVehicle; vehicle: CatalogVehicle; reports: readonly BatteryDiagnosisReport[]; busy: boolean; change: Change;
   openReport: (report: BatteryDiagnosisReport) => void; openCheck: (intent: "check" | "charge") => void; openHistory: () => void; onRemoved: () => void;

@@ -1,25 +1,11 @@
 import type { ChargeLog } from "./session.js";
 
-// Spec: docs/specs/T2.13-drive-check.md §Design, The measure and §Rule. Pure over the ChargeLog; decoding stays T2.4's.
-// The values below are policy, locked by the owner on 2026-10-01 before any group statistic was computed.
-
-/** A set is steady when the currents on both sides of it differ by at most this (T2.12's BRACKET_SAME_A). */
 export const STEADY_A = 10;
-/** The two bracketing currents must be at most this far apart; excludes sets that sit across a stall. */
 export const BRACKET_MAX_S = 3;
-/** A steady set is "under load" at or above this |current|. */
 export const LOAD_A = 50;
-/** Fewest loaded steady sets for a slope; below this the result is not-checked, not a pass. */
 export const MIN_LOADED_SETS = 10;
-/** Lower-bound multiplier on the slope standard error. */
 export const Z = 2;
-/** Multiplier in the formula for the limit below. */
 export const MARGIN = 2;
-/**
- * Computed once, from drive 1 only (fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-drive.redacted.jsonl), spec §Rule:
- * L = ceil(100 x MARGIN x max_g e_g) / 100 mΩ. The printed max excess on drive 1 was 0.0174 mΩ (0.017395647 unrounded; group 16, module 2),
- * so ceil(100 x 2 x 0.017395647) = ceil(3.479) = 4 and L = 0.04. Never changed in response to drive 2, a synthetic case or the Stage B drive.
- */
 export const GROUP_EXCESS_LIMIT_MOHM = 0.04;
 
 export interface GroupUnderLoad { index: number; module: number; excessMohm: number; seMohm: number; lowerMohm: number; flagged: boolean }
@@ -30,7 +16,6 @@ export interface GroupsUnderLoad {
   currentRange?: { min: number; max: number };
   groups: readonly GroupUnderLoad[];
   flagged: readonly number[];
-  /** Recorded in the artifact and the report data, never shown in the app (ADR-023 item 4). */
   medianGroupMohm?: number;
 }
 
@@ -40,7 +25,6 @@ const median = (values: readonly number[]): number => {
   return sorted.length % 2 === 1 ? sorted[mid] ?? NaN : ((sorted[mid - 1] ?? NaN) + (sorted[mid] ?? NaN)) / 2;
 };
 
-/** Least-squares slope of y on x and its standard error (n - 2 degrees of freedom). */
 function slope(x: readonly number[], y: readonly number[]): { b: number; se: number } {
   const n = x.length;
   const mx = x.reduce((s, v) => s + v, 0) / n;
@@ -54,7 +38,6 @@ function slope(x: readonly number[], y: readonly number[]): { b: number; se: num
 }
 
 export function groupsUnderLoad(log: ChargeLog, limitMohm: number = GROUP_EXCESS_LIMIT_MOHM): GroupsUnderLoad {
-  // Steady sets: the last current before the set and the first after it, close in time, close in value, no recovery between.
   const steady: { set: ChargeLog["groups"][number]; amps: number }[] = [];
   let next = 0;
   for (const set of log.groups) {

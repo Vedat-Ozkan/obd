@@ -7,15 +7,12 @@ import { BMS_LABEL, bmsEnergyCapacity, INTEGRATED_LABEL, integratedCurrentCapaci
 import { groupImbalance } from "../src/imbalance.js";
 import { chargeLogFromRecording, chargePhases, gapText, gateFailures, largestGap, num, shortPostRest, type ChargePhases, type Window } from "../src/session.js";
 
-// Layout: docs/specs/T2.4-charge-logger.md §Summary artifact. `num` is the convention in src/report.ts (4 decimals).
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
-/** BM2 selection threshold, printed but not enforced (docs/ML.md §Methods). */
 const BM2_MIN_DELTA_SOC = 30;
 
 const window = (name: string, w: Window | undefined, extra = "") =>
   w === undefined ? `${name}: not found` : `${name}: t=${num(w.start)}–${num(w.end)} (${num(w.end - w.start)} s)${extra}`;
-/** Decision 19: recovery gaps are counted and printed, never a failed condition. */
 const recoveryText = (gaps: ChargePhases["recoveryGaps"]) =>
   gaps.length === 0 ? "recovery gaps: 0" : `recovery gaps: ${String(gaps.length)}, longest ${num(Math.max(...gaps.map((g) => g.seconds)))} s`;
 const input = (estimate: CapacityEstimate & { status: "estimated" }, name: string) => estimate.inputs.find((i) => i.name === name)?.value ?? NaN;
@@ -113,7 +110,6 @@ export async function chargeLogSummary(lines: readonly RecordingLine[], recordin
 async function main(paths: readonly string[]): Promise<string> {
   const sections: string[] = [];
   for (const path of paths) {
-    // Decision 11: `./fixtures/synthetic/...` and absolute paths under it count as synthetic too.
     const underSynthetic = relative(resolve(root, "fixtures/synthetic"), resolve(path));
     if (!path.endsWith(".redacted.jsonl") && (underSynthetic.startsWith("..") || isAbsolute(underSynthetic))) {
       throw new Error(`expected a redacted or explicitly synthetic JSONL path: ${path}`);

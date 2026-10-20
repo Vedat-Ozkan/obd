@@ -5,8 +5,6 @@ import { chargePhases, gateFailures, num, type ChargeLog } from "obd-battery/ses
 import { checkFacts, claimGrammar, renderClaims } from "./check.js";
 import { reportFacts, type StructuredSummary, type SummaryFact } from "./summary.js";
 
-// Design: docs/specs/T2.11a-assistant-tools-replay.md. Every tool reads the caller's in-memory data; none touches the vehicle.
-
 export type AssistantSource =
   | { kind: "battery-scan"; report: BatteryDiagnosisReport; synthetic: boolean }
   | { kind: "charge-log"; log: ChargeLog };
@@ -30,7 +28,6 @@ export type AssistantAnswer =
   | { kind: "answer"; text: string; answer: StructuredSummary; steps: readonly AssistantStep[]; usage: readonly AssistantUsage[] }
   | { kind: "fallback"; text: string; reason: AssistantFallback; steps: readonly AssistantStep[]; usage: readonly AssistantUsage[] };
 
-// Design bounds, not vehicle constants.
 export const MAX_TOOL_CALLS = 4;
 export const MAX_SOURCES = 32;
 export const ASSISTANT_FALLBACK_TEXT =
@@ -38,7 +35,6 @@ export const ASSISTANT_FALLBACK_TEXT =
 
 const TOOLS: readonly ToolName[] = ["list_sessions", "get_session", "get_capacity_estimate", "get_codes"];
 
-// The claim grammar is the shared claimGrammar (check.ts), the text the checker enforces for the summary and the assistant.
 export const assistantInstructions = `Assistant prompt version: t2.11-v2. Answer the user's question about their stored battery data using only the tool results received for this question.
 Reply with exactly one JSON object per turn, with every key present. To request one tool: {"version":1,"kind":"tool","tool":NAME,"sessionId":ID or null,"claims":null}. To answer: {"version":1,"kind":"answer","tool":null,"sessionId":null,"claims":[{"text":TEXT,"factIds":[IDS]}]}.
 NAME is one of list_sessions (sessionId null), get_session (needs a sessionId), get_codes (needs a sessionId) and get_capacity_estimate (a sessionId, or null). Session IDs are s1, s2 and so on, as listed by list_sessions. Request at most ${String(MAX_TOOL_CALLS)} tools.
@@ -48,7 +44,6 @@ When the needed fact is missing, NOT MEASURED, not read or not assessed, say so 
 Keep community and synthetic labels; give no battery health verdict. Omit unsupported claims.
 ${claimGrammar}`;
 
-/** Flat on purpose: one object shape with nullable fields, so a strict provider schema needs no anyOf. */
 export const assistantReplySchema = {
   type: "object", additionalProperties: false, required: ["version", "kind", "tool", "sessionId", "claims"],
   properties: {
@@ -63,7 +58,6 @@ export const assistantReplySchema = {
   },
 };
 
-// tool stays a free string here so an out-of-allowlist name is told apart from a malformed reply.
 const replyParser = z.discriminatedUnion("kind", [
   z.strictObject({ version: z.literal(1), kind: z.literal("tool"), tool: z.string(), sessionId: z.string().nullable(), claims: z.null() }),
   z.strictObject({ version: z.literal(1), kind: z.literal("answer"), tool: z.null(), sessionId: z.null(), claims: z.array(z.strictObject({ text: z.string(), factIds: z.array(z.string()) })) }),
@@ -79,7 +73,6 @@ function capacityFacts(sid: string, source: AssistantSource): SummaryFact[] {
   if (source.kind === "battery-scan") {
     return prefixed(sid, reportFacts(source.report).filter((f) => f.id === "capacity-status" || f.id === "capacity-reason"));
   }
-  // A completed charge log: the T2.4 gate passes and the estimator returns a figure.
   const phases = chargePhases(source.log);
   const failures = gateFailures(phases);
   const estimate = failures.length === 0 ? integratedCurrentCapacity(source.log, phases) : undefined;
@@ -113,7 +106,6 @@ function codeFacts(sid: string, source: AssistantSource): SummaryFact[] {
   return prefixed(sid, reportFacts(source.report).filter((f) => f.id.startsWith("codes-") || f.id.startsWith("readiness-")));
 }
 
-/** The model's arguments are never echoed: an error carries only a fixed code. */
 function runTool(sources: readonly AssistantSource[], call: ToolCall, stepNumber: number): ToolResult {
   const failure = (code: string): ToolResult => ({ ok: false, facts: [fact(`step-${String(stepNumber)}/error`, "Tool error", code, { status: "missing" })] });
   if (call.tool === "list_sessions") {
@@ -143,7 +135,6 @@ function runTool(sources: readonly AssistantSource[], call: ToolCall, stepNumber
 const same = (a: SummaryFact, b: SummaryFact) =>
   a.label === b.label && a.value === b.value && a.unit === b.unit && a.tier === b.tier && a.status === b.status;
 
-/** Facts from this question's tool results only; identical repeats collapse, a conflicting repeat returns undefined. */
 function receivedFacts(steps: readonly AssistantStep[]): SummaryFact[] | undefined {
   const byId = new Map<string, SummaryFact>();
   for (const step of steps) {
@@ -167,7 +158,6 @@ export async function askAssistant(sources: readonly AssistantSource[], question
   const trimmed = question.replace(/^ +| +$/g, "");
   if (!validQuestion(trimmed) || sources.length > MAX_SOURCES) return fallback("invalid-input");
   for (;;) {
-    // A fresh steps copy per round: a request already handed to the client must not change afterwards.
     const request: AssistantTurnRequest = { version: 1, promptVersion: "t2.11-v2", question: trimmed, steps: [...steps] };
     const before = now();
     let response: Awaited<ReturnType<AssistantClient["next"]>>;

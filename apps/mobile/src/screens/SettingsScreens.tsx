@@ -12,7 +12,6 @@ import { setThemePreference, useThemePreference, useTokens } from "../ui/theme.j
 
 const THEME_LABELS: Record<ThemePreference, string> = { system: "System default", light: "Light", dark: "Dark" };
 
-/** The remembered capture folder's name, or "Not chosen"; `reload` re-reads it after a change. */
 function useFolderLabel(): [string, () => void] {
   const [label, setLabel] = useState("");
   const reload = () => { void folderLabel().then((name) => { setLabel(name ?? "Not chosen"); }, () => { setLabel("Could not be read"); }); };
@@ -20,7 +19,6 @@ function useFolderLabel(): [string, () => void] {
   return [label, reload];
 }
 
-// Spec §Screens 7: Data, Display and About groups, each row with its current value on the right.
 function SettingsScreen({ beta, openBeta, openSaveFolder, openTheme, openPrivacy, openLicenses }: {
   beta: BetaStatus; openBeta: () => void; openSaveFolder: () => void; openTheme: () => void; openPrivacy: () => void; openLicenses: () => void;
 }) {
@@ -45,7 +43,6 @@ function SettingsScreen({ beta, openBeta, openSaveFolder, openTheme, openPrivacy
   </>;
 }
 
-/** The T2.9 beta controls, moved from Garage: switching on opens the consent screen, switching off decides at once. */
 function BetaScreen({ beta, betaMessage, busy, decideBeta, setConsentOpen, deleteBeta }: {
   beta: BetaStatus; betaMessage: string; busy: boolean; decideBeta: (share: boolean) => Promise<void>; setConsentOpen: (open: boolean) => void; deleteBeta: () => void;
 }) {
@@ -64,7 +61,6 @@ function BetaScreen({ beta, betaMessage, busy, decideBeta, setConsentOpen, delet
   </>;
 }
 
-/** System default, Light or Dark: the app re-themes at once, and the choice is kept in the private theme.txt. */
 function ThemeScreen() {
   const theme = useThemePreference();
   const choose = (preference: ThemePreference) => { setThemePreference(preference); saveThemePreference(preference); };
@@ -73,7 +69,6 @@ function ThemeScreen() {
   </View>;
 }
 
-/** The folder picked once for saved runs (T0.9b); forgetting it makes the next save ask again (phoneTargets.forgetFolder). */
 function SaveFolderScreen() {
   const tokens = useTokens();
   const [folder, reload] = useFolderLabel();
@@ -84,7 +79,6 @@ function SaveFolderScreen() {
   </>;
 }
 
-/** Every runtime dependency with its license, and the OBDb attribution (ADR-010). */
 function LicensesScreen() {
   return <>
     <View>
@@ -98,7 +92,6 @@ function LicensesScreen() {
   </>;
 }
 
-/** The pinned PRIVACY_NOTE, verbatim, with its markdown shown as headings, bullets, bold and italic. */
 function PrivacyScreen() {
   const tokens = useTokens();
   return <View style={{ gap: 8 }}>

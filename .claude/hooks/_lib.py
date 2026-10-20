@@ -8,7 +8,6 @@ def read_input():
         return {}
 
 def project_root(data):
-    # In a worktree the hook's cwd follows the worktree; CLAUDE_PROJECT_DIR stays at the launch root.
     return data.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 
 def deny(reason, event="PreToolUse"):

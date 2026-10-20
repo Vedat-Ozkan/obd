@@ -1,6 +1,3 @@
-// T2.9 Stage A: docs/specs/T2.9-beta-data-upload.md Verification "Stage A". E2E runs over the committed
-// *.redacted.jsonl recordings, the beta-scrub artifact, parity with tools/spike/redact_vin.py, and one isolated
-// case per listed scrubber failure mode (1-15). No test prints a line or value of a gitignored original.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,11 +20,9 @@ const PHONE = `${equinox}2026-09-24-phone-console.redacted.jsonl`;
 const TARGETED = `${equinox}2026-09-23-discovery-targeted.redacted.jsonl`;
 const PATHS = [SPIKE, SPIKE2, PHONE, TARGETED];
 
-// Synthetic VIN of tools/spike/test_redact_vin.py (T0.4 spec Sources); its serial is characters 12-17.
 const VIN = "1C4SYNTHETICVIN00";
 const SERIAL = VIN.slice(11);
 const MASKED = VIN.slice(0, 11) + "000000";
-// 49 CFR 565.15(c) Table VI worked example (docs/ELM327.md §J1979 conventions "VIN check digit").
 const TABLE_VI = "1G4AH59H45G118341";
 
 type Row = Record<string, unknown>;
@@ -37,14 +32,12 @@ const fromHex = (h: string) => (h.match(/../g) ?? []).map((x) => parseInt(x, 16)
 const toHex = (b: readonly number[]) => b.map((x) => x.toString(16).padStart(2, "0").toUpperCase()).join("");
 const serialForms = (s: string) => [s, toHex(bytes(s)), toHex(bytes(s)).toLowerCase()];
 
-// Python json.dumps form for flat rows built in this file (test_redact_vin.py writes json.dumps(row)).
 function pyLine(row: Row): string {
   const body = Object.entries(row).map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(", ");
   return `{${body}}`.replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 const pythonForm = (line: string) => pyLine(JSON.parse(line) as Row) === line;
 
-/** ISO-TP FF + CFs as the ELM prints them with ATH1 (sep " " for ATS1): port of test_redact_vin.py frames(). */
 function frames(header: string, payload: readonly number[], sep = ""): string[] {
   const fmt = (pci: string, data: readonly number[]) =>
     [header, ...(pci.match(/../g) ?? []), ...data.map((b) => toHex([b]))].join(sep);
@@ -67,7 +60,6 @@ const recording = (tx: string, replyFrames: readonly string[], chunk = 11) => fi
 const vin0902 = (vin: string) => [0x49, 0x02, 0x01, ...bytes(vin)];
 
 interface Msg { tx: number; cmd: string; header: string; data: number[] }
-/** Reassembled messages per tx (obd-core isotp), 1-based tx line. */
 function messagesOf(text: string): Msg[] {
   const rows = text.split("\n").filter((l) => l !== "").map((l) => JSON.parse(l) as Row);
   const out: Msg[] = [];
@@ -89,7 +81,6 @@ function leaks(text: string, serial: string): boolean {
     messagesOf(text).some((m) => String.fromCharCode(...m.data).includes(serial));
 }
 
-/** Every isolated case: line count unchanged, output in Python form. */
 function scrub(text: string) {
   const r = scrubRecording(text);
   const inLines = text.split("\n").length;
@@ -362,7 +353,6 @@ describe("isolated scrubber failure modes", () => {
     }
   });
 
-  // X-2026-09-27-power-state-meta S1-S3: powerState is kept only for "ready" and "unknown"; anything else refuses quietly.
   it("power-state-refusal: out-of-set and non-string powerState values refuse with the line number and no value", () => {
     const strings: unknown[] = ["other", "Ready", "ready, park", "2026-09-27", VIN];
     const nonStrings: unknown[] = [true, 1, null, ["ready"], {}];
@@ -386,7 +376,6 @@ describe("isolated scrubber failure modes", () => {
       [recording("0902", [f[0], f[1].slice(0, 8) + "23" + f[1].slice(10), f[2]]), 2],
       [recording("0902", f.slice(1)), 2],
       [recording("0902", frames("18DAF117", vin0902("1C4SYNTHETIcVIN00"))), 2],
-      // Decision 16: tx/rx lines are fail-closed like meta lines.
       [pyLine(START) + "\n" + pyLine({ t: 1, dir: "tx", data: "0902\r", vin: VIN }) + "\n", 2],
       [pyLine({ t: 1, dir: "rx", data: "OK\r\r>", note: "x" }) + "\n", 1],
     ];
@@ -395,7 +384,6 @@ describe("isolated scrubber failure modes", () => {
       expect(e.line, text).toBe(line);
       assertQuiet(e);
     }
-    // Python-written floats ("t": 5.0) are json.dumps form and must be accepted verbatim.
     const py = '{"t": 5.0, "dir": "tx", "data": "ATZ\\r"}\n{"t": 5.25, "dir": "rx", "data": "OK\\r\\r>"}\n';
     expect(scrubRecording(py).text).toBe(py);
   });
@@ -403,7 +391,6 @@ describe("isolated scrubber failure modes", () => {
   it("13 safety-net: a serial learned from 0902 or 22 4193 surviving outside every rule is refused by verify (Decision 17)", () => {
     const from0902 = exchange("0902", frames("18DAF117", vin0902(VIN)), 11, 1);
     const from4193 = exchange("22 4193", frames("18DAF117", [0x62, 0x41, 0x93, ...bytes(VIN.repeat(4))]), 11, 1);
-    // The serial straddles the FF/CF boundary: only the reassembled payload holds it, no line or rx hex run does.
     const straddling = frames("18DAF117", [0x62, 0x12, 0x34, ...bytes(SERIAL)]);
     expect(straddling.length).toBe(2);
     for (const f of straddling) expect(f).not.toContain(toHex(bytes(SERIAL)));
@@ -428,7 +415,6 @@ describe("isolated scrubber failure modes", () => {
   });
 
   it("13b safety-net-check-digit: a digit-only check-digit hit is masked but does not feed the safety net (Decision 11)", () => {
-    // 11111111111111111: weights sum to 89, 89 mod 11 = 1, so position 9 ("1") passes 49 CFR 565.15(c).
     const digits = "1".repeat(17);
     const text = file([
       START,

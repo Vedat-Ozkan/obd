@@ -1,6 +1,3 @@
-// Codes report model and the "recently cleared" verdict: docs/specs/T0.7-codes-report.md "Stage B2: codes.ts".
-// Heuristic: docs/PLAN.md T0.7 row; permanent codes as the strong path: docs/ELM327.md §Standard modes, row 0A.
-// Layouts and decoders: src/obd/* (docs/ELM327.md §J1979 conventions).
 import type { Frame } from "../elm/isotp.js";
 import type { ElmResponse } from "../elm/session.js";
 import { decodeDtcList, type DtcMode } from "../obd/dtc.js";
@@ -10,34 +7,32 @@ import { decodeReadiness, type Monitor } from "../obd/readiness.js";
 import type { DecodeFailure } from "../obd/response.js";
 import { decodeSupported } from "../obd/supported.js";
 
-/** One command sent during a scan and its response, in send order. T0.9 builds these; replay builds them in tests. */
 export interface CodesExchange { command: string; response: ElmResponse }
 
 export type Tri = "yes" | "no" | "unknown";
 
 type Failed = { status: "failed"; reason: DecodeFailure["reason"]; code?: number };
-type NotRead = { status: "not-read" }; // not requested, or requested and this module sent no frame
-type Unsupported = { status: "unsupported" }; // the module's bitmap covering this PID was read and does not flag it
+type NotRead = { status: "not-read" };
+type Unsupported = { status: "unsupported" };
 
 export type DtcRead = { status: "read"; dtcs: string[] } | Failed | NotRead;
 export type PidValue = { status: "read"; value: number; unit: Unit } | Unsupported | Failed | NotRead;
 export type ReadinessRead = { status: "read"; mil: boolean; dtcCount: number; monitors: Monitor[] } | Unsupported | Failed | NotRead;
 export type FreezeFrame =
-  | { status: "none-stored" } // PID 02 = 00 00: nothing else from Mode 02 is shown
-  | { status: "stored"; dtc: string; readings: PidReading[] } // readings: frame-0 MODE01_PIDS values, ascending PID
+  | { status: "none-stored" }
+  | { status: "stored"; dtc: string; readings: PidReading[] }
   | Failed | NotRead;
 
-/** PIDs the codes report shows: MIL distance/time and the three "since codes cleared" counters. */
 export type CodesPid = "21" | "30" | "31" | "4D" | "4E";
 
 export interface ModuleCodes {
-  ecu: string; // Frame.ecu: "17", "7E8"
-  stored: DtcRead; // Mode 03
-  pending: DtcRead; // Mode 07
-  permanent: DtcRead; // Mode 0A
-  readiness: ReadinessRead; // PID 01
+  ecu: string;
+  stored: DtcRead;
+  pending: DtcRead;
+  permanent: DtcRead;
+  readiness: ReadinessRead;
   pids: Record<CodesPid, PidValue>;
-  freezeFrame: FreezeFrame; // Mode 02 frame 0
+  freezeFrame: FreezeFrame;
 }
 
 export interface ClearLegs {
@@ -49,23 +44,18 @@ export interface ClearLegs {
 
 export interface RecentlyCleared {
   verdict: "indicated" | "not-indicated" | "unknown";
-  /** The permanent-DTC path fired (docs/ELM327.md §Standard modes, row 0A). */
   strong: boolean;
   legs: ClearLegs;
 }
 
 export interface CodesReport {
-  modules: ModuleCodes[]; // ascending by ecu
+  modules: ModuleCodes[];
   recentlyCleared: RecentlyCleared;
 }
 
-/** POLICY values (Decisions, Q1), not from a standard: a counter below its value is "low". Set by the owner
- *  (2026-09-24) to catch a clear within roughly the last few days of ordinary use before a sale; round numbers,
- *  not measured; revisit with beta recordings. */
 export const LOW_COUNTER: Readonly<Record<"30" | "31" | "4E", number>> = { "30": 10, "31": 100, "4E": 600 };
 
 const CODES_PIDS: readonly CodesPid[] = ["21", "30", "31", "4D", "4E"];
-// Covering supported-PID bitmap per Mode 01 PID: docs/ELM327.md §J1979 conventions "Supported-PID bitmaps".
 const BITMAP_FOR: Readonly<Record<"01" | CodesPid, string>> = {
   "01": "0100", "21": "0120", "30": "0120", "31": "0120", "4D": "0140", "4E": "0140",
 };
@@ -73,7 +63,6 @@ const DTC_MODES: Readonly<Record<"03" | "07" | "0A", DtcMode>> = { "03": 0x03, "
 const RECOGNIZED = new Set(["0100", "0120", "0140", "0101", "0121", "0130", "0131", "014D", "014E", "03", "07", "0A", "020200"]);
 
 const pidHex = (pid: number) => pid.toString(16).padStart(2, "0").toUpperCase();
-// Mode 02 frame 0 only: docs/ELM327.md §J1979 conventions "Mode 02 reply layout".
 const freezeCommand = (pid: number) => `02${pidHex(pid)}00`;
 for (const d of MODE01_PIDS) RECOGNIZED.add(freezeCommand(d.pid));
 
@@ -83,7 +72,6 @@ function failed(f: DecodeFailure): Failed {
 
 type FrameOf = (command: string) => Frame | undefined;
 
-/** The PID's covering bitmap was decoded for this ECU and does not flag it. */
 function unsupported(frameOf: FrameOf, pid: "01" | CodesPid): boolean {
   const bitmap = BITMAP_FOR[pid];
   const frame = frameOf(bitmap);
@@ -113,7 +101,6 @@ function readinessRead(frameOf: FrameOf): ReadinessRead {
   return r.ok ? { status: "read", mil: r.mil === true, dtcCount: r.dtcCount ?? 0, monitors: r.monitors } : failed(r);
 }
 
-/** No Mode 02 value is carried unless PID 02 names a DTC (T0.5 Stage C decision). */
 function freezeFrame(frameOf: FrameOf): FreezeFrame {
   const frame = frameOf("020200");
   if (frame === undefined) return { status: "not-read" };
@@ -157,7 +144,6 @@ function legs(modules: readonly ModuleCodes[]): ClearLegs {
   if (lists(stored).some((d) => d.length > 0)) noStoredDtcs = "no";
   else if (!stored.some((r) => r.status === "failed") && lists(stored).length > 0) noStoredDtcs = "yes";
   const permanentDtcs: Tri = lists(permanent).some((d) => d.length > 0) ? "yes" : lists(permanent).length > 0 ? "no" : "unknown";
-  // Absent monitors are not in Readiness.monitors, so they are never read as incomplete (T0.5 Risks).
   const monitorsIncomplete: Tri = monitors.some((ms) => ms.some((x) => !x.complete))
     ? "yes"
     : monitors.some((ms) => ms.length > 0) ? "no" : "unknown";
@@ -165,12 +151,9 @@ function legs(modules: readonly ModuleCodes[]): ClearLegs {
   return { noStoredDtcs, monitorsIncomplete, countersLow, permanentDtcs };
 }
 
-/** The verdict from the four legs; exported for the one isolated test (Verification, failure 10). */
 export function recentlyCleared(l: ClearLegs): RecentlyCleared {
   const standard = l.noStoredDtcs === "yes" && l.monitorsIncomplete === "yes" && l.countersLow === "yes";
   const strong = l.noStoredDtcs === "yes" && l.permanentDtcs === "yes" && l.monitorsIncomplete === "yes";
-  // POLICY (Decisions, Q2): only a counter read at or above its threshold can say "not indicated", because only
-  // the counters measure time or distance since a clear. Anything else that is not "indicated" is unknown.
   const verdict = standard || strong ? "indicated" : l.countersLow === "no" ? "not-indicated" : "unknown";
   return { verdict, strong, legs: l };
 }
@@ -179,7 +162,7 @@ export function buildCodesReport(exchanges: readonly CodesExchange[]): CodesRepo
   const byCommand = new Map<string, ElmResponse>();
   for (const { command, response } of exchanges) {
     const c = command.replace(/ /g, "").toUpperCase();
-    if (RECOGNIZED.has(c)) byCommand.set(c, response); // a repeated command: the later exchange wins
+    if (RECOGNIZED.has(c)) byCommand.set(c, response);
   }
   const ecus = [...new Set([...byCommand.values()].flatMap((r) => r.frames.map((f) => f.ecu)))].sort();
   const modules = ecus.map((ecu) =>

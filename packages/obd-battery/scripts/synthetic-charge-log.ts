@@ -2,11 +2,6 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Writes fixtures/synthetic/charge-log-rested.jsonl and its .label.json (docs/specs/T2.4-charge-logger.md
-// §Verification, Stage A). Deterministic: integer milliseconds, no clock, no randomness.
-// Encodings mirror the decoder's sourced scalings (spec §Sources), so this fixture cannot catch a wrong scaling;
-// the P1 recording does that. Everything here is synthetic, not the car's.
-
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const FIXTURE = "fixtures/synthetic/charge-log-rested.jsonl";
 const LABEL = "fixtures/synthetic/charge-log-rested.label.json";
@@ -14,7 +9,6 @@ const LABEL = "fixtures/synthetic/charge-log-rested.label.json";
 const CYCLE_MS = 10_000;
 const STEP_MS = 50;
 const REPLY_MS = 20;
-/** Synthetic capacity, small so that the 900 s charge covers ΔSOC >= 30 %. Not the car's. */
 const CAPACITY_AH = 12;
 const PACK_V = 312;
 const CAPACITY_KWH = (CAPACITY_AH * PACK_V) / 1000;
@@ -22,16 +16,13 @@ const SOC_START = 40;
 const REST_A = 0.5;
 const CHARGE_A = -20;
 const GROUP_V = 3.9;
-const WEAK_RECORD = 21; // 1-based record position; module 3
+const WEAK_RECORD = 21;
 const WEAK_DROP_V = 0.03;
-/** Planted not-80 set: record 80's module byte is 0, so 79 records are valid (Decision 8). */
 const NOT_80_VALID = 79;
-/** Planted recovery (Decision 19): charge cycle 46 starts 5 s late after a "timeout" session boundary, a 15 s gap then a 5 s one. */
 const RECOVERY_CYCLE = 46;
 const RECOVERY_DELAY_MS = 5_000;
 
 const GROUP_DIDS = ["2AE1", "2AE2", "2AE3", "2AE4", "2AE5", "2AE6", "2AE7"];
-// scanMode22Profile's commands for the decoded DIDs only (packages/obd-core/src/vehicles/scan.ts).
 const CYCLE = [
   "ATSP7", "ATCP 18", "ATSH DA17F1", "ATCRA 18DAF117", "ATFCSH 18DA17F1", "ATFCSD 300000", "ATFCSM 1", "22 2414", "22 2885",
   "ATSH DACBF1", "ATCRA 18DAF1CB", "ATFCSH 18DACBF1", "22 27AF", "22 2B43", "22 2AF5", ...GROUP_DIDS.map((d) => `22 ${d}`),
@@ -45,24 +36,21 @@ function schedule(): Cycle[] {
   const cycles: Cycle[] = [];
   const add = (startMs: number, phase: Phase, amps: number, groupNoData?: string) =>
     cycles.push({ startMs, phase, amps, ...(groupNoData ? { groupNoData } : {}) });
-  // Planted: a group set with 79 valid records, a 2AE3 NO DATA cycle, then a 15 s current gap, all before the pre-rest.
-  // The 79-record cycle sits 5 s in, so the largest group-set gap stays the NO DATA one, which ends before the pre-rest.
   add(0, "early", REST_A);
   cycles.push({ startMs: 5_000, phase: "early", amps: REST_A, not80: true });
   add(10_000, "early", REST_A, "2AE3");
   add(20_000, "early", REST_A);
   let t = 35_000;
-  for (let i = 0; i < 64; i++, t += CYCLE_MS) add(t, "pre-rest", REST_A); // 630 s
-  for (let i = 0; i < 13; i++, t += CYCLE_MS) add(t, "ramp", -2.5 - 0.15 * i); // 120 s in the "other" class
-  for (let i = 0; i < 91; i++, t += CYCLE_MS) { // 900 s
+  for (let i = 0; i < 64; i++, t += CYCLE_MS) add(t, "pre-rest", REST_A);
+  for (let i = 0; i < 13; i++, t += CYCLE_MS) add(t, "ramp", -2.5 - 0.15 * i);
+  for (let i = 0; i < 91; i++, t += CYCLE_MS) {
     if (i === RECOVERY_CYCLE) cycles.push({ startMs: t + RECOVERY_DELAY_MS, phase: "charge", amps: CHARGE_A, recovery: true });
     else add(t, "charge", CHARGE_A);
   }
-  for (let i = 0; i < 184; i++, t += CYCLE_MS) add(t, "post-rest", REST_A); // 1830 s
+  for (let i = 0; i < 184; i++, t += CYCLE_MS) add(t, "post-rest", REST_A);
   return cycles;
 }
 
-/** The true current is piecewise linear through the 2414 samples, so its integral is exact under the trapezoid rule. */
 function trueSoc(samples: readonly { t: number; amps: number }[]): (t: number) => number {
   return (t: number) => {
     let ampSeconds = 0;
@@ -80,7 +68,6 @@ function trueSoc(samples: readonly { t: number; amps: number }[]): (t: number) =
 const hex = (bytes: readonly number[]) => bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join("");
 const u16 = (value: number) => [(value >> 8) & 0xff, value & 0xff];
 
-/** ISO-TP frames as the ELM prints them with ATH1 and ATS0 (see the P1 recording). */
 function reply(module: string, did: string, data: readonly number[]): string {
   const header = `18DAF1${module}`;
   const payload = [0x62, parseInt(did.slice(0, 2), 16), parseInt(did.slice(2), 16), ...data];
@@ -100,7 +87,7 @@ export function generate(): { jsonl: string; label: string } {
   const soc = trueSoc(samples);
   const counts = groupVolts().map((v) => Math.round(v * 10000));
   const records = counts.flatMap((count, i) => [...u16(count), Math.floor(i / 8) + 1]);
-  while (records.length < GROUP_DIDS.length * 36) records.push(0, 0, 0); // 84 records per set; the last 4 are zero
+  while (records.length < GROUP_DIDS.length * 36) records.push(0, 0, 0);
   const not80Records = records.map((b, i) => (i === 80 * 3 - 1 ? 0 : b));
   const avg = Math.round(counts.reduce((s, c) => s + c, 0) / counts.length);
 
@@ -109,7 +96,6 @@ export function generate(): { jsonl: string; label: string } {
     { t: 0, dir: "meta", event: "charge-log session", reason: "start" },
   ];
   for (const cycle of cycles) {
-    // The boundary the phone writes before a new session's ATZ; this fixture's sessions have no init, like its first one.
     if (cycle.recovery) lines.push({ t: (cycle.startMs - 1_000) / 1000, dir: "meta", event: "charge-log session", reason: "timeout" });
     for (const command of CYCLE) {
       const txMs = cycle.startMs + at(command);
@@ -160,7 +146,7 @@ export function generate(): { jsonl: string; label: string } {
     planted: {
       current_gap: { seconds: 15, at: early[early.length - 1].t },
       group_gap: { seconds: 20, at: groupT(cycles[0]) },
-      not_80_group_set: { at: groupT(cycles[1]), valid: NOT_80_VALID }, // schedule() plants it second
+      not_80_group_set: { at: groupT(cycles[1]), valid: NOT_80_VALID },
       recovery_gap: { seconds: (CYCLE_MS + RECOVERY_DELAY_MS) / 1000, at: samples[recovery - 1].t },
     },
     notes: "Generator truth for a synthetic charge log. The capacity is synthetic, not the car's; the scalings are the decoder's own, so only the P1 recording checks them.",

@@ -3,11 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { fromByteArray, toByteArray } from "base64-js";
 import { connectVeepeak, orderDevices, scanDevices, VEEPEAK_SERVICE_UUID, type ScannedDevice } from "../src/ble/BleTransport.js";
 
-// Mocked react-native-ble-plx objects only; no Bluetooth hardware is loaded.
 const fff1 = "0000fff1-0000-1000-8000-00805f9b34fb"; const fff2 = "0000fff2-0000-1000-8000-00805f9b34fb";
 const fff3 = "0000fff3-0000-1000-8000-00805f9b34fb"; const otherService = "0000180a-0000-1000-8000-00805f9b34fb";
 const props = { isWritableWithoutResponse: false, isWritableWithResponse: false, isNotifiable: false, isIndicatable: false };
-// Reversed relative to the "FFF1 write / FFF2 notify" folklore: roles must come from properties.
 const reversedChars = [{ uuid: fff1, ...props, isNotifiable: true }, { uuid: fff2, ...props, isWritableWithoutResponse: true }];
 
 function fakeDevice(mtu = 185, chars: object[] = reversedChars, services?: object[]) {
@@ -60,7 +58,6 @@ describe("scanDevices advertised services (X-2026-09-28-persistent-dongle S1)", 
   });
 });
 
-// The picker's order (spec §Picker sheet, Order). The FFF0 signal is docs/ELM327.md §BLE specifics; the name pattern is a UI heuristic.
 describe("orderDevices", () => {
   const ids = (devices: ScannedDevice[]) => devices.map((device) => device.id);
   it("O1: the remembered device is first, even with an unrelated name and the weakest signal", () => {

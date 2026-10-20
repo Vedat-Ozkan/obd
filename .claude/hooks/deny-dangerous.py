@@ -14,7 +14,6 @@ if tool == "Bash":
     if re.search(r"git\s+push\b.*(\s--force\b|\s-f\b)", c): deny("Force-push is not allowed.")
     if re.search(r"git\s+reset\s+--hard|git\s+checkout\s+--\s+\.|git\s+clean\s+-[a-z]*f", c): deny("Destructive git reset/checkout/clean is not allowed; ask the lead.")
     if re.search(r"\brm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+(/|~|\$HOME|\.\.)", c): deny("Recursive delete outside the repo is not allowed.")
-    # Hard rule 2: recordings change only through the recording and redaction tools, never by shell edits.
     if re.search(r"(sed\s+-i|>>?|\btee\b|\btruncate\b|\brm\b|\bmv\b)[^|;&]*fixtures/recordings/", c):
         deny("fixtures/recordings/ is immutable (AGENTS.md hard rule 2). Add recordings with the recording tool; redact with tools/spike/redact_vin.py.")
     # Hard rule 7: dependency changes need a spec that lists them, so the lead unlocks them.

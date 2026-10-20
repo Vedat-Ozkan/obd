@@ -9,14 +9,9 @@ function checkedOn(scannedAt: string): string {
   return new Date(scannedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-/**
- * History (spec §Screens 6): chart 2, the battery checks (newest first, as batteryHistory.list returns them), then charge logs.
- * Charge-log files are not linked to a garage car yet, so that section is an honest empty state (spec §Decisions 4).
- */
 function ReportHistory({ historyReports, openReport }: { historyReports: readonly BatteryDiagnosisReport[]; openReport: (report: BatteryDiagnosisReport) => void }) {
   const tokens = useTokens();
   const muted = { color: tokens.muted };
-  // Two checks on one day are told apart by the time.
   const when = (scannedAt: string) => new Date(scannedAt).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return <>
     <View style={{ gap: 8 }}>
@@ -36,7 +31,6 @@ function ReportHistory({ historyReports, openReport }: { historyReports: readonl
   </>;
 }
 
-/** Report summary (spec §Screens 3): the SoC hero, four rows with value and rating chip, and one primary action. */
 function ReportSummary({ report, canCheck, busy, openSection, openCodes, openCheck, openAiSummary }: {
   report: BatteryDiagnosisReport; canCheck: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
   openCodes: () => void; openCheck: () => void; openAiSummary: () => void;

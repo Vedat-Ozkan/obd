@@ -11,12 +11,10 @@ import {
   type AssistantAnswer, type AssistantClient, type AssistantSource, type AssistantTurnRequest, type AssistantUsage,
 } from "../src/index.js";
 
-/** dropReads removes one command's reads (its tx line and the reply after it) with t in [fromT, toT], in memory only. */
 export interface SourceSpec { kind: "battery-scan" | "charge-log"; recording: string; dropReads?: { command: string; fromT: number; toT: number } }
 export interface DatasetSpec {
   dataTag: string;
   sources?: SourceSpec[];
-  /** Dataset whose sources are rebuilt with the injection below applied to the first one, in memory only. */
   base?: string;
   injection?: { note: string; recordingName: string; realNoteFragment: string };
 }
@@ -27,7 +25,6 @@ export interface QuestionSpec {
 export interface QuestionSet { label: string; version: 1; datasets: Record<string, DatasetSpec>; questions: QuestionSpec[] }
 export interface SavedRound { reply?: unknown; reject?: string; usage?: Omit<AssistantUsage, "latencyMs"> }
 export interface SavedResponses {
-  /** Provenance sentence, shown as the artifact note. */
   label: string;
   questions: Record<string, SavedRound[]>;
   adversarial: { name: string; dataset: string; question: string; rounds: SavedRound[] }[];
@@ -65,7 +62,6 @@ async function buildSource(spec: SourceSpec, root: URL, inject?: { note: string;
   const signals = importObdbMode22(JSON.parse(readFileSync(new URL(SIGNALSET, root), "utf8")));
   let text = readFileSync(new URL(spec.recording, root), "latin1");
   if (inject !== undefined) {
-    // In memory only: fixtures/recordings/ is never written.
     const lines = text.split("\n");
     lines[0] = JSON.stringify({ ...(JSON.parse(lines[0]) as object), note: inject.note });
     text = lines.join("\n");
@@ -89,7 +85,6 @@ export async function buildDatasets(questionSet: QuestionSet, root: URL): Promis
   return built;
 }
 
-/** Replays saved rounds through public askAssistant with a fixed stepping clock; records every request the client saw. */
 export async function runSavedCase(sources: readonly AssistantSource[], question: string, rounds: readonly SavedRound[]): Promise<{ result: AssistantAnswer; requests: AssistantTurnRequest[]; calls: number }> {
   const requests: AssistantTurnRequest[] = [];
   const client: AssistantClient = {
@@ -105,7 +100,6 @@ export async function runSavedCase(sources: readonly AssistantSource[], question
   return { result, requests, calls: requests.length };
 }
 
-// Any null round makes the total null: a partial sum would read as a real cost. No rounds is also null, not zero.
 const total = (values: readonly (number | null)[]): number | null =>
   values.length === 0 || values.some((value) => value === null) ? null : Math.round(values.reduce<number>((sum, value) => sum + (value ?? 0), 0) * 1e9) / 1e9;
 
@@ -125,13 +119,11 @@ export function row(dataset: string, dataTag: string, question: string, run: Awa
     dataset, dataTag, question, kind: result.kind, reason: result.kind === "fallback" ? result.reason : null, text: result.text,
     trace: result.steps.map((step) => ({ tool: step.call.tool, sessionId: step.call.sessionId, ok: step.result.ok, facts: step.result.facts.map(factLine) })),
     citedIds: result.kind === "answer" ? [...new Set(result.answer.claims.flatMap((claim) => claim.factIds))] : [],
-    // askAssistant returns an answer only after the shared checker passed both; a fallback proves neither.
     citationsResolve: answered, numbersMatch: answered, missingHonest: null, expectationMet: null,
     clientCalls: run.calls, usage: result.usage, totals: totals(result.usage),
   };
 }
 
-// Tests base.text, the rendered text the user sees: a raw claim would count the digit inside a placeholder ID such as {label:s2/cell-spread}.
 export function scoreExpectation(base: AssistantReplayRow, expect: QuestionSpec["expect"]): AssistantReplayRow {
   const answered = base.kind === "answer";
   const missingHonest = expect.missing === undefined ? null

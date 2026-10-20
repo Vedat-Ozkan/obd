@@ -9,7 +9,6 @@ import { useTokens } from "../ui/theme.js";
 
 const signal = (rssi: number | undefined) => rssi === undefined ? "Signal unknown" : `Signal ${String(rssi).replace("-", "−")} dBm`;
 
-/** X-2026-09-28-persistent-dongle §Picker sheet: a bottom sheet that scans only while it is visible; a tap outside or system back closes only the sheet. */
 export function DonglePicker({ visible, rememberedId, onPick, onDismiss }: { visible: boolean; rememberedId?: string; onPick: (device: ScannedDevice) => void; onDismiss: () => void }) {
   const tokens = useTokens();
   const insets = useSafeAreaInsets();
@@ -38,8 +37,6 @@ export function DonglePicker({ visible, rememberedId, onPick, onDismiss }: { vis
         <ScrollView style={{ maxHeight: height * 0.7 }}>
           {shown.map((item) => <ListRow key={item.id} icon="bluetooth" title={item.name ?? "Unnamed device"}
             subtitle={`${item.id === rememberedId ? "Last used with this car · " : ""}${signal(item.rssi)}`} onPress={() => {
-              // Spec order: stop the scan before the connect starts. The effect cleanup only runs after React commits, so stop here too (stopping twice is harmless).
-              // No busy guard: the sheet covers the start buttons and Change dongle is disabled while a session is busy, so no session is running under an open picker.
               stopScan.current?.(); onPick(item);
             }} />)}
           {!showAll && shown.length === 0 ? <Text style={{ color: tokens.muted, paddingVertical: 8 }}>No OBD adapters found yet. Check the dongle is plugged in, or show all devices.</Text> : null}

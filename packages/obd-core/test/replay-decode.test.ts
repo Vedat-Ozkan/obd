@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { replayRecording } from "../scripts/replay.js";
 import { latin1Decode, latin1Encode, parseRecording } from "../src/recording/format.js";
 
-// `decoded` lines of pnpm replay: docs/specs/T0.5-standard-decoding.md "scripts/replay.ts".
 function load(rel: string) {
   return parseRecording(readFileSync(fileURLToPath(new URL(`../../../${rel}`, import.meta.url)), "latin1"));
 }
@@ -15,7 +14,6 @@ const spike2 = load(`${equinox}2026-09-22-spike-2.redacted.jsonl`);
 const standard = load("fixtures/synthetic/standard-decoding.jsonl");
 const branches = load("fixtures/synthetic/session-branches.jsonl");
 
-/** Output lines of the block whose header starts with `L<line> `. */
 function block(out: string[], line: number): string[] {
   const start = out.findIndex((l) => l.startsWith(`L${String(line)} `));
   const end = out.findIndex((l, i) => i > start && !l.startsWith("  "));
@@ -24,7 +22,6 @@ function block(out: string[], line: number): string[] {
 
 const decoded = (lines: string[]) => lines.filter((l) => l.startsWith("  decoded "));
 
-// T0.4 expectNoVin approach (test/session.test.ts): no 4-byte run of a synthetic VIN, in ASCII, packed or spaced hex.
 function expectNoVin(out: string[], vin: string): void {
   const bytes = Array.from(latin1Encode(vin));
   const hex = (run: number[]) => run.map((b) => b.toString(16).padStart(2, "0").toUpperCase());

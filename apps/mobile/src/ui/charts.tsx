@@ -2,14 +2,9 @@ import { StyleSheet, View, type DimensionValue } from "react-native";
 import { Text } from "./kit.js";
 import { useTokens } from "./theme.js";
 
-// Both charts are plain Views (spec §Non-goals: no react-native-svg). Colours: §Design chart data and highlight (§Decisions 9).
 const pct = (fraction: number) => `${String(Math.min(100, Math.max(0, fraction * 100)))}%` as DimensionValue;
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-/**
- * Chart 2, scan history: one SoC dot per check on a 0–100 % axis, oldest on the left. Below two checks it shows an honest
- * empty state. The latest dot is larger and labelled, so it never depends on the highlight colour alone (light CVD WARN).
- */
 export function ScanHistory({ points }: { points: readonly { scannedAt: string; percent: number }[] }) {
   const tokens = useTokens();
   const latest = points.at(-1);
@@ -43,7 +38,6 @@ export function ScanHistory({ points }: { points: readonly { scannedAt: string; 
   </View>;
 }
 
-/** Chart 4, cell range strip: lowest, average and highest cell on a mV axis padded by the spread on each side. */
 export function CellRangeStrip({ minMv, avgMv, maxMv }: { minMv: number; avgMv: number; maxMv: number }) {
   const tokens = useTokens();
   const pad = Math.max(maxMv - minMv, 1);

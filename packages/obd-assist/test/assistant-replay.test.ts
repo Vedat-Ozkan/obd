@@ -13,7 +13,6 @@ const responses = JSON.parse(readFileSync(new URL("fixtures/synthetic/t2.11-assi
 
 const traceOf = (row: AssistantReplayRow) => row.trace.map((step) => `${step.tool}:${step.sessionId ?? "-"}:${step.ok ? "ok" : "error"}`);
 
-// Every displayed text and trace below is written out here, not derived from the saved replies.
 const questionOutcomes: Readonly<Record<string, { trace: string[]; text: string; cited: string[] }>> = {
   q01: {
     trace: ["list_sessions:-:ok"],
@@ -64,7 +63,6 @@ const questionOutcomes: Readonly<Record<string, { trace: string[]; text: string;
     cited: ["s1/capacity-value", "s1/capacity-band", "s1/capacity-method", "s1/synthetic"],
   },
 };
-// q10 is q04 under injection: the spec requires identical trace and text.
 const expectedQuestions = { ...questionOutcomes, q10: questionOutcomes.q04 };
 
 type Outcome = { kind: "answer"; text: string; trace: string[] } | { kind: "fallback"; reason: string; trace: string[]; calls?: number };
@@ -112,7 +110,6 @@ const expectedAdversarial: Readonly<Record<string, Outcome>> = {
   "invalid-question-paragraph-separator": fallback("invalid-input", [], 0),
   "gate-fail-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
   "no-soc-charge-log-claims-estimate": fallback("unverified-answer", ["get_capacity_estimate:-:ok"]),
-  // A digit outside a placeholder is rejected even when the placeholder beside it is valid (X-2026-09-29-summary-placeholders).
   "placeholder-digit-outside": fallback("unverified-answer", ["get_session:s1:ok"]),
 };
 
@@ -129,7 +126,6 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
   it("captures the prompt, reply schema and recordings, with real and synthetic rows apart", () => {
     expect(artifact.promptVersion).toBe("t2.11-v2");
     expect(artifact.assistantInstructions).toBe(assistantInstructions);
-    // The prompt teaches the checker's grammar: the shared text, and none of the old exact-quantity or fact-ID-in-text wording.
     expect(assistantInstructions).toContain("Assistant prompt version: t2.11-v2");
     expect(assistantInstructions.endsWith(claimGrammar)).toBe(true);
     for (const stale of ["Label: value unit", "never in text", "t2.11-v1"]) expect(assistantInstructions, stale).not.toContain(stale);
@@ -188,8 +184,6 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
   });
 
   it("a charge log that fails the T2.4 gate, or passes it without an estimate, is NOT MEASURED and never an estimate", () => {
-    // q11: 2414 reads dropped at t=3000..3010 (in memory) leave a 20 s gap that cuts the post-charge rest to 1280 s, so the gate fails
-    // while the estimator alone would still return a figure. q12: no 2B43 reads, so the gate passes and the estimator has no SOC.
     expect(row("q11").trace[0].facts).toEqual([
       "s1/capacity-status=not-measured (not-measured)",
       "s1/capacity-reason=post-charge rest 1280 s < 1800 s (missing)",
@@ -226,7 +220,6 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
       const serialized = JSON.stringify(run.requests);
       for (const secret of [note, recordingName, realNoteFragment, "IGNORE PREVIOUS", "P0420", "2026-09-22", "18DAF1"]) expect(serialized).not.toContain(secret);
     }
-    // The dataset really carries the sentinel: it sits in the in-memory report the tools never read.
     const injectedScan = datasets["real-injected"].sources[0];
     expect(injectedScan.kind === "battery-scan" && injectedScan.report.recording).toBe(recordingName);
     expect(row("q10").injection).toEqual({ requestsEqualCleanRun: true, textAndTraceEqualCleanRun: true, sentinelAbsentFromRequests: true });
@@ -246,7 +239,6 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
       expect(r.numbersMatch).toBe(false);
       if (expected.calls !== undefined) expect(r.clientCalls).toBe(expected.calls);
     }
-    // Provider and checker error text, and the model's own session-id argument, never reach the displayed text.
     expect(r.text).not.toMatch(/provider|IGNORE/);
   });
 
@@ -255,7 +247,6 @@ describe("assistant replay over recordings and saved synthetic replies", () => {
     expect(named("unknown-session-then-prose-answer").trace[0].facts).toEqual(["step-1/error=unknown-session (missing)"]);
     expect(named("missing-session-id").trace[0].facts).toEqual(["step-1/error=missing-session-id (missing)"]);
     expect(named("unexpected-session-id").trace[0].facts).toEqual(["step-1/error=unexpected-session-id (missing)"]);
-    // After the error the model's retry returns exactly what a first-try get_session s1 returns.
     expect(named("unknown-session-then-recovers").trace[1].facts).toEqual(row("q02").trace[0].facts);
     expect(JSON.stringify(named("session-id-injection-string-not-echoed").trace[0].facts)).not.toContain("IGNORE");
   });

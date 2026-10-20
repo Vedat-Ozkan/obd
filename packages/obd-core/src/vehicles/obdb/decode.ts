@@ -5,7 +5,6 @@ export type SignalReading =
   | { ok: true; id: string; name: string; value: number; unit: string; tier: SignalTier; ecu: string }
   | { ok: false; id: string; reason: "header" | "echo" | "negative" | "length" | "format"; ecu: string };
 
-/** Extracts big-endian bits from the data after the 62 DID echo. */
 function unsignedBits(data: Uint8Array, bix: number, len: number): number {
   let raw = 0n;
   for (let bit = bix; bit < bix + len; bit++) {

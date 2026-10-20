@@ -1,6 +1,3 @@
-// T2.9 Stage C1: docs/specs/T2.9-beta-data-upload.md Verification "Stage C1", W1–W11 (failure modes listed in
-// docs/task-runs/T2.9.md before any code), plus the orchestrator's C1-b route DELETE /v1/files/<fileId>. In process:
-// handleRequest over an in-memory bucket with a fixed clock.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryBucket } from "../../apps/mobile/test/fakeBeta.js";
 import { SCRUB_RULES, SCRUB_VERSION } from "../../packages/obd-core/src/recording/scrub.js";
@@ -62,7 +59,6 @@ describe("Worker failure modes", () => {
     const s = server();
     expect((await s.register(A, SECRET_A)).status).toBe(201);
     const before = s.bucket.keys();
-    // C1b: an installId with no record (B here) is not in this list; its deletes answer 204 (W12).
     const wrong = [undefined, "", "Bearer", `Bearer ${A}`, `Bearer ${A}:`, bearer(A, SECRET_B), `Basic ${A}:${SECRET_A}`, `Bearer ${ADMIN}`];
     for (const auth of wrong) {
       const headers = auth === undefined ? {} : { auth };
@@ -123,7 +119,6 @@ describe("Worker failure modes", () => {
     expect((await s.part(auth, F1, 0, "x".repeat(11))).status).toBe(429);
     expect(s.bucket.keys(`files/${A}/${F1}/`)).toEqual([]);
     expect((await s.part(auth, F1, 0, "x".repeat(10))).status).toBe(204);
-    // Re-sending the same part replaces it, so its old size does not count twice.
     expect((await s.part(auth, F1, 0, "y".repeat(10))).status).toBe(204);
     expect((await s.part(auth, F1, 1, "x")).status).toBe(429);
     s.clock.now = NEXT_DAY;
@@ -199,7 +194,6 @@ describe("Worker failure modes", () => {
     await s.part(bearer(A, SECRET_A), F1, 0, LINE);
     await s.register(B, SECRET_B);
     await s.send("DELETE", "/v1/installs/me", { auth: bearer(B, SECRET_B) });
-    // Objects under an installId with no record cannot arise from the routes; seeded, they show nothing is removed.
     const C = id(3);
     s.bucket.seed(`files/${C}/${F1}/part-000.jsonl`, LINE.length, NOW);
     const before = [...s.bucket.objects.entries()];
@@ -324,7 +318,6 @@ describe("Worker failure modes", () => {
     await s.send("DELETE", `/v1/files/${F1}`, { auth });
     await s.send("DELETE", "/v1/installs/me", { auth });
     await s.send("GET", "/nowhere");
-    // An internal failure answers 500 without echoing the error.
     s.bucket.head = () => Promise.reject(new Error(`boom ${SECRET_A} ${IP}`));
     expect((await s.register(B, SECRET_B)).status).toBe(500);
     const seen = [...s.bodies, ...logged.map((value) => (value instanceof Error ? `${value.message} ${value.stack ?? ""}` : String(value)))].join("\n");

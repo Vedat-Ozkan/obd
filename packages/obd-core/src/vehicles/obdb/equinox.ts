@@ -5,8 +5,6 @@ export interface EquinoxSignalEvidence {
   readonly check: string;
 }
 
-// The first September 22 capture records the owner's 70% dash observation in Ready/Park.
-// The second capture repeats the same observation; a distinct-SOC check remains T2.2b.
 export const equinoxEv2024Evidence: Readonly<Record<string, EquinoxSignalEvidence>> = {
   EQUINOXEV_SOC_HD: {
     recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl",
@@ -22,7 +20,6 @@ export const equinoxEv2024Evidence: Readonly<Record<string, EquinoxSignalEvidenc
   },
 };
 
-/** Apply the fixed 2024 Equinox evidence to matching imported signal definitions only. */
 export function withEquinoxEv2024Evidence(imported: readonly ObdbMode22Signal[]): readonly ObdbMode22Signal[] {
   if (imported.some((signal) => signal.id === "EQUINOXEV_BMS_ENERGY_REMAINING" || (signal.module === "CB" && signal.did === "27AF"))) {
     throw new Error("duplicate Equinox first-party 27AF signal");

@@ -6,25 +6,16 @@ import { afterReply, allowedCommand, beforeWrite, NON_PRINTABLE, normalize, UNKN
 import { reassemble, type DroppedFrame, type Frame } from "./isotp.js";
 import { ElmLineReader, parseElmResponse } from "./reader.js";
 
-// Behavior: docs/specs/T0.4-elm327-session.md "src/elm/session.ts"; ELM rules: docs/ELM327.md §Framing,
-// §Init sequence, §Responses, §Clone quirks.
-
 export interface SendOptions {
-  /** Default DEFAULT_TIMEOUT_MS; measured from just before transport.write(). */
   timeoutMs?: number;
-  /** Default true; `pnpm replay` passes false (recordings from the Python tools contain no retries). */
   retry?: boolean;
 }
 
 interface ResponseBody {
-  /** [] for AT commands. */
   frames: Frame[];
-  /** [] for AT commands. */
   dropped: DroppedFrame[];
-  /** AT commands: all content lines; others: Reassembly.text. Non-printable lines removed. */
   lines: string[];
   searching: boolean;
-  /** Verbatim text of the final attempt, '>' excluded. */
   raw: string;
   attempts: 1 | 2;
 }
@@ -33,22 +24,17 @@ export type ElmResponse =
   | ({ kind: "data" } & ResponseBody)
   | ({ kind: "ok" } & ResponseBody)
   | ({ kind: "nodata" } & ResponseBody)
-  | ({ kind: "error"; error: ElmError } & ResponseBody); // frames kept: BUFFER FULL still returns complete messages
+  | ({ kind: "error"; error: ElmError } & ResponseBody);
 
 export interface InitResult {
-  /** The ATSP value in effect after init ("0" after a fallback). */
   protocol: VehicleProfile["protocol"];
   fellBack: boolean;
-  /** From response0100.frames[0].header length (3 -> 11, 8 -> 29). */
   idBits: 11 | 29;
-  /** ATRV content line as printed ("12.7V"); undefined if ATRV was not data. */
   voltage: string | undefined;
-  /** kind "data", frames.length >= 1; T0.5 reuses it instead of re-sending 0100. */
   response0100: ElmResponse;
 }
 
 export interface InitOptions {
-  /** Called after core's final reply and before the next init command. Throwing aborts init. */
   onInformationalReply?: (command: "ATI" | "ATDPN" | "ATRV", response: ElmResponse) => void;
 }
 
@@ -57,7 +43,6 @@ export type SessionErrorKind = "timeout" | "closed" | "blocked" | "init";
 export class ElmSessionError extends Error {
   readonly kind: SessionErrorKind;
   readonly command: string;
-  /** "init": the response that failed the step. */
   readonly response?: ElmResponse;
 
   constructor(kind: SessionErrorKind, command: string, response?: ElmResponse) {
@@ -69,16 +54,12 @@ export class ElmSessionError extends Error {
   }
 }
 
-/** tools/spike/discover.py CMD_TIMEOUT_S = 5 (longest seen: 2.3 s, 0100 with SEARCHING...). */
 export const DEFAULT_TIMEOUT_MS = 5000;
-/** docs/ELM327.md §Responses: CAN ERROR -> retry once after 500 ms. */
 export const CAN_ERROR_RETRY_DELAY_MS = 500;
-/** Policy value, not an ELM constant (spec Risks): how long to wait for a late '>' after a timeout. */
 export const RESYNC_MS = 1000;
 
 const PROTOCOLS: readonly string[] = ["0", "6", "7"];
 
-/** The one thing the current queue slot waits for: a '>' (reply or resync) or a timer (timeout, delay). */
 interface Wait {
   cmd: string;
   timer: ReturnType<typeof setTimeout>;
@@ -92,10 +73,7 @@ export class Elm327Session {
   private tail: Promise<unknown> = Promise.resolve();
   private wait: Wait | undefined;
   private stale = false;
-  // docs/ELM327.md §Write safety: a new session cannot tell whether the ELM is idle, so until an ATZ or ATI is
-  // answered cleanly only those two are written. STOPPED starts the state again.
   private unknown: boolean;
-  /** After STOPPED: wait for the second '>' before the next write. */
   private drain = false;
   private closed = false;
   private headerState: HeaderState = UNKNOWN_STATE;
@@ -108,8 +86,6 @@ export class Elm327Session {
   }
 
   init(profile: VehicleProfile, options: InitOptions = {}): Promise<InitResult> {
-    // Runtime check: the profile may come from outside TypeScript, and ATSP<protocol> is written verbatim.
-    // Read once: the queued init must use the validated value, not a later (mutated or getter) read.
     const { protocol } = profile;
     if (!PROTOCOLS.includes(protocol)) {
       return Promise.reject(new ElmSessionError("blocked", `ATSP${protocol}`));
@@ -118,7 +94,6 @@ export class Elm327Session {
   }
 
   send(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
-    // AGENTS.md hard rule 5; docs/ELM327.md §Write safety.
     if (allowedCommand(cmd) === undefined) return Promise.reject(new ElmSessionError("blocked", cmd));
     return this.enqueue(cmd, () => this.run(cmd, opts));
   }
@@ -153,7 +128,6 @@ export class Elm327Session {
         this.wait = undefined;
         w.onPrompt(raw);
       } else {
-        // A '>' with nothing in flight (late prompt after a timeout, or a second segment): discard.
         this.stale = false;
       }
     }
@@ -177,7 +151,6 @@ export class Elm327Session {
     });
   }
 
-  /** Resolves true on a '>', false when RESYNC_MS passes without one. */
   private resync(cmd: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       this.arm(cmd, RESYNC_MS, () => {
@@ -190,7 +163,6 @@ export class Elm327Session {
 
   private exchange(cmd: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Defense in depth: the only transport.write; nothing off the allowlist (control bytes, empty) goes out.
       if (allowedCommand(cmd) === undefined) {
         reject(new ElmSessionError("blocked", cmd));
         return;
@@ -212,7 +184,6 @@ export class Elm327Session {
         clearTimeout(w.timer);
         this.wait = undefined;
         this.stale = true;
-        // A transport.write rejection propagates as-is (spec "Resolve vs reject").
         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
         reject(e);
       });
@@ -221,13 +192,9 @@ export class Elm327Session {
 
   private async attempt(cmd: string, timeoutMs: number): Promise<ElmResponse> {
     if (this.stale) {
-      // docs/ELM327.md §Write safety: a busy ELM discards the first character it receives, so nothing is
-      // written until a '>' shows it is idle; without one the session stays stale.
       if (!(await this.resync(cmd))) throw new ElmSessionError("timeout", cmd);
       this.stale = false;
     } else if (this.drain) {
-      // docs/ELM327.md §Write safety (DS p.9, p.48): only the interrupting character is discarded, so the rest
-      // of the stopped command may still be answered. Written either way; the unknown state limits it to ATZ/ATI.
       await this.resync(cmd);
       this.drain = false;
     }
@@ -236,7 +203,6 @@ export class Elm327Session {
   }
 
   private async run(cmd: string, opts: SendOptions = {}): Promise<ElmResponse> {
-    // docs/ELM327.md §Write safety: checked in queue order; if an attempt throws, the in-flight state stays.
     const norm = normalize(cmd);
     const probe = norm === "ATZ" || norm === "ATI";
     if (this.unknown && !probe) throw new ElmSessionError("blocked", cmd);
@@ -267,7 +233,6 @@ export class Elm327Session {
 
   private async runInit(requested: VehicleProfile["protocol"], options: InitOptions): Promise<InitResult> {
     this.reader.reset();
-    // An ATZ answered with an error reset nothing; ATE0 must not follow it (docs/ELM327.md §Write safety).
     const reset = await this.run("ATZ");
     if (reset.kind === "error") throw new ElmSessionError("init", "ATZ", reset);
     const identity = await this.run("ATI");
@@ -299,7 +264,6 @@ function answered(r: ElmResponse): boolean {
   return r.kind === "data" && r.frames.length >= 1;
 }
 
-/** Milliseconds to wait before the one retry, or undefined for no retry (docs/ELM327.md §Responses, §Clone quirks). */
 function retryAfter(r: ElmResponse): number | undefined {
   if (r.kind === "error" && r.error.kind === "can-error") return CAN_ERROR_RETRY_DELAY_MS;
   if (r.kind === "error" && r.error.kind === "data-error") return 0;
@@ -309,7 +273,6 @@ function retryAfter(r: ElmResponse): number | undefined {
 
 function toResponse(cmd: string, raw: string): ElmResponse {
   const parsed = parseElmResponse(raw, cmd);
-  // The clone's reset garbage (docs/ELM327.md §Clone quirks) survives as a content line; it stays in raw.
   const printable = parsed.lines.filter((l) => !NON_PRINTABLE.test(l));
   const isAt = normalize(cmd).startsWith("AT");
   const r = isAt ? { frames: [], dropped: [], text: printable } : reassemble(printable);

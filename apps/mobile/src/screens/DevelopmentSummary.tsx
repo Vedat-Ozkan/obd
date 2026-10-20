@@ -23,8 +23,6 @@ function DevelopmentSummary({ report }: { report: BatteryDiagnosisReport }) {
   const withdraw = () => {
     generation.current++; flow.withdraw(); setToken(""); setAccepted(false); setSummary(undefined); setPending(false);
   };
-  // This component lives only on a saved detail view. Leaving it also clears
-  // session auth and prevents the pending promise from updating a later view.
   useEffect(() => () => { generation.current++; flow.withdraw(); }, [flow, report]);
   const request = async () => {
     if (!__DEV__ || pending || !accepted) return;

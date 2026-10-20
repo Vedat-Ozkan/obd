@@ -33,13 +33,10 @@ export class RelayBroker implements RelayCommandChannel {
   private serial = 0;
   private messages: Promise<void> = Promise.resolve();
   private readonly logger: (line: string) => void;
-  // Per phone connection, reset on hello: what the ELM may hold (guard.ts sequence rule), and whether its last
-  // exchange ended in a clean '>' reply. The stale rule: docs/ELM327.md §Write safety, Input rules.
   private header: HeaderState = UNKNOWN_STATE;
   private idle = false;
 
   constructor(options: BrokerOptions = {}) {
-    // An empty or whitespace-only OBD_RELAY_TOKEN (a blank .env line) is unset; it must never become the token.
     const configured = process.env.OBD_RELAY_TOKEN;
     this.token = (configured?.trim() === "" ? undefined : configured) ?? options.token ?? randomBytes(32).toString("base64url");
     this.root = resolve(options.root ?? process.cwd());
@@ -57,7 +54,6 @@ export class RelayBroker implements RelayCommandChannel {
   }
 
   port(): number | undefined { const address = this.http.address(); return typeof address === "object" && address ? address.port : undefined; }
-  // The caller's confirmation is ignored: dispatch derives the policy again from the text.
   request(command: RelayCommand): RelayCommandExchange { return this.dispatch(command.command); }
   async send(commandText: string): Promise<{ bytes: Uint8Array; ms: number }> { const exchange = this.dispatch(commandText); await exchange.started; return exchange.result; }
   async startRecording(path: string): Promise<{ path: string }> {
@@ -75,14 +71,12 @@ export class RelayBroker implements RelayCommandChannel {
   async close(): Promise<void> { const phone = this.phone; await this.enqueue(() => this.disconnect(phone, new Error("relay: closed"))); phone?.close(); await new Promise<void>((resolveClose) => { this.http.close(() => { resolveClose(); }); }); }
   isConnected(): boolean { return this.phone !== undefined && this.hello !== undefined; }
 
-  /** The single check for every phone-bound command. */
   private dispatch(text: string): RelayCommandExchange {
     let command: RelayCommand;
     try { command = authorizeRelayCommand(text); } catch (error) { return this.refuse(text, error instanceof Error ? error.message : "relay: refused"); }
     if (!this.isConnected()) return rejectedExchange("relay: disconnected");
     if (this.pending !== undefined) return rejectedExchange("relay: busy");
     const norm = normalize(command.command);
-    // A busy ELM drops the first character; the datasheet does not bound how many, and ATI/ATZ leave no hex behind.
     if (!this.idle && norm !== "ATI" && norm !== "ATZ") return this.refuse(text, "relay: refused, ELM state unknown; send ATI or ATZ first");
     const inFlight = beforeWrite(this.header, norm);
     if (inFlight === undefined) return this.refuse(text, "relay: refused, header/protocol sequence");
@@ -141,7 +135,6 @@ export class RelayBroker implements RelayCommandChannel {
   }
   private async disconnect(socket: WebSocket | undefined, error: Error): Promise<void> {
     if (socket !== undefined && socket !== this.phone) return;
-    // The final meta is on disk before any caller sees the rejection.
     this.phone = undefined; this.hello = undefined; try { await this.endRecording("phone relay: disconnected"); } finally { this.failPending(this.pending, error); }
   }
   private failPending(pending: Pending | undefined, error: Error): void { if (pending === undefined || this.pending !== pending) return; this.pending = undefined; pending.rejectStarted(error); pending.rejectResult(error); }
@@ -149,7 +142,6 @@ export class RelayBroker implements RelayCommandChannel {
   private async endRecording(note: string): Promise<void> { const recording = this.recording; if (recording === undefined) return; this.recording = undefined; await this.append(recording, { dir: "meta", note }); await recording.chain; }
   private async record(dir: "tx" | "rx", data: string): Promise<void> { const recording = this.recording; if (recording !== undefined) await this.append(recording, { dir, data }); }
   private async recordMeta(meta: Record<string, unknown>): Promise<void> { const recording = this.recording; if (recording !== undefined) await this.append(recording, { dir: "meta", ...meta }); }
-  // json.dumps form, ASCII only: tools/spike/redact_vin.py _check refuses anything else (ADR-017).
   private async append(recording: Recording, line: Record<string, unknown>, initial = false): Promise<void> {
     recording.chain = recording.chain.then(async () => { const elapsedMs = Number((process.hrtime.bigint() - recording.startedAt) / 1_000_000n); const t = initial ? 0 : Math.max(recording.lastT, Math.round(elapsedMs) / 1000); recording.lastT = t; await appendFile(recording.path, pythonJson({ t, ...line }) + "\n", "utf8"); recording.lines++; });
     return recording.chain;

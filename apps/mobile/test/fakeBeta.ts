@@ -1,5 +1,3 @@
-// In-memory BetaFiles and BetaBackend for docs/specs/T2.9-beta-data-upload.md Verification "Stage B": an ordered call
-// log, what the backend received, and switchable failures. MemoryBucket is the in-memory R2 bucket of Stage C1.
 import type { BetaManifest } from "obd-core/recording/provenance";
 import type { BucketLike, BucketObject } from "../../../tools/beta-backend/handler.js";
 import { BackendError, type Auth, type BetaBackend, type BetaFiles } from "../src/beta/outbox.js";
@@ -7,7 +5,6 @@ import { BackendError, type Auth, type BetaBackend, type BetaFiles } from "../sr
 export class MemoryBetaFiles implements BetaFiles {
   state: string | undefined;
   stateWrites = 0;
-  /** Stage D repair 1 (3): appendPart calls, each one open/append/close on the phone. */
   appends = 0;
   readonly parts = new Map<string, string[]>();
 
@@ -48,7 +45,6 @@ export class MemoryBetaFiles implements BetaFiles {
     return Promise.resolve([...this.parts.keys()]);
   }
 
-  /** The text at a partPath, as the phone's UploadTask would stream it. */
   read(path: string): string {
     const match = /^beta-outbox\/(.+)\/part-(\d{3})\.jsonl$/.exec(path);
     const text = match ? this.parts.get(match[1])?.[Number(match[2])] : undefined;
@@ -61,13 +57,10 @@ type Call = "register" | "putPart" | "putManifest" | "deleteAll" | "deleteFile";
 
 export class FakeBetaBackend implements BetaBackend {
   readonly log: string[] = [];
-  /** fileId -> part index -> the bytes received. */
   readonly received = new Map<string, string[]>();
   readonly manifests = new Map<string, BetaManifest>();
   readonly installs = new Set<string>();
-  /** Returns the error a call rejects with, or undefined to succeed. */
   fail?: (call: Call, index?: number) => BackendError | undefined;
-  /** When set, each call waits for the test to resolve it. */
   held?: (() => void)[];
 
   constructor(private readonly files: MemoryBetaFiles) {}
@@ -77,7 +70,6 @@ export class FakeBetaBackend implements BetaBackend {
   }
 
   putPart(auth: Auth, fileId: string, index: number, path: string, bytes: number): Promise<void> {
-    // Read when the call starts: an upload in flight already has its bytes, even if the part is deleted meanwhile.
     let text: string | Error;
     try { text = this.files.read(path); } catch (error) { text = error as Error; }
     return this.call("putPart", `part:${fileId}:${String(index)}`, index, () => {
@@ -108,7 +100,6 @@ export class FakeBetaBackend implements BetaBackend {
     }, auth);
   }
 
-  /** The uploaded file: its parts joined in order. */
   uploaded(fileId: string): string {
     return (this.received.get(fileId) ?? []).join("");
   }
@@ -125,8 +116,6 @@ export class FakeBetaBackend implements BetaBackend {
 
 interface Stored { bytes?: Uint8Array; size: number; uploaded: Date }
 
-/** The R2 subset the Worker uses, in memory. `uploaded` comes from the injected clock; `seed` stores a size without
- *  bytes, so quota tests need no gigabytes. `limit` is the page size of list(). */
 export class MemoryBucket implements BucketLike {
   readonly objects = new Map<string, Stored>();
   limit = 1000;
@@ -173,7 +162,6 @@ export class MemoryBucket implements BucketLike {
     return Promise.resolve();
   }
 
-  /** Test helpers: an object's text, and the keys under a prefix. */
   text(key: string): string | undefined {
     const bytes = this.objects.get(key)?.bytes;
     return bytes === undefined ? undefined : new TextDecoder().decode(bytes);

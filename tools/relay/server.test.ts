@@ -18,7 +18,6 @@ import { createRelayServer } from "./server.js";
 
 const hello = { type: "hello", protocol: 1, vehicle: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", writeChar: "FFF1", notifyChar: "FFF2", mtu: 20 };
 const raw = "4100 BE 1F A8 13\r>";
-// ATI reply: spike lines 6–8. ATZ banner: 2026-09-24-phone-console.redacted.jsonl line 6.
 const banner = "\r\rELM327 v1.5\r\r>";
 const version = "ELM327 v1.5\r\r>";
 
@@ -44,7 +43,6 @@ async function fixture(primed = true): Promise<{ broker: RelayBroker; phone: Pho
   if (primed) await prime(broker, phone);
   return { broker, phone, root, logs };
 }
-// A new connection admits only AT commands until one gets a clean reply (amendment 2026-09-24, decision 3).
 async function prime(broker: RelayBroker, phone: Phone): Promise<void> { await exchange(broker, phone, "ATI", version); phone.commands.length = 0; }
 async function exchange(broker: RelayBroker, phone: Phone, command: string, reply: string): Promise<void> {
   const count = phone.commands.length; const sent = broker.send(command); await commands(phone, count + 1);
@@ -327,7 +325,6 @@ describe("authenticated fake phone, recording, and MCP", () => {
   });
   it("hil:smoke reports a disconnect after the last reply as a disconnect", async () => {
     const { broker, phone, root } = await fixture(false); const dir = join(root, "fixtures/recordings/chevrolet-equinox-ev-2024");
-    // Test-only seam: the window between the last reply and the final stop is otherwise not reproducible. The wrapper delegates to the real method.
     const realStop = broker.stopRecording.bind(broker); let first = true;
     broker.stopRecording = async () => { if (first) { first = false; phone.close(); await waitFor(() => !broker.isConnected()); } return realStop(); };
     const written: string[] = []; const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
@@ -344,7 +341,6 @@ describe("authenticated fake phone, recording, and MCP", () => {
       expect(lines.at(-1)).toMatchObject({ dir: "meta", note: "phone relay: disconnected" });
     } finally { stdout.mockRestore(); await close(broker); }
   });
-  // Redactor form: tools/spike/redact_vin.py _check. JUNK is synthetic (0xFC as seen after ATZ on 2026-09-28; one byte per escape class).
   it("hil:smoke writes a relay recording redact_vin.py accepts, junk bytes included", async () => {
     const { broker, phone, root } = await fixture(false); const dir = join(root, "fixtures/recordings/chevrolet-equinox-ev-2024");
     const JUNK = "\x00\x7F\x80\x9F\xFC\xFF";
@@ -366,14 +362,24 @@ describe("authenticated fake phone, recording, and MCP", () => {
       const redacted = parseRecording(readFileSync(redactedPath, "latin1"));
       expect(atz(redactedPath)).toMatchObject({ data: JUNK + banner }); expect(redacted.at(-1)).toMatchObject({ dir: "meta", redacted: "vin-serial" });
       const output = await replayRecording(redacted); expect(output).toContain("L14 0100 -> data");
-      // Artifact: the redacted ATZ rx line and the replay output, for the reviewer and the task-run record.
       const atzLine = readFileSync(redactedPath, "latin1").split("\n").find((line) => line.includes('"rx"')); artifact = `redacted ATZ rx line:\n${atzLine ?? ""}\nreplay output:\n${output.join("\n")}`;
     } finally { stdout.mockRestore(); if (artifact) console.info(artifact); await close(broker); }
   }, 60_000);
 });
 
 describe("shared write guard at the broker (amendment 2026-09-24)", () => {
-  // F1–F4: guard-refused commands, Mode 04 variants, and Mode 06 never reach the phone, and each refusal is logged once.
+  it("T2.16 forwards exact 1902FF after 29-bit setup and refuses variants", async () => {
+    const { broker, phone } = await fixture();
+    try {
+      await refused(broker, phone, "ATSH DA17F1", "header/protocol sequence");
+      await exchange(broker, phone, "ATSP7", "OK\r\r>");
+      await exchange(broker, phone, "ATSH DA17F1", "OK\r\r>");
+      await exchange(broker, phone, "19 02 FF", "18DAF117035902FF\r>");
+      for (const variant of ["190200", "190201", "190A", "1901FF", "19FFFF", "1902FF00", "1902FFF", "1902F", "19\r02FF"])
+        await refused(broker, phone, variant);
+      expect(phone.commands.map((entry) => entry.command)).toEqual(["ATSP7", "ATSH DA17F1", "19 02 FF"]);
+    } finally { await close(broker, phone); }
+  });
   it.each(["", "   ", "ATCAF0", "ATPP 24 SV FF", "ATMA", "08 01", "11 01", "14 FF FF FF", "2E1234", "0100FF", "014FFFFFF1", "01", "01\r00", "04FF", "0400", "044", "0600"])("T1 refuses %j before the phone and logs it", async (command) => {
     const { broker, phone, logs } = await fixture();
     try {

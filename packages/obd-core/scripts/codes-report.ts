@@ -1,5 +1,3 @@
-// `node --import tsx packages/obd-core/scripts/codes-report.ts <recording…>`: Node-only CLI, kept outside src/ so
-// obd-core/src stays pure. Contract: docs/specs/T0.7-codes-report.md "Stage B2: scripts/codes-report.ts".
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -11,7 +9,6 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 export { codesReportFromRecording };
 
-/** For each repo-relative path: "<!-- <path> -->\n" + renderCodesReport(report), blocks joined by "\n". Used by the CLI and the test. */
 export async function renderRecordings(paths: readonly string[]): Promise<string> {
   const blocks: string[] = [];
   for (const path of paths) {
@@ -31,7 +28,6 @@ async function main(): Promise<number> {
     process.stdout.write(await renderRecordings(paths));
     return 0;
   } catch (e) {
-    // Parse errors and ReplayMismatchError both land here.
     if (e instanceof Error) {
       process.stderr.write(`${e.message}\n`);
       return 1;

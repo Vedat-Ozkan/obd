@@ -2,11 +2,6 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Writes <stem>.redacted.jsonl: a recording with VIN characters 12-17 masked in place (ADR-017).
-
-Sources: docs/specs/X-2026-09-23-vin-redaction.md (Sources table). Only hex digits of the VIN serial change;
-every original line keeps its number and length, and one meta line recording the redaction is appended.
-"""
 
 import hashlib
 import json
@@ -16,9 +11,7 @@ import sys
 from typing import NamedTuple
 
 VERSION = 1
-MASK = "0"  # ASCII 0x30; each masked VIN byte's two hex digits become "30"
-# Normalized tx command -> (reply payload prefix, payload indices where a 17-byte VIN starts).
-# 0902: docs/ELM327.md + spike line 72. 224193: discovery.jsonl tx 44429 (VIN repeated four times, 68-byte run).
+MASK = "0"
 RULES: dict[str, tuple[bytes, tuple[int, ...]]] = {
     "0902": (bytes.fromhex("490201"), (3,)),
     "224193": (bytes.fromhex("624193"), (3, 20, 37, 54)),
@@ -26,7 +19,7 @@ RULES: dict[str, tuple[bytes, tuple[int, ...]]] = {
 _VIN_CHARS = re.compile(rb"[0-9A-Z]*")
 _HEX = re.compile(r"[0-9A-F]+")
 
-Spot = tuple[int, int]  # (line_idx, char_idx) of one hex digit in a record's "data"
+Spot = tuple[int, int]
 
 
 class Message(NamedTuple):
@@ -43,7 +36,6 @@ def _norm(cmd: str) -> str:
 
 
 def _replies(records: list[dict]):
-    """Yields (tx line_idx, normalized cmd, rx chars with their spots) for every tx."""
     txs = [i for i, r in enumerate(records) if r["dir"] == "tx"]
     for i, j in zip(txs, [*txs[1:], len(records)], strict=True):
         chars = [(c, (k, n)) for k in range(i + 1, j) if records[k]["dir"] == "rx"
@@ -64,10 +56,9 @@ def _frames(chars: list[tuple[str, Spot]]):
 
 
 def messages(records: list[dict]) -> list[Message]:
-    """Reassembles ISO-TP SF/FF/CF per header inside each tx's reply (rx lines up to the next tx), for every command."""
     out: list[Message] = []
     for i, cmd, chars in _replies(records):
-        started: list[list] = []  # [header, length, payload bytearray, spots, next seq], in FF/SF order
+        started: list[list] = []
         open_: dict[str, list] = {}
         for text, spots in _frames(chars):
             h = 8 if len(text) % 2 == 0 else 3
@@ -117,18 +108,15 @@ def _check(text: str) -> list[dict]:
 
 
 def redact(text: str, source: str, source_sha256: str) -> tuple[str, list[str]]:
-    """Returns (redacted file text, one summary entry per masked message, e.g. "L72 0902 18DAF117").
-    Raises ValueError (no partial output) on any refusal. Never includes the VIN in any message."""
     records = _check(text)
     lines = text[:-1].split("\n")
     edits: dict[int, dict[int, str]] = {}
     serials: set[bytes] = set()
     found = [m for m in messages(records) if _qualifies(m)]
     for m in found:
-        for o in RULES[m.cmd][1]:  # VIN characters 12-17 are payload indices o+11..o+16
+        for o in RULES[m.cmd][1]:
             if not _VIN_CHARS.fullmatch(m.payload[o:o + 17]):
                 raise ValueError(f"L{m.tx_line} {m.cmd} {m.header}: VIN byte outside 0-9A-Z")
-            # An already-masked serial (a phone-scrubbed upload, T2.9) is the mask, not a secret: never a safety-net hit.
             if len(m.payload) >= o + 17 and m.payload[o + 11:o + 17] != MASK.encode() * 6:
                 serials.add(m.payload[o + 11:o + 17])
             for a, b in m.spots[o + 11:o + 17]:
@@ -164,7 +152,6 @@ def _safety_net(out: str, serials: set[bytes]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """uv run tools/spike/redact_vin.py <recording.jsonl>"""
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 1:
         print("usage: redact_vin.py <recording.jsonl>", file=sys.stderr)
@@ -182,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
                 f.write(out)
         except FileExistsError:
             raise ValueError(f"output exists, not overwritten: {dst}") from None
-    except ValueError as e:  # includes UnicodeDecodeError
+    except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1
     print(dst)

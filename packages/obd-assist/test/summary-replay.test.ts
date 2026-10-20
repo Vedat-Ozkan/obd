@@ -226,7 +226,6 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "placeholder-malformed-nested": "template",
   "placeholder-malformed-fullwidth-braces": "template",
   "placeholder-malformed-id-97-characters": "template",
-  // Boundary, documented (Stage 3b): a report fact ID written as a word in prose displays; IDs with a digit, "_" or "/" still fail the charset.
   "placeholder-id-in-prose": "llm",
   "placeholder-real-values": "llm",
   "placeholder-two-facts": "llm",
@@ -234,8 +233,6 @@ const expectedKinds: Readonly<Record<string, "llm" | "template">> = {
   "id-underscore-in-prose": "template"
 };
 
-// The displayed text of every accepted case, written out here rather than derived from the saved replies.
-// Migrated cases keep the text they displayed before placeholders (X-2026-09-29-summary-placeholders, Stage 2, item 13).
 const capacityProse = "Capacity is not measured because no completed charge log and reviewed capacity estimator are available.";
 const expectedText: Readonly<Record<string, string>> = {
   "accepted": `The adapter supply measured 12.7 V.\n${capacityProse}\nThe community cell spread measured 0.003 volts.`,
@@ -252,7 +249,6 @@ const expectedText: Readonly<Record<string, string>> = {
   "synthetic-dtc-after-quantity-no-recording": "The adapter supply measured 12.7 V; P0133 was stored.",
   "placeholder-real-values": "SoC: 69.8039 percent.\nCell spread: 0.003 volts, a community reading.\nThe adapter supply measured 12.7 V.\n12 V battery status is not-assessed.",
   "placeholder-two-facts": "Cell voltage (min): 3.9287 volts; Cell voltage (max): 3.9317 volts.\n0.003 volts, that is 0.003 volts.",
-  // Boundary, documented and not a defect (Decision 6): relational prose around a rendered exact value is accepted.
   "placeholder-relational-prose": "Cell spread is less than 0.003 volts.",
   "placeholder-id-in-prose": "cell-spread is 0.003 volts.",
 };
@@ -262,7 +258,6 @@ describe("summary recording replay", () => {
   let report: Awaited<ReturnType<typeof replayReport>>;
   beforeAll(async () => { report = await replayReport(); });
 
-  // The v1 claim corpus (150+ grammar cases) runs through the shared claim checker and renderer, not the v2 summary path.
   it.each(responses.cases)("saved claim set $name", async (saved) => {
     const caseReport = reportForSavedCase(report, saved);
     const result = (await createClaimReplayArtifact(report, { cases: [saved] })).cases[0];
@@ -277,7 +272,6 @@ describe("summary recording replay", () => {
       }
       if (saved.report === "synthetic-multi-dtc-no-recording") expect(result.text).toContain("P0133");
       if (saved.name === "synthetic-multi-dtc-with-number-no-recording") expect(result.text).toContain("12.7 V");
-      // Real numbers, computed from the report object without the projection: the rounding is the only step between them.
       if (saved.name === "placeholder-real-values") {
         const soc = report.signals.find((signal) => signal.id === "EQUINOXEV_SOC");
         if (!soc || !report.cellSpread) throw new Error("spike report lacks the SoC signal or the cell spread");
@@ -302,8 +296,6 @@ describe("summary recording replay", () => {
   });
 });
 
-// SYNTHETIC reconstruction of claims quoted in docs/task-runs/T2.10.md; the raw provider reply was never saved.
-// The 12 V name allowance is gone (X-2026-09-29-summary-placeholders): "12 V" outside a placeholder is a digit.
 const nameExpected: Readonly<Record<string, { kind: "llm" | "template"; text?: string }>> = {
   "synthetic-reconstructed-deepseek-twelve-volt-names": { kind: "template" },
   "synthetic-reconstructed-false-reading": { kind: "template" },
@@ -315,7 +307,6 @@ const nameExpected: Readonly<Record<string, { kind: "llm" | "template"; text?: s
     "Cell spread is unavailable.",
   ].join("\n") },
   "placeholder-fact-absent-from-report": { kind: "template" },
-  // Stage 3b: with no prose fact-ID guard, ordinary twelve-volt wording displays, cited or not.
   "prose-twelve-volt-battery": { kind: "llm", text: "12 V observations: not read; the twelve-volt battery was not checked." },
   "prose-twelve-volt-battery-status": { kind: "llm", text: "The twelve-volt battery status is not-assessed." },
 };
@@ -348,8 +339,6 @@ describe("12 V name phrases on the phone-console recording (synthetic responses)
   });
 });
 
-// Summary v2 (X-2026-09-29-explanatory-summary, Stage 2): the SYNTHETIC replies run through `summarize` on the real spike report.
-// The whole displayed text is written out here, not derived from the saved reply.
 const explanatoryText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
 
 State of charge
@@ -400,9 +389,7 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
     const result = await summarize(caseReport, client, { model: "saved-response", effort: "none" });
     expect(explanatoryKinds[saved.name]).toBeDefined();
     expect(result.kind).toBe(explanatoryKinds[saved.name]);
-    // The projection carries the app's rating for every area, after the report's own facts.
     expect(request?.promptVersion).toBe("t2.10-v4");
-    // The projection sent out carries no path, scan time, garage id, header or VIN, for real and synthetic-report cases alike.
     expect(JSON.stringify(request)).not.toMatch(/summary-replay|2026-09-22T00:00:00.000Z|2026-09-22-spike\.redacted|18DAF1|VIN/i);
     expect(request?.facts.slice(-10).map((fact) => fact.id)).toEqual(["soc", "cells", "capacity", "twelve-volt", "codes"].flatMap((prefix) => [`${prefix}-rating`, `${prefix}-rating-basis`]));
     if (result.kind === "template") {
@@ -430,8 +417,6 @@ describe("explanatory summary v2 on the spike recording (synthetic replies)", ()
   });
 });
 
-// Summary v3 (X-2026-09-29-summary-claim-split): one sentence per claim, and four code roll-ups instead of per-module facts.
-// The whole displayed text is written out here, not derived from the saved reply. Every reply is SYNTHETIC.
 const splitCodesLine = "Stored diagnostic codes: none (5 of 5 modules read). Pending diagnostic codes: none (5 of 5 modules read); Permanent diagnostic codes: none (3 of 5 modules read). Readiness status: 5 of 5 modules read; the recently cleared check answered unknown.";
 const splitText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
 
@@ -460,7 +445,6 @@ const splitTextStored = splitText
 const splitKinds: Readonly<Record<string, "llm" | "template">> = {
   "claim-split-accepted": "llm", "claim-split-accepted-stored-code": "llm", "claim-split-common": "llm",
   "synthetic-reconstructed-single-claim-areas": "template", "v2-era-module-citation": "template",
-  // Boundary, documented (Decision A3), not a defect: a repeated {fact:ID} displays its correct value twice.
   "repeated-fact-in-claim": "llm",
 };
 
@@ -505,7 +489,6 @@ describe("claim-split summary v3 on the spike recording (synthetic replies)", ()
   });
 });
 
-// Summary v4 (X-2026-09-29-summary-wording-polish): display forms in the projection, two sentence rules at render. Every reply is SYNTHETIC.
 const polish = JSON.parse(readFileSync(new URL("fixtures/synthetic/x-2026-09-29-summary-wording-polish-responses.json", root), "utf8")) as { readonly label: string; readonly cases: readonly SavedSummaryCase[] };
 const polishText = `This parked check read the charge level, cell voltages, the supply voltage and trouble codes, but it cannot measure how much capacity the battery has left.
 
@@ -539,7 +522,6 @@ describe("wording polish v4 on the spike recording (synthetic replies)", () => {
     expect(polish.cases.map((saved) => [saved.name, saved.report])).toEqual([["polish-owner-phrasing", "synthetic-not-indicated-no-recording"], ["polish-prompt-form", "synthetic-not-indicated-no-recording"]]);
   });
 
-  // Failure 1: the display forms are wrong, or leak into the report facts the assistant reads.
   it("sends plain status words and lower-case reasons, and leaves reportFacts raw", async () => {
     let request: SummaryRequest | undefined;
     await summarize(report, { generate(input) { request = input; return Promise.resolve(undefined); } }, { model: "saved-response", effort: "none" });
@@ -556,13 +538,11 @@ describe("wording polish v4 on the spike recording (synthetic replies)", () => {
     expect(shown("twelve-volt-reason")).toBe("in-car adapter and control-module supply voltage are not rested battery-terminal measurements; a load test or service assessment is needed for battery health");
     const displayIds = ["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared", "capacity-reason", "health-reason", "twelve-volt-reason"];
     const raw = reportFacts(report);
-    // Only the seven display facts differ from the report's own facts, and only in value.
     for (const item of raw.filter((candidate) => sent.has(candidate.id))) {
       const projected = sent.get(item.id);
       if (displayIds.includes(item.id)) expect(projected, item.id).toEqual({ ...item, value: projected?.value });
       else expect(projected, item.id).toEqual(item);
     }
-    // The spike's recently-cleared verdict is "unknown", which has no hyphen to change; the other six differ from the raw value.
     expect(displayIds.filter((id) => sent.get(id)?.value !== raw.find((item) => item.id === id)?.value)).toEqual(displayIds.filter((id) => id !== "codes-recently-cleared"));
     expect(["capacity-status", "health-status", "twelve-volt-status", "codes-recently-cleared", "capacity-reason", "health-reason", "twelve-volt-reason"].map((id) => sent.get(id)?.status)).toEqual(["not-measured", "not-assessed", "not-assessed", "unknown", "missing", "missing", "available"]);
     expect(raw.find((item) => item.id === "capacity-status")?.value).toBe("not-measured");
@@ -574,7 +554,6 @@ describe("wording polish v4 on the spike recording (synthetic replies)", () => {
     }
   });
 
-  // Failures 2 and 3: the owner's phrasing renders robotically, or the prompt's own form leaves a doubled period.
   it.each(polish.cases)("saved reply $name", async (saved) => {
     const caseReport = reportForSavedCase(report, saved);
     const result = await summarize(caseReport, { generate() { return Promise.resolve(saved.response); } }, { model: "saved-response", effort: "none" });
