@@ -42,6 +42,12 @@ function noSoc(): RecordingLine[] {
     return [line];
   });
 }
+const wrongModel = parseRecording(read(new URL("fixtures/synthetic/battery-diagnosis-wrong-model.jsonl", root), "latin1"));
+function vinNoData(): RecordingLine[] {
+  const start = fixture.findIndex((line) => line.dir === "tx" && line.data === "0902\r");
+  const end = fixture.findIndex((line, index) => index > start && line.dir === "tx");
+  return [...fixture.slice(0, start + 1), { t: fixture[start].t + 0.001, dir: "rx", data: "NO DATA\r\r>" }, ...fixture.slice(end)];
+}
 function failureAt(command: string): RecordingLine[] {
   const index = fixture.findIndex((line) => line.dir === "tx" && line.data === `${command}\r`);
   return [...fixture.slice(0, index + 1), { t: fixture[index].t + 1, dir: "rx", data: "LV RESET\r\r>" }];
@@ -259,5 +265,33 @@ describe("selected-car battery diagnosis action", () => {
     expect(progress).not.toContain("Building battery diagnosis");
     expect(progress).not.toContain("Saving report to this car");
     write("/tmp/t2.6d-synthetic-unsignaled-close-error.json", `${JSON.stringify({ synthetic: true, privateLabel: label, error, finalResponsePresent, closeFailureMarkerPresent, keepCount: kept.length, savedReportCount })}\n`);
+  });
+
+  it("passes the real 0902 answer and saves the report", async () => {
+    const { first, history } = await setup();
+    const result = await run(first, fixture, history, () => "battery-scans/1/match.jsonl");
+    write("/tmp/t2.8b-match.json", `${JSON.stringify({ synthetic: true, status: result.status })}\n`);
+    expect(result.status).toBe("saved");
+    expect(await history.list(first.id)).toHaveLength(1);
+  });
+
+  it.each([
+    ["mismatch", wrongModel, "did not answer as a 2024 Chevrolet Equinox EV"],
+    ["unconfirmed", vinNoData(), "Could not confirm the car is a 2024 Chevrolet Equinox EV"],
+  ] as const)("stops with model-not-confirmed on %s before any Mode 22 read", async (name, lines, wording) => {
+    const { first, history } = await setup();
+    let keeps = 0;
+    const buffer = recording();
+    const result = await runAndSaveBatteryDiagnosis({ entry: first, transport: new ReplayTransport(lines), recording: buffer, scannedAt: at, keepScan: () => { keeps++; return "should-not-keep"; }, history, importedSignals: signals, getInterruption: () => undefined, onProgress: () => undefined });
+    const sent = parseRecording(buffer.toJsonl()).filter((line) => line.dir === "tx").map((line) => line.data.trim());
+    write(`/tmp/t2.8b-${name}.json`, `${JSON.stringify({ synthetic: true, result, keeps, saved: (await history.list(first.id)).length, sent })}\n`);
+    expect(result.status).toBe("model-not-confirmed");
+    if (result.status !== "model-not-confirmed") return;
+    expect(result.reason).toContain(wording);
+    expect(result.reason).not.toMatch(/3GN|7DNRP/);
+    expect(keeps).toBe(0);
+    expect(await history.list(first.id)).toHaveLength(0);
+    expect(sent).toContain("0902");
+    expect(sent.filter((command) => command.startsWith("22"))).toEqual([]);
   });
 });

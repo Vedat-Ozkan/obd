@@ -39,7 +39,7 @@ describe("garage user flow", () => {
     expect(SUPPORTED_VEHICLES.find((vehicle) => vehicle.id === "tesla-model-3-2024")).toBeUndefined();
     expect(SUPPORTED_VEHICLES.find((vehicle) => vehicle.id === "ford-f150-2024")).toBeUndefined();
     const verified = SUPPORTED_VEHICLES.filter((vehicle) => vehicle.tier === "verified");
-    expect(verified).toEqual([{ id: "chevrolet-equinox-ev-2024", make: "Chevrolet", model: "Equinox EV", year: 2024, tier: "verified", recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl" }]);
+    expect(verified).toEqual([{ id: "chevrolet-equinox-ev-2024", make: "Chevrolet", model: "Equinox EV", year: 2024, tier: "verified", recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl", vinIdentity: { wmi: "3GN", yearCode: "R" } }]);
     expect(vehicleEvidence(verified[0])).toContain(verified[0].recording);
     expect(canUseEquinoxConsole(verified[0])).toBe(true);
     expect(SUPPORTED_VEHICLES.filter((vehicle) => vehicle.tier === "beta")).toHaveLength(expectedIds.length - 1);

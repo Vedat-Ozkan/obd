@@ -11,6 +11,7 @@ import { batteryDiagnosisFromRecording, renderBatteryDiagnosis } from "../../../
 import { runBatteryDiagnosisScan, hasEquinoxSocFingerprint } from "../src/batteryScan.js";
 import { RecordingBuffer } from "../src/recording.js";
 import { createBatteryReportHistory } from "../src/batteryReports.js";
+import { SUPPORTED_VEHICLES, checkVehicleIdentity } from "../src/garage/catalog.js";
 import { createGarageFlow } from "../src/garage/flow.js";
 import { CHARGE_LOG_PROFILE } from "obd-battery/session";
 
@@ -23,6 +24,9 @@ const signalset = importObdbMode22(signalsetJson);
 const recordingLabel = "synthetic/battery-diagnosis-full-scan.jsonl";
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "synthetic ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 const input = (status: "complete" | "partial") => ({ garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024" as const, scannedAt: "2026-09-24T00:00:00.000Z", recording: recordingLabel, scanStatus: status });
+const equinox = SUPPORTED_VEHICLES.find((vehicle) => vehicle.id === "chevrolet-equinox-ev-2024");
+if (!equinox) throw new Error("catalog lacks the verified Equinox entry");
+const confirmEquinox = (vins: string[]) => checkVehicleIdentity(equinox, vins);
 function fresh() { const recording = new RecordingBuffer(() => 1); recording.start(meta); return recording; }
 
 function replyChangedAt(command: string, reply: string): RecordingLine[] {
@@ -53,7 +57,7 @@ for (const [name, replies, recovered, artifactPath] of [
   ["DATA ERROR exhausted", ["DATA ERROR", "DATA ERROR"], false, "/tmp/t2.6c-data-error-exhausted.json"],
 ] as const) {
   it(`applies final init retry policy for ${name} at ATDPN`, async () => {
-    const result = await runBatteryDiagnosisScan(new ReplayTransport(retryRepliesAt("ATDPN", replies)), fresh(), () => undefined);
+    const result = await runBatteryDiagnosisScan(new ReplayTransport(retryRepliesAt("ATDPN", replies)), fresh(), () => undefined, confirmEquinox);
     const lines = parseRecording(result.jsonl);
     const commands = lines.filter((line) => line.dir === "tx").map((line) => line.data.trim());
     const artifact = {
@@ -83,7 +87,7 @@ for (const [command, reply, next, artifactName] of [
 ] as const) {
   it(`stops the fresh scan after ${reply} at ${command}`, async () => {
     const recording = fresh();
-    const result = await runBatteryDiagnosisScan(new ReplayTransport(replyChangedAt(command, reply)), recording, () => undefined);
+    const result = await runBatteryDiagnosisScan(new ReplayTransport(replyChangedAt(command, reply)), recording, () => undefined, confirmEquinox);
     const commands = parseRecording(result.jsonl).filter((line) => line.dir === "tx").map((line) => line.data.trim());
     const artifact = { synthetic: true, injectedAt: command, reply, scanStatus: result.scanStatus, stopReason: result.stopReason, lastCommand: commands.at(-1), sentNext: commands.includes(next) };
     write(`/tmp/t2.6b-synthetic-${artifactName}.json`, `${JSON.stringify(artifact)}\n`);
@@ -101,7 +105,7 @@ for (const [command, next] of [
 ] as const) {
   it(`keeps the partial recording and stops after LV RESET during init at ${command}`, async () => {
     const recording = fresh();
-    const result = await runBatteryDiagnosisScan(new ReplayTransport(replyChangedAt(command, "LV RESET")), recording, () => undefined);
+    const result = await runBatteryDiagnosisScan(new ReplayTransport(replyChangedAt(command, "LV RESET")), recording, () => undefined, confirmEquinox);
     const lines = parseRecording(result.jsonl);
     const commands = lines.filter((line) => line.dir === "tx").map((line) => line.data.trim());
     const artifact = {
@@ -122,7 +126,7 @@ for (const [command, next] of [
 it("replays the labeled synthetic combined scan and renders a deterministic diagnosis", async () => {
   const source = parseRecording(read(file(fixture), "latin1"));
   const recording = fresh();
-  const result = await runBatteryDiagnosisScan(new ReplayTransport(source), recording, () => undefined);
+  const result = await runBatteryDiagnosisScan(new ReplayTransport(source), recording, () => undefined, confirmEquinox);
   expect(result.scanStatus).toBe("complete");
   const actual = parseRecording(result.jsonl);
   expect(actual.filter((line) => line.dir === "tx").map((line) => line.data)).toEqual(source.filter((line) => line.dir === "tx").map((line) => line.data));
@@ -142,7 +146,7 @@ it("records three parked cycles and saves the synthetic parked observations", as
   let clock = 0;
   const recording = new RecordingBuffer(() => clock++);
   recording.start(meta);
-  const result = await runBatteryDiagnosisScan(new ReplayTransport(source), recording, () => undefined);
+  const result = await runBatteryDiagnosisScan(new ReplayTransport(source), recording, () => undefined, confirmEquinox);
   const lines = parseRecording(result.jsonl);
   const marker = lines.findIndex((line) => line.dir === "meta" && line.note === "parked scan start");
   const tail = lines.slice(marker + 1).filter((line) => line.dir === "tx").map((line) => line.data.trim());
@@ -189,7 +193,7 @@ it("keeps missing parked observations absent across complete synthetic scans", a
     let clock = 0;
     const recording = new RecordingBuffer(() => clock++);
     recording.start(meta);
-    const result = await runBatteryDiagnosisScan(new ReplayTransport(changed), recording, () => undefined);
+    const result = await runBatteryDiagnosisScan(new ReplayTransport(changed), recording, () => undefined, confirmEquinox);
     const report = await batteryDiagnosisFromRecording(result.jsonl, input(result.scanStatus), signalset);
     results.push({ name: variant.name, scanStatus: result.scanStatus, absent: report.parked?.[variant.missing] === undefined, parked: report.parked });
     expect(result.scanStatus).toBe("complete");
@@ -227,7 +231,7 @@ it("refuses a selected-car report when the CB SOC fingerprint is missing", async
     return [line];
   });
   const recording = fresh();
-  const result = await runBatteryDiagnosisScan(new ReplayTransport(missing), recording, () => undefined);
+  const result = await runBatteryDiagnosisScan(new ReplayTransport(missing), recording, () => undefined, confirmEquinox);
   const report = await batteryDiagnosisFromRecording(result.jsonl, input(result.scanStatus), signalset);
   expect(hasEquinoxSocFingerprint(report)).toBe(false);
   write("/tmp/t2.6b-synthetic-mismatch.json", `${JSON.stringify({ synthetic: true, scanStatus: result.scanStatus, canSave: hasEquinoxSocFingerprint(report) })}\n`);
@@ -237,7 +241,7 @@ it("keeps a partial recording on a disconnected replay", async () => {
   const source = parseRecording(read(file(fixture), "latin1"));
   const cut = source.findIndex((line) => line.dir === "tx" && line.data === "0120\r");
   const recording = fresh();
-  const result = await runBatteryDiagnosisScan(new ReplayTransport(source.slice(0, cut)), recording, () => undefined);
+  const result = await runBatteryDiagnosisScan(new ReplayTransport(source.slice(0, cut)), recording, () => undefined, confirmEquinox);
   expect(result.scanStatus).toBe("partial");
   expect(parseRecording(result.jsonl).some((line) => line.dir === "tx")).toBe(true);
   expect(result.stopReason).toBeDefined();
