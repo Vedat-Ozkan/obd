@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-10-24)
 
-- **Stage:** Stage C1 implementation (implementer spawned)
+- **Stage:** Stage C1 review (head da53b6c)
 - **Next action:** relay C1 report, review, integrate; then C2 and C3.
 
 ## Ownership
@@ -35,3 +35,4 @@
 - Owner 2026-10-24: add agent-driven visual tests for key flows beyond automated runs. A subagent drives the emulator over adb (screencap, uiautomator dump, input; Maestro may reach start states), reads its own screenshots, and reports problems. Sonnet 5.5 medium by default; Opus only by lead decision on escalation. Architect to amend spec with a stage for it.
 - Spec amended (C3 visual pass, D folded in, C1 follow-ups). Orchestrator took defaults for open questions 9-11 and the drive question: do not lint build-table.ts; C3 is its own stage; visual run once per release candidate, Opus only for flagged ambiguous screens; flow 4 drives once (1.0, light) and re-views saved reports in the other combinations.
 - C1 implementer: head 80e755e; build PASS (prebuild + assembleDebug x86_64), P4 PASS, P9 PASS (runs/20261024-105939); P2 blocked: broker hello accepts only veepeak + mtu>0. Lead decision 2026-10-24 (amends non-goal "no relay changes"): broker hello accepts dongle "simulated" with mtu 0 allowed only for it, plus a server.test.ts case; ConsoleScreen relay hello sends dongleKind(active); pnpm hil:smoke refuses a simulated phone so nothing simulated lands in fixtures/recordings. Sent back to the C1 implementer.
+- C1 implementer round 2: head da53b6c; P2 PASS (runs/20261024-122711: hil:smoke refuses simulated, 2E refused by guard, Mode 04 Cancel -> confirmation-denied, no tx 04, relay killed -> "Relay ended mid-command"); P4, P9 PASS (runs/20261024-123720); scoped checks PASS. C1 reviewer spawned.
