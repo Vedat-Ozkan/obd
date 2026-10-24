@@ -47,7 +47,7 @@ For BM1–BM9 and the LLM features (T2.10, T2.11), see AGENTS.md hard rule 11, [
 
 CI has no Bluetooth. The phone relay (ADR-013; the laptop bridge for the spike) lets an agent send real commands to the real dongle through an MCP server with a read-only allowlist, and save the exchange as a recording. The cycle for anything protocol-related is: spike on hardware → recording → replay test → implementation → reviewer replays the recording. Agents never assert dongle behavior from memory; they assert it from a recording, or they say NOT RUN.
 
-If the relay is unreachable (phone not in the car, app not in relay mode, car off), the implementer says so and the reviewer marks the item hardware-only. Nobody simulates the dongle to make a check pass.
+If the relay is unreachable (phone not in the car, app not in relay mode, car off), the implementer says so and the reviewer marks the item hardware-only. Nobody simulates the dongle to make a check pass: simulated runs (`tools/sim/`) may de-risk a check at the desk, but they are labelled simulated and never tick an item or close an OWNER-QUEUE row.
 
 ## Handoff between Claude and Codex
 

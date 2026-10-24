@@ -1,0 +1,39 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- tapOn: "Run check"
+- extendedWaitUntil:
+    visible: "Choose your OBD dongle"
+    timeout: 30000
+- assertVisible: "Simulated car \\(Equinox EV\\)"
+- assertVisible: "Simulated car \\(wrong model VIN\\)"
+- assertVisible: "Scan error.*"
+- takeScreenshot: 01-picker-both-rows-and-scan-error
+- tapOn: "Simulated car \\(Equinox EV\\)"
+- extendedWaitUntil:
+    visible: "Run battery check"
+    timeout: 30000
+- tapOn: "Run battery check"
+- extendedWaitUntil:
+    visible: "Battery report"
+    timeout: 240000
+- takeScreenshot: 02-equinox-saved
+- back
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- tapOn: "Run check"
+- tapOn: "Disconnect"
+- tapOn: "Choose dongle"
+- tapOn: "Simulated car \\(wrong model VIN\\)"
+- extendedWaitUntil:
+    visible: "Run battery check"
+    timeout: 30000
+- tapOn: "Run battery check"
+- extendedWaitUntil:
+    visible: ".*did not answer as a.*"
+    timeout: 120000
+- takeScreenshot: 03-wrong-model-mismatch

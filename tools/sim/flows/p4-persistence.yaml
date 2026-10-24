@@ -1,0 +1,53 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- takeScreenshot: 01-garage
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- tapOn: "Run check"
+- assertVisible: "Fake real dongle"
+- takeScreenshot: 02-console-remembered-dongle
+- extendedWaitUntil:
+    visible: ".*Could not reach Fake real dongle.*"
+    timeout: 180000
+- takeScreenshot: 02b-remembered-dongle-connect-gave-up
+- tapOn: "Change dongle"
+- assertVisible: "Choose your OBD dongle"
+- tapOn: "Simulated car \\(Equinox EV\\)"
+- extendedWaitUntil:
+    visible: "Run battery check"
+    timeout: 30000
+- takeScreenshot: 03-connected
+- tapOn: "Run battery check"
+- extendedWaitUntil:
+    visible: "Battery report"
+    timeout: 240000
+- takeScreenshot: 04-report-saved
+- back
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- takeScreenshot: 05-car-after-save
+- stopApp
+- openLink: exp+obd://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081
+- extendedWaitUntil:
+    visible: "Add a vehicle"
+    timeout: 120000
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- assertVisible: "Last check.*"
+- takeScreenshot: 06-entry1-after-reopen
+- back
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 1
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- assertVisible: "No check yet"
+- takeScreenshot: 07-entry2-empty

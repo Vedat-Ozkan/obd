@@ -1,0 +1,11 @@
+appId: com.ev.obd
+---
+- runFlow:
+    when:
+      visible: "Clear trouble codes\\?"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: ".*Relay ended mid-command.*"
+    timeout: 30000
+- takeScreenshot: 05-relay-ended-mid-command

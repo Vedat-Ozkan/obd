@@ -10,7 +10,11 @@ import { pythonJson } from "../../packages/obd-core/src/recording/provenance.js"
 import { authorizeRelayCommand, type RelayCommand, type RelayCommandChannel, type RelayCommandExchange } from "../../packages/obd-core/src/transport/relay.js";
 
 const vehicle = "chevrolet-equinox-ev-2024" as const;
-const helloSchema = z.object({ type: z.literal("hello"), protocol: z.literal(1), vehicle: z.literal(vehicle), dongle: z.literal("veepeak-obdcheck-ble"), writeChar: z.string(), notifyChar: z.string(), mtu: z.number().int().positive() });
+const helloBase = { type: z.literal("hello"), protocol: z.literal(1), vehicle: z.literal(vehicle), writeChar: z.string(), notifyChar: z.string() };
+const helloSchema = z.discriminatedUnion("dongle", [
+  z.object({ ...helloBase, dongle: z.literal("veepeak-obdcheck-ble"), mtu: z.number().int().positive() }),
+  z.object({ ...helloBase, dongle: z.literal("simulated"), mtu: z.number().int().nonnegative() }),
+]);
 const startedSchema = z.object({ type: z.literal("started"), id: z.string() });
 const resultSchema = z.looseObject({ type: z.literal("result"), id: z.string(), ok: z.boolean() });
 const successfulResultSchema = z.object({ type: z.literal("result"), id: z.string(), ok: z.literal(true), dataBase64: z.string(), ms: z.number() });
@@ -69,6 +73,7 @@ export class RelayBroker implements RelayCommandChannel {
     const data = await readFile(recording.path); return { path: relativeToRoot(this.root, recording.path), sha256: createHash("sha256").update(data).digest("hex"), lines: recording.lines };
   }
   async close(): Promise<void> { const phone = this.phone; await this.enqueue(() => this.disconnect(phone, new Error("relay: closed"))); phone?.close(); await new Promise<void>((resolveClose) => { this.http.close(() => { resolveClose(); }); }); }
+  phoneDongle(): Hello["dongle"] | undefined { return this.hello?.dongle; }
   isConnected(): boolean { return this.phone !== undefined && this.hello !== undefined; }
 
   private dispatch(text: string): RelayCommandExchange {

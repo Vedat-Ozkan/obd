@@ -307,6 +307,21 @@ describe("authenticated fake phone, recording, and MCP", () => {
       expect(parseRecording(readFileSync(join(root, path("disconnect-order")), "latin1")).map((line) => line.dir)).toEqual(["meta", "tx", "meta"]);
     } finally { await close(broker); }
   });
+  it("accepts a simulated hello with mtu 0 and rejects a veepeak hello with mtu 0", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obd-relay-"));
+    const sim = new RelayBroker({ port: 0, root, token: "test-token", logger: () => undefined });
+    try { const socket = await connectRaw(sim); socket.send(JSON.stringify({ ...hello, dongle: "simulated", mtu: 0 })); await waitFor(() => sim.isConnected()); expect(sim.phoneDongle()).toBe("simulated"); socket.close(); } finally { await sim.close(); }
+    const strict = new RelayBroker({ port: 0, root, token: "test-token", logger: () => undefined });
+    try { const socket = await connectRaw(strict); const closed = new Promise<void>((done) => { socket.once("close", () => { done(); }); }); socket.send(JSON.stringify({ ...hello, mtu: 0 })); await closed; expect(strict.isConnected()).toBe(false); } finally { await strict.close(); }
+  });
+  it("hil:smoke refuses a simulated phone and writes no recording", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obd-relay-")); await mkdir(join(root, "fixtures/recordings/chevrolet-equinox-ev-2024"), { recursive: true });
+    const broker = new RelayBroker({ port: 0, root, token: "test-token", logger: () => undefined });
+    const socket = await connectRaw(broker); socket.send(JSON.stringify({ ...hello, dongle: "simulated", mtu: 0 })); await waitFor(() => broker.isConnected());
+    await expect(hilSmoke(broker)).rejects.toThrow("simulated car");
+    expect(await readdir(join(root, "fixtures/recordings/chevrolet-equinox-ev-2024"))).toEqual([]);
+    socket.close();
+  });
   it("hil:smoke reports a mid-sequence disconnect, keeps the final meta, and closes the broker", async () => {
     const { broker, phone, root } = await fixture(false); const dir = join(root, "fixtures/recordings/chevrolet-equinox-ev-2024");
     try {

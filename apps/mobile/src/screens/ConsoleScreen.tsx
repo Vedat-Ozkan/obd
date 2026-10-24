@@ -459,7 +459,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     catch { bleOwner.current = undefined; setRelaying(false); setRelayStatus("Error: could not open the relay socket."); return; }
     let opened = false;
     let terminated = false as boolean;
-    const client = new RelayClient(socket, active.transport, { vehicle: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu },
+    const client = new RelayClient(socket, active.transport, { vehicle: "chevrolet-equinox-ev-2024", dongle: dongleKind(active), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu },
       confirmMode04, undefined, undefined,
       (uncertain) => {
         terminated = true;
