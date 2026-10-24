@@ -7,11 +7,13 @@ import { CHARGE_LOG_PROFILE } from "obd-battery/session";
 import { CODES_SCAN_COMMANDS } from "./codesScan.js";
 import type { RecordingBuffer } from "./recording.js";
 import type { GarageVehicle } from "./garage/flow.js";
+import type { ModelCheck } from "./garage/catalog.js";
 
 export interface DiagnosisRun {
   jsonl: string;
   scanStatus: "complete" | "partial";
   stopReason?: string;
+  identity?: ModelCheck;
 }
 
 export function batteryReportRows(reports: readonly BatteryDiagnosisReport[]): readonly { label: string; detail: string; report: BatteryDiagnosisReport }[] {
@@ -34,6 +36,13 @@ export function hasEquinoxSocFingerprint(report: BatteryDiagnosisReport): boolea
   );
 }
 
+function vinsFrom(response: ElmResponse): string[] {
+  if (response.kind !== "data") return [];
+  return response.frames
+    .filter((frame) => frame.data.length === 20 && frame.data[0] === 0x49 && frame.data[1] === 0x02 && frame.data[2] === 1)
+    .map((frame) => String.fromCharCode(...frame.data.subarray(3)));
+}
+
 class StopOnElmErrorSession extends Elm327Session {
   override async send(command: string): Promise<ElmResponse> {
     const response = await super.send(command);
@@ -46,6 +55,7 @@ export async function runBatteryDiagnosisScan(
   transport: Transport,
   recording: RecordingBuffer,
   onProgress: (message: string) => void,
+  confirm: (vins: string[]) => ModelCheck,
 ): Promise<DiagnosisRun> {
   const callbacks = new Set<(bytes: Uint8Array) => void>();
   let open = true;
@@ -71,6 +81,7 @@ export async function runBatteryDiagnosisScan(
   };
   const session = new StopOnElmErrorSession(recorded);
   let stopReason: string | undefined;
+  let identity: Exclude<ModelCheck, { status: "match" }> | undefined;
   try {
     onProgress("Initializing ELM327");
     await session.init(genericProfile, {
@@ -78,11 +89,14 @@ export async function runBatteryDiagnosisScan(
         if (response.kind === "error") throw new Error(`${response.error.line} at ${command}`);
       },
     });
-    for (const command of CODES_SCAN_COMMANDS.slice(CODES_SCAN_COMMANDS.indexOf("0100") + 1)) {
-      onProgress(`Reading ${command}`);
-      await session.send(command);
-    }
-    if (stopReason === undefined) {
+    onProgress("Confirming car model");
+    const check = confirm(vinsFrom(await session.send("0902")));
+    if (check.status !== "match") identity = check;
+    if (identity === undefined) {
+      for (const command of CODES_SCAN_COMMANDS.slice(CODES_SCAN_COMMANDS.indexOf("0100") + 1)) {
+        onProgress(`Reading ${command}`);
+        await session.send(command);
+      }
       onProgress("Reading Equinox battery modules");
       await scanMode22Profile(session, equinoxEv2024Profile);
       recording.meta("parked scan start");
@@ -95,6 +109,10 @@ export async function runBatteryDiagnosisScan(
     stopReason = error instanceof Error ? error.message : String(error);
   } finally {
     await session.close();
+  }
+  if (identity) {
+    recording.meta(`battery scan stopped: model not confirmed (${identity.status})`);
+    return { jsonl: recording.toJsonl(), scanStatus: "partial", stopReason: identity.reason, identity };
   }
   recording.meta(stopReason === undefined ? "battery scan complete" : `battery scan partial: ${stopReason}`);
   return stopReason === undefined

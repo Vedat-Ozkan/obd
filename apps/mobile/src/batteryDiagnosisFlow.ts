@@ -3,7 +3,7 @@ import type { ObdbMode22Signal } from "obd-core/vehicles";
 import { batteryDiagnosisFromRecording, type BatteryDiagnosisReport } from "obd-battery/report";
 import { createBatteryReportHistory } from "./batteryReports.js";
 import { hasEquinoxSocFingerprint, runBatteryDiagnosisScan } from "./batteryScan.js";
-import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./garage/catalog.js";
+import { SUPPORTED_VEHICLES, canUseEquinoxConsole, checkVehicleIdentity } from "./garage/catalog.js";
 import type { GarageVehicle } from "./garage/flow.js";
 import type { BleConnection } from "./ble/BleTransport.js";
 import type { RecordingBuffer, RecordingMeta } from "./recording.js";
@@ -33,13 +33,14 @@ export async function runAndSaveBatteryDiagnosis(input: {
 }): Promise<
   | { status: "saved"; report: BatteryDiagnosisReport; recording: string }
   | { status: "no-fingerprint"; recording: string; scanStatus: "complete" | "partial"; reason: string }
+  | { status: "model-not-confirmed"; reason: string }
   | { status: "stopped"; cause: "cancelled" | "disconnected"; recording: string; reason: string }
 > {
   const catalog = SUPPORTED_VEHICLES.find((vehicle) => vehicle.id === input.entry.catalogId);
   if (!catalog || !canUseEquinoxConsole(catalog)) throw new Error("Battery diagnosis requires a verified 2024 Equinox EV garage entry.");
   let scan: Awaited<ReturnType<typeof runBatteryDiagnosisScan>>;
   try {
-    scan = await runBatteryDiagnosisScan(input.transport, input.recording, input.onProgress);
+    scan = await runBatteryDiagnosisScan(input.transport, input.recording, input.onProgress, (vins) => checkVehicleIdentity(catalog, vins));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const interruption = input.getInterruption();
@@ -52,6 +53,7 @@ export async function runAndSaveBatteryDiagnosis(input: {
     }
     throw new Error(`Battery diagnosis failed: ${message}. Private scan: ${recording}`, { cause: error });
   }
+  if (scan.identity && scan.identity.status !== "match") return { status: "model-not-confirmed", reason: scan.identity.reason };
   const interruption = input.getInterruption();
   if (interruption) {
     input.recording.meta(`battery diagnosis interrupted: ${interruption}`);

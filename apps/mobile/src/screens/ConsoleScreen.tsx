@@ -287,9 +287,11 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     try {
       const outcome = await runAndSaveBatteryDiagnosis({ entry, transport: scanTransport, recording: scanRecording, scannedAt, keepScan: keepPrivateBatteryScan, history: batteryHistory, importedSignals: equinoxSignals, getInterruption: () => diagnosisInterruption.current, onProgress: (message) => { if (message === "Keeping private scan") { diagnosisScanActive.current = false; setCanCancelDiagnosis(false); } setStatus(message); } });
       // T2.9: every kept private scan is shared, whatever its outcome.
-      const beta = await queueForBeta("battery-scan", entry, readLines(outcome.recording));
+      const beta = outcome.status === "model-not-confirmed" ? undefined : await queueForBeta("battery-scan", entry, readLines(outcome.recording));
       const betaSentence = beta === undefined ? "" : ` ${beta}`;
-      if (outcome.status === "saved") {
+      if (outcome.status === "model-not-confirmed") {
+        setStatus(outcome.reason);
+      } else if (outcome.status === "saved") {
         await onSaved(outcome.report);
         setStatus(`Battery diagnosis saved: ${outcome.report.scanStatus}.${betaSentence}`);
       } else if (outcome.status === "stopped") {

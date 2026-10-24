@@ -1,5 +1,5 @@
 export type Tier = "verified" | "beta";
-export type CatalogVehicle = { id: string; make: string; model: string; year: number; tier: Tier; recording?: string };
+export type CatalogVehicle = { id: string; make: string; model: string; year: number; tier: Tier; recording?: string; vinIdentity?: { wmi: "3GN"; yearCode: "R" } };
 
 const models = [
   { slug: "chevrolet-equinox-ev", make: "Chevrolet", model: "Equinox EV", years: [2024, 2025, 2026] },
@@ -17,7 +17,7 @@ const models = [
 export const SUPPORTED_VEHICLES: readonly CatalogVehicle[] = models.flatMap(({ slug, make, model, years }) => years.map((year) => {
   const verified = slug === "chevrolet-equinox-ev" && year === 2024;
   return verified
-    ? { id: `${slug}-${String(year)}`, make, model, year, tier: "verified" as const, recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl" }
+    ? { id: `${slug}-${String(year)}`, make, model, year, tier: "verified" as const, recording: "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl", vinIdentity: { wmi: "3GN" as const, yearCode: "R" as const } }
     : { id: `${slug}-${String(year)}`, make, model, year, tier: "beta" as const };
 }));
 
@@ -33,4 +33,14 @@ export function vehicleEvidence(vehicle: CatalogVehicle): string {
 
 export function canUseEquinoxConsole(vehicle: CatalogVehicle): boolean {
   return vehicle.id === "chevrolet-equinox-ev-2024" && vehicle.tier === "verified" && !!vehicle.recording;
+}
+
+export type ModelCheck = { status: "match" } | { status: "mismatch" | "unconfirmed"; reason: string };
+
+export function checkVehicleIdentity(vehicle: CatalogVehicle, vins: readonly string[]): ModelCheck {
+  const name = `${String(vehicle.year)} ${vehicle.make} ${vehicle.model}`;
+  const { vinIdentity } = vehicle;
+  if (!vinIdentity || vins.length === 0) return { status: "unconfirmed", reason: `Could not confirm the car is a ${name}; no battery data read and no report saved. Check the car is on and try again.` };
+  if (vins.every((vin) => vin.slice(0, 3) === vinIdentity.wmi && vin[9] === vinIdentity.yearCode)) return { status: "match" };
+  return { status: "mismatch", reason: `This car did not answer as a ${name}; no battery data read and no report saved. Select the car's real model year.` };
 }

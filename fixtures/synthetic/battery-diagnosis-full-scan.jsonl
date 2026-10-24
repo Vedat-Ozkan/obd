@@ -1,4 +1,4 @@
-{"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "synthetic full scan; ready; reply bytes copied from 2026-09-22-spike.redacted.jsonl; missing codes branches are NO DATA", "writeChar": "fff1", "notifyChar": "fff2", "mtu": 23}
+{"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "synthetic full scan; ready; reply bytes (including the 0902 VIN answer) copied from 2026-09-22-spike.redacted.jsonl; missing codes branches are NO DATA", "writeChar": "fff1", "notifyChar": "fff2", "mtu": 23}
 {"t": 1, "dir": "tx", "data": "ATZ\r"}
 {"t": 2, "dir": "rx", "data": "ATZ\r"}
 {"t": 3, "dir": "rx", "data": "\u00fc"}
@@ -39,6 +39,18 @@
 {"t": 38, "dir": "rx", "data": "13\r"}
 {"t": 39, "dir": "rx", "data": "\r"}
 {"t": 40, "dir": "rx", "data": ">"}
+{"t": 40.01, "dir": "tx", "data": "0902\r"}
+{"t": 40.02, "dir": "rx", "data": "18DAF11710144902"}
+{"t": 40.03, "dir": "rx", "data": "0133474E\r18DAF12"}
+{"t": 40.04, "dir": "rx", "data": "8101449020133474"}
+{"t": 40.05, "dir": "rx", "data": "E\r18DAF117213744"}
+{"t": 40.06, "dir": "rx", "data": "4E52503952\r18DAF"}
+{"t": 40.07, "dir": "rx", "data": "1282137444E52503"}
+{"t": 40.08, "dir": "rx", "data": "952\r18DAF1172253"}
+{"t": 40.09, "dir": "rx", "data": "303030303030\r18D"}
+{"t": 40.1, "dir": "rx", "data": "AF12822533030303"}
+{"t": 40.11, "dir": "rx", "data": "03030\r"}
+{"t": 40.12, "dir": "rx", "data": "\r>"}
 {"t": 41, "dir": "tx", "data": "0120\r"}
 {"t": 42, "dir": "rx", "data": "18DAF14506412000"}
 {"t": 43, "dir": "rx", "data": "000001\r18DAF1400"}
