@@ -18,7 +18,8 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 | D8 | Answer the four T2.11c outline questions (car removal with chats, session ids, history size, model on phone) | `rec/T2.11.md:13` | T2.11c |
 | D9 | Thresholds task (cell balance, 12 V) and the paid summary comparison: start or keep paused | `rec/X-2026-09-29-explanatory-summary.md:13`, `rec/X-2026-09-29-summary-wording-polish.md:11` | summary "Not rated" areas |
 | D10 | T2.10 rewarded-ad path (ledger, signed callback, T2.10b/c2/d2, US$5-capped live eval): pursue or re-scope | `rec/T2.10.md:17` | T2.10 |
-| D11 | Keep or drop the two unlinked 2026-10-23 audits, `docs/ACCESSIBILITY.md` and `docs/ANALYTICS.md` (untracked) | `git status` | — |
+| D11 | T2.20 Stage B choices: car removal is blocked while charge summaries exist (matches reports), or delete them with the car; summary date = save time; "1 sessions" wording | `rec/T2.20.md` | T2.20 |
+| D12 | Approve a toolchain edit so root vitest excludes `.claude/worktrees/**`: leftover worktrees duplicate tests and made `worker.test.ts` fail with `Address already in use` | `rec/T2.20.md` | reliable `pnpm check` |
 
 ## Build first
 

@@ -10,7 +10,9 @@
 - Owner authorizations: edit `eslint.config.js` (toolchain; lead creates `.claude/ALLOW_TOOLCHAIN` before the implementer starts, deletes it after).
 - NOT RUN: none yet.
 - Blocker: none.
-- Next action: lead unlocks toolchain, then implementer builds to the spec.
+- (superseded 2026-10-24: done) Next action: lead unlocks toolchain, then implementer builds to the spec.
+- Implementer: APPROVE (repairs 0/2) — merged 0ec1d37. Gate: `pnpm check` PASS on main; probe reported unlabeled, spread and `RN.TextInput` cases only; `.claude/worktrees/**` ignored by eslint. Toolchain unlock removed.
+- Next action: none.
 
 ## Baseline
 
