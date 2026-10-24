@@ -39,7 +39,7 @@ describe("charge log summaries on the phone", () => {
     expect(summary.id).toBe(file);
     expect(summary.at).toBe("2026-10-01T10:00:00.000Z");
     expect(summary.synthetic).toBe(true);
-    expect(trendCaptions([], await reopened.list("1"))).toEqual(["BMS-referenced capacity index (Ah), not state of health: Not enough data yet: 1 sessions over 0 days."]);
+    expect(trendCaptions([], await reopened.list("1"))).toEqual(["BMS-referenced capacity index (Ah), not state of health: Not enough data yet: 1 session over 0 days."]);
   });
 
   it("does not overwrite a malformed history file", async () => {
