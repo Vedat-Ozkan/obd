@@ -131,7 +131,7 @@ flow_p2() {
   maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect (guard) failed;"; }
   await_probe guard "PHONE CONNECTED" 60; touch "$scratch/go"
   maestro_flow "$dir" p2-relay-cancel || { result=FAIL; notes="$notes Mode 04 Cancel flow failed;"; }
-  if await_probe guard "^04: REFUSED" 30 && grep -q '^2E F190 00: REFUSED' "$dir/probe-guard.log"; then notes="$notes 2E refused by guard, 04 denied on phone;"; else result=FAIL; notes="$notes 2E/04 outcome missing;"; fi
+  if await_probe guard "^04: REFUSED" 30 && grep -q '^2E F190 00: REFUSED' "$dir/probe-guard.log"; then notes="$notes 2E refused by guard, 04 denied on phone (evidence: probe-guard.log);"; else result=FAIL; notes="$notes 2E/04 outcome missing;"; fi
   stop_probe
 
   fresh_app; seed garage.json "$dir/garage.json"
@@ -145,7 +145,9 @@ flow_p2() {
 
   adb shell "run-as $APP sh -c 'cat files/captures/* files/battery-scans/*/* 2>/dev/null'" 2>/dev/null | tr -d '\r' > "$dir/app-captures.txt"
   cat "$scratch"/fixtures/recordings/*/* >> "$dir/app-captures.txt" 2>/dev/null
-  if grep -q '"dir": "tx", "data": "04' "$dir/app-captures.txt"; then result=FAIL; notes="$notes tx 04 found in captures;"; else notes="$notes no tx 04 in captures;"; fi
+  if [ ! -s "$dir/app-captures.txt" ]; then notes="$notes no captures to check (see probe-guard.log);"
+  elif grep -q '"dir": "tx", "data": "04' "$dir/app-captures.txt"; then result=FAIL; notes="$notes tx 04 found in captures;"
+  else notes="$notes no tx 04 in captures;"; fi
   cp -r "$scratch/fixtures" "$dir/relay-recording" 2>/dev/null
   rm -rf "$scratch"
   collect_sim_misses
