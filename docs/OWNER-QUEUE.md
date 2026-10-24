@@ -11,7 +11,7 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 | D1 | Push main to origin; hosted CI has not seen `1c74db4..4919240` | `git status -sb` | hosted CI |
 | D2 | T2.3: keep or drop the "agent proposal precision against the owner's verdicts" requirement; discovery ran as scripted laptop sessions (T2.3a/T2.3b), not agent-driven | `docs/PLAN.md` T2.3 row | T2.3 |
 | D3 | Approve redacting the local `2026-09-28-phone-console-2.jsonl` (likely the 19-command codes scan behind the committed `2026-09-28-codes-report.md`), then replay and reconcile T0.9 Stage B at the desk | `rec/T0.9.md:8`, `rec/T0.9b.md:9` | T0.9 |
-| D4 | Fill `docs/spike-2026-09.md` (still the blank worksheet, `Decision: NOT DECIDED`) from the committed redacted spike recordings, so T0.2's Gate A line exists | `rec/T0.2.md:5`, `docs/spike-2026-09.md:123` | T0.2 |
+| D4 | Tick PLAN T0.2: the worksheet is now filled from the committed redacted recordings, Gate A GO | `docs/spike-2026-09.md` §6 | T0.2 |
 | D5 | T2.7: may it tick on software evidence plus the manual run; confirm no scan-time ownership tag | `rec/T2.7.md:8` | T2.7 |
 | D6 | Choose the privacy-note contact email; review consent and privacy wording | `rec/T2.9.md:44, 65` | T2.9 Stage E |
 | D7 | Go/no-go on the paid T2.11b Stage 2 four-arm eval (stop rules US$0.05/0.15/0.05/0.25); its precondition, T2.10's paid phone check, passed 2026-09-29 | `rec/T2.11.md:13, 22` | T2.11, BM5 |
@@ -20,6 +20,7 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 | D10 | T2.10 rewarded-ad path (ledger, signed callback, T2.10b/c2/d2, US$5-capped live eval): pursue or re-scope | `rec/T2.10.md:17` | T2.10 |
 | D11 | T2.20 Stage B choices: car removal is blocked while charge summaries exist (matches reports), or delete them with the car; summary date = save time; "1 sessions" wording | `rec/T2.20.md` | T2.20 |
 | D12 | Approve a toolchain edit so root vitest excludes `.claude/worktrees/**`: leftover worktrees duplicate tests and made `worker.test.ts` fail with `Address already in use` | `rec/T2.20.md` | reliable `pnpm check` |
+| D13 | Confirm T2.8b's provisional rules: an unreadable VIN blocks the check ("could not confirm"); a mismatched scan is neither kept nor queued for beta; no override; checked on every battery scan; charge logs not covered | `docs/specs/T2.8b-garage-gates.md` Open questions | T2.8 |
 
 ## Build first
 
@@ -70,5 +71,5 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 
 ## Not startable yet
 
-- T2.17 cold-soak `2AF1` reading: needs a spec first.
+- T2.17 cold-soak `2AF1` reading: no new code needed. After an overnight cold soak, run a normal parked battery check (the T2.14 scan reads `2AF1` raw), export it redacted, and note the outside temperature.
 - T2.18 guided buyer flow: needs T2.13 Stage C.
