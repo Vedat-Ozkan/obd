@@ -1,5 +1,5 @@
 // @ts-expect-error Node built-in types are not part of the mobile target.
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { latin1Decode, latin1Encode, parseRecording, type RecordingLine } from "obd-core/recording";
 import type { Transport } from "obd-core/transport";
@@ -11,6 +11,13 @@ import { groupsUnderLoad } from "../../../packages/obd-battery/src/driveGroups.j
 import { RECOVERY_WAIT_S, type StreamTargets } from "../src/chargeLogger.js";
 import { CONTEXT_DIDS, CONTEXT_EVERY, DRIVE_SILENT_S, GROUP_DIDS, runDriveCapture, type DriveCaptureResult } from "../src/driveCapture.js";
 import { RecordingBuffer } from "../src/recording.js";
+import { CODES_SCAN_COMMANDS } from "../src/codesScan.js";
+import { createDriveReportHistory, preDriveReport } from "../src/driveReports.js";
+import { createBatteryReportHistory, type ReportTextStore } from "../src/batteryReports.js";
+import { createGarageFlow } from "../src/garage/flow.js";
+import { codesReportFromRecording } from "obd-core/report";
+import { driveReportFromRecording, renderDriveReport } from "../../../packages/obd-battery/src/driveReport.js";
+import { batteryDiagnosisFromRecording } from "../../../packages/obd-battery/src/report.js";
 
 async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string): Promise<string> {
   const script = new URL("../../../packages/obd-battery/scripts/drive-capture.ts", import.meta.url).href;
@@ -115,7 +122,7 @@ interface Options {
   minutes?: 10 | 20;
 }
 
-interface Run { result: DriveCaptureResult; lines: RecordingLine[]; summary: string; connects: number; endS: number; statuses: string[] }
+interface Run { result: DriveCaptureResult; lines: RecordingLine[]; summary: string; connects: number; endS: number; statuses: string[]; text: string }
 
 const isBoundary = (l: RecordingLine) => l.dir === "meta" && l.event === "charge-log session";
 const boundaries = (lines: readonly RecordingLine[]) => lines.filter(isBoundary).map((l) => (l.dir === "meta" ? l.reason : undefined));
@@ -176,7 +183,7 @@ async function run(name: string, plan: Plan, options: Options = {}): Promise<Run
   expect(last?.dir === "meta" && String(last.note)).toContain(result.stopReason);
   const summary = await driveCaptureSummary(lines, `/tmp/t2.13-${name}.jsonl`);
   write(`/tmp/t2.13-${name}-summary.md`, summary);
-  return { result, lines, summary, connects, endS, statuses };
+  return { result, lines, summary, connects, endS, statuses, text: stream.content };
 }
 
 const value = (summary: string, prefix: string, label: string): number => {
@@ -206,7 +213,7 @@ it("D1: the 20 min cap; the schedule, the context cadence, and the fake's resist
   expect(r.statuses.some((s) => /^Test drive: \d+:\d\d of 20:00 recorded; \d+ current samples\.$/.test(s))).toBe(true);
   expect(r.statuses.at(-1)).toBe(`Test drive stopped: 20 min recorded. Saved ${FILE} to the capture folder.`);
 
-  const txs = commands(r.lines);
+  const txs = commands(r.lines.slice(0, r.lines.findIndex((l) => l.dir === "meta" && l.event === "codes rescan")));
   const first = GROUP_DIDS[0] ?? "";
   const starts = txs.flatMap((c, i) => c === `22 ${first}` ? [i] : []);
   expect(starts.length).toBeGreaterThan(100);
@@ -315,7 +322,7 @@ it("D5: 7F 22 21 is re-sent once; a second 7F 22 21 is kept and the set is dropp
     },
   };
   const r = await run("d5-resend", plan, { minutes: 10 });
-  const txs = commands(r.lines);
+  const txs = commands(r.lines.slice(0, r.lines.findIndex((l) => l.dir === "meta" && l.event === "codes rescan")));
   const at = (did: string): number[] => txs.flatMap((c, i) => c === `22 ${did}` ? [i] : []);
   const [a, b] = at("2AE3");
   expect(b).toBe(a + 1);
@@ -338,3 +345,84 @@ it("D6: the 10 min option stops with its own reason and status lines", async () 
   expect(r.statuses.some((s) => s.includes("of 20:00"))).toBe(false);
   expect(r.summary).toContain("Stop: 10 min recorded");
 }, SLOW);
+
+const readText = readFileSync as unknown as (path: string | URL, encoding: string) => string;
+const repo = new URL("../../../", import.meta.url);
+const STORED = "7E80443010133\r\r>";
+const rescanStart = (lines: readonly RecordingLine[]) => lines.findIndex((l) => l.dir === "meta" && l.event === "codes rescan");
+const driveInput = (stopReason: string) => ({ garageVehicleId: "1", scannedAt: "2026-09-29T00:20:00.000Z", recording: FILE, minutes: 20 as const, stopReason, signals });
+const storedAnswer = (command: string): string | undefined => command === "03" ? STORED : undefined;
+
+async function parkedReport() {
+  const before = "fixtures/synthetic/codes-compare-before.jsonl";
+  const full = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
+  const report = await batteryDiagnosisFromRecording(readText(new URL(full, repo), "latin1"), { garageVehicleId: "1", catalogId: "chevrolet-equinox-ev-2024", scannedAt: "2026-09-28T23:00:00.000Z", recording: full, scanStatus: "complete" }, signals);
+  return { ...report, codes: await codesReportFromRecording(parseRecording(readText(new URL(before, repo), "latin1"))) };
+}
+
+it("D7: the cap rescans the codes in the same recording and the report compares them with the parked scan", async () => {
+  const r = await run("d7-rescan", { amps: drivePlan, inject: storedAnswer });
+  const at = rescanStart(r.lines);
+  expect(at).toBeGreaterThan(0);
+  const after = r.lines.slice(at);
+  expect(commands(after)).toEqual(CODES_SCAN_COMMANDS);
+  expect(r.result.rescan).toBe("ran");
+  const parked = await parkedReport();
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason), parked);
+  const text = renderDriveReport(report);
+  write("/tmp/t2.13-c-d7.md", text);
+  expect(report.codes.status).toBe("compared");
+  expect(text).toContain("stored: gone P0171; unchanged P0133");
+  expect(text).toContain("Compared with the parked scan of 2026-09-28T23:00:00.000Z");
+}, SLOW);
+
+it("D8: car off sends no rescan and the report says car off", async () => {
+  const r = await run("d8-car-off", { amps: drivePlan, offAt: 60 });
+  expect(rescanStart(r.lines)).toBe(-1);
+  expect(r.result.rescan).toBe("not run");
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason));
+  expect(report.codes).toEqual({ status: "not-run", reason: "car off" });
+}, SLOW);
+
+it("D9: Disconnect still rescans", async () => {
+  const stop = { requested: false };
+  const r = await run("d9-disconnect", { amps: drivePlan, inject: (command, s) => { if (command === "22 2AE3" && s >= 50) stop.requested = true; return storedAnswer(command); } }, { stop });
+  expect(r.result.stopReason).toBe("disconnect pressed");
+  expect(r.result.rescan).toBe("ran");
+  expect(commands(r.lines.slice(rescanStart(r.lines)))).toEqual(CODES_SCAN_COMMANDS);
+}, SLOW);
+
+it("D10: a rescan refused with UNABLE TO CONNECT is not-run with that reason and the drive file is still saved", async () => {
+  const r = await run("d10-refused", { amps: drivePlan, inject: (command, s) => command === "0100" && s >= 20 * 60 ? "UNABLE TO CONNECT\r\r>" : undefined });
+  expect(r.result.saved).toBe(`Saved ${FILE} to the capture folder.`);
+  expect(r.result.stopReason).toBe("20 min recorded");
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason));
+  expect(report.codes.status).toBe("not-run");
+  expect(JSON.stringify(report.codes)).toContain("UNABLE TO CONNECT");
+  expect(report.groups.status).toBe("checked");
+}, SLOW);
+
+it("C6: drive reports save to their own history and leave a parked-only battery history loading", async () => {
+  let driveText: string | undefined;
+  let batteryText: string | undefined;
+  const memory = (get: () => string | undefined, set: (t: string) => void): ReportTextStore => ({ read: () => Promise.resolve(get()), write: (t) => { set(t); return Promise.resolve(); } });
+  const drives = createDriveReportHistory(memory(() => driveText, (t) => { driveText = t; }));
+  const r = await run("c6-history", { amps: drivePlan });
+  const report = await driveReportFromRecording(r.text, driveInput("20 min recorded"));
+  await drives.save(report);
+  expect((await drives.list("1")).map((x) => x.recording)).toEqual([FILE]);
+  expect(await drives.list("2")).toEqual([]);
+
+  let garageText: string | undefined;
+  const garage = createGarageFlow(memory(() => garageText, (t) => { garageText = t; }));
+  await garage.add("chevrolet-equinox-ev-2024", "mine");
+  const parked = await parkedReport();
+  const batteries = createBatteryReportHistory(memory(() => batteryText, (t) => { batteryText = t; }), garage);
+  await batteries.save(parked);
+  const reloaded = createBatteryReportHistory(memory(() => batteryText, (t) => { batteryText = t; }), garage);
+  const list = await reloaded.list("1");
+  expect(list).toHaveLength(1);
+  expect(batteryText).not.toContain("groupRule");
+  expect(preDriveReport(list, new Date("2026-09-29T00:00:00Z"))?.scannedAt).toBe(parked.scannedAt);
+  expect(preDriveReport(list, new Date("2026-09-30T00:00:00Z"))).toBeUndefined();
+});

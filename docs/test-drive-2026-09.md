@@ -227,3 +227,18 @@ Verdict by the spec rule: G1 to G3 do not all pass, so **NO-GO** for T2.13 as an
 
 - The car-off silent stop on the car (H3): NOT RUN.
 - The car-off `UNABLE TO CONNECT` line citation for the spec's Sources table: NOT RUN. The 2026-09-28 charge logs (`2026-09-28-charge-log*.jsonl`) are not in this checkout, so no line numbers can be given.
+
+## 8. Stage C desk artifacts (2026-10-24)
+
+Group rule status in this build: `unconfirmed` (`GROUP_RULE_STATUS` in `packages/obd-battery/src/driveReport.ts`).
+
+| Check | Result | Artifact (written by the tests) |
+|---|---|---|
+| C1 drive 1 through `driveReportFromRecording` | checked, nothing flagged, label present, rescan `not-run` | `/tmp/t2.13-c-drive1.md` |
+| C2 drive 2 | no flag, label present | `/tmp/t2.13-c-drive2.md` |
+| C3 synthetic 4L excess, drive 1 | injected group named, provisional wording | `/tmp/t2.13-c-inject.md` |
+| C4 `compareCodes` on `fixtures/synthetic/codes-compare-{before,after}.jsonl` (hand-written, synthetic) | new, gone, unchanged, one-sided modules | `/tmp/t2.13-c-compare.md` |
+| C5, C6 pre-drive pointer, JSON round trip, separate history files | pass | `packages/obd-battery/test/drive-report.test.ts`, `apps/mobile/test/drive-capture.test.ts` |
+| D7 to D10 fake-ELM rescan (cap, car off, Disconnect, UNABLE TO CONNECT) | pass | `/tmp/t2.13-c-d7.md`, `/tmp/t2.13-d{7,8,9,10}-*.jsonl` |
+
+Not run: C7 (the Stage B drive as a third replay case) and H-C (the rescan on the car) wait for the owner drive on the Stage C build. Hardware result goes here when it exists, with the recording path.

@@ -16,6 +16,21 @@ export const batteryReportsDocumentStore: ReportTextStore = {
   },
 };
 
+export const driveReportsDocumentStore: ReportTextStore = {
+  async read() {
+    const file = new File(Paths.document, "drive-reports.json");
+    return file.exists ? file.text() : undefined;
+  },
+  async write(text) {
+    const pending = new File(Paths.document, "drive-reports.pending.json");
+    const destination = new File(Paths.document, "drive-reports.json");
+    if (pending.exists) pending.delete();
+    pending.create();
+    pending.write(text);
+    await pending.move(destination, { overwrite: true });
+  },
+};
+
 export function keepPrivateBatteryScan(garageVehicleId: string, scannedAt: string, jsonl: string): string {
   if (!/^[1-9]\d*$/.test(garageVehicleId)) throw new Error("Invalid garage vehicle ID.");
   const stamp = new Date(scannedAt);

@@ -1,0 +1,7 @@
+{"t": 0.000, "dir": "meta", "synthetic": true, "car": "none", "dongle": "none", "note": "hand-written for T2.13 Stage C: codes after a drive: 7E8 stored P0171 P0300, pending U0158; 7EA stored P0420; 7E9 absent"}
+{"t": 0.010, "dir": "tx", "data": "03\r"}
+{"t": 0.030, "dir": "rx", "data": "7E806430201710300\r7EA0443010420\r\r>"}
+{"t": 0.040, "dir": "tx", "data": "07\r"}
+{"t": 0.060, "dir": "rx", "data": "7E8044701C158\r7EA024700\r\r>"}
+{"t": 0.070, "dir": "tx", "data": "0A\r"}
+{"t": 0.090, "dir": "rx", "data": "7E8024A00\r7EA024A00\r\r>"}
