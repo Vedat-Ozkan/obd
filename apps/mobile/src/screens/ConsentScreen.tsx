@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Switch, View } from "react-native";
+import { View } from "react-native";
 import { Icon, TouchableRipple } from "react-native-paper";
 import { CONSENT_SWITCH_LABEL, CONSENT_TEXT, CONSENT_TITLE } from "../beta/consent.js";
 import type { BetaStatus } from "../beta/outbox.js";
-import { Button, Card, Screen, styles, Text } from "../ui/kit.js";
+import { Button, Card, Screen, styles, SwitchRow, Text } from "../ui/kit.js";
 import { consentSections } from "../ui/text.js";
 import { useTokens } from "../ui/theme.js";
 
@@ -27,13 +27,10 @@ function ConsentScreen({ beta, betaMessage, consentShare, setConsentShare, busy,
   return <Screen scroll blocks>
     <Text accessibilityRole="header" style={styles.h1}>{CONSENT_TITLE}</Text>
     <Text style={{ color: tokens.muted }}>{beta.line}</Text>
-    {betaMessage ? <Text>{betaMessage}</Text> : null}
+    {betaMessage ? <Text accessibilityLiveRegion="polite">{betaMessage}</Text> : null}
     <Text selectable>{intro}</Text>
     {sections.map((section) => <ConsentSection key={section.title} title={section.title} body={section.body} />)}
-    <View style={[styles.row, { minHeight: 60 }]}>
-      <Text style={[styles.rowLabel, { flex: 1 }]}>{CONSENT_SWITCH_LABEL}</Text>
-      <Switch accessibilityLabel={CONSENT_SWITCH_LABEL} value={consentShare} onValueChange={setConsentShare} />
-    </View>
+    <SwitchRow title={CONSENT_SWITCH_LABEL} value={consentShare} onValueChange={setConsentShare} />
     <Button title="Continue" disabled={busy} onPress={() => void decideBeta(consentShare)} />
   </Screen>;
 }

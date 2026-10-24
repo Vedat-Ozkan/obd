@@ -15,7 +15,7 @@ import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { back, type Route } from "./src/app/navigation.js";
 import { findReport } from "./src/app/reportView.js";
 import { batteryHistory, betaOutbox, garageFlow, loadThemePreference } from "./src/app/runtime.js";
-import { Button, Screen, styles, Text } from "./src/ui/kit.js";
+import { Button, Screen, styles, Text, useTitleFocus } from "./src/ui/kit.js";
 import { FONTS, paperTheme, setThemePreference, useScheme, useTokens } from "./src/ui/theme.js";
 import { AddVehicleScreen, InterestScreen } from "./src/screens/AddVehicleScreen.js";
 import { CarScreen } from "./src/screens/CarScreen.js";
@@ -29,9 +29,10 @@ import { BetaScreen, LicensesScreen, PrivacyScreen, SaveFolderScreen, SettingsSc
 
 function TopBar({ title, onBack, action }: { title: string; onBack?: () => void; action?: ReactNode }) {
   const tokens = useTokens();
+  const titleRef = useTitleFocus(title);
   return <View style={[styles.row, { minHeight: 56 }]}>
     {onBack ? <IconButton icon="arrow-left" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Back" onPress={onBack} /> : null}
-    <Text accessibilityRole="header" style={[styles.h1, { flex: 1 }]}>{title}</Text>
+    <View ref={titleRef} accessible accessibilityRole="header" style={{ flex: 1 }}><Text style={styles.h1}>{title}</Text></View>
     {action}
   </View>;
 }
@@ -152,7 +153,7 @@ export function App() {
 
   const page = (heading: string, body: ReactNode, action?: ReactNode) => <Screen scroll blocks>
     <TopBar title={heading} onBack={stack.length > 1 ? pop : undefined} action={action} />
-    {error ? <Text style={{ color: tokens.error }}>{error}</Text> : null}
+    {error ? <Text accessibilityLiveRegion="assertive" style={{ color: tokens.error }}>{error}</Text> : null}
     {body}
   </Screen>;
   const vehicleName = selectedVehicle ? `${String(selectedVehicle.year)} ${selectedVehicle.make} ${selectedVehicle.model}` : "";

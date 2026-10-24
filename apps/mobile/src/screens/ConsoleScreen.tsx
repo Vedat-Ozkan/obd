@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Transport } from "obd-core/transport";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
-import { Alert, PermissionsAndroid, Platform, ScrollView, Switch, TextInput, View } from "react-native";
+import { Alert, PermissionsAndroid, Platform, ScrollView, TextInput, View } from "react-native";
 import { Icon, IconButton, TouchableRipple } from "react-native-paper";
 import { readLines } from "../beta/phoneStore.js";
 import type { BleConnection } from "../ble/BleTransport.js";
@@ -22,7 +22,7 @@ import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js"
 import type { GarageVehicle } from "../garage/flow.js";
 import { batteryHistory, betaOutbox, chargeRun, deferShare, dongleLink, dongleMemory, driveTargets, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
 import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
-import { Button, Card, ListRow, Screen, SectionLabel, styles, Text } from "../ui/kit.js";
+import { Button, Card, ListRow, Screen, SectionLabel, styles, SwitchRow, Text, useTitleFocus } from "../ui/kit.js";
 import { DonglePicker } from "./DonglePicker.js";
 import { useTokens } from "../ui/theme.js";
 
@@ -473,6 +473,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const saved = chargeStep(status) === 5;
   const driving = chargeLogging && chargeRun.current()?.kind === "drive";
   const title = driving ? "Test drive" : chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : "Battery check";
+  const titleRef = useTitleFocus(title);
   const marks = stepMarks(reached, saved);
   const MARK = {
     done: { icon: "check-circle", color: tokens.accent, word: "Done" }, logged: { icon: "check-circle", color: tokens.accent, word: "Logged" },
@@ -485,14 +486,15 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     teardown("Disconnected by user."); void dongleLink.disconnect();
   }} />;
 
-  return <Screen scroll blocks>
+  return <>
+  <Screen scroll blocks hidden={pickerOpen}>
     <View style={[styles.row, { minHeight: 56 }]}>
       <IconButton icon="arrow-left" iconColor={tokens.text} size={24} style={{ margin: 0, width: 48, height: 48 }} accessibilityLabel="Back" disabled={diagnosing || chargeLogging} onPress={onBack} />
-      <Text accessibilityRole="header" style={[styles.h1, { flex: 1 }]}>{title}</Text>
+      <View ref={titleRef} accessible accessibilityRole="header" style={{ flex: 1 }}><Text style={styles.h1}>{title}</Text></View>
     </View>
-    <View accessibilityLiveRegion="polite" style={[styles.hero, styles.heroContent, { backgroundColor: tokens.container }]}>
+    <View style={[styles.hero, styles.heroContent, { backgroundColor: tokens.container }]}>
       <Text style={[styles.caption, { color: tokens.containerMuted }]}>2024 Chevrolet Equinox EV · garage car {entry.id}</Text>
-      <Text style={[styles.rowLabel, { color: tokens.onContainer }]}>{status}</Text>
+      <Text accessibilityLiveRegion="polite" style={[styles.rowLabel, { color: tokens.onContainer }]}>{status}</Text>
       <Text style={[styles.caption, { color: tokens.containerMuted }]}>{connection ? `Connected ${connection.deviceName ?? connection.deviceId}; MTU ${String(connection.mtu)}; write ${connection.writeCharacteristicUuid}; notify ${connection.notifyCharacteristicUuid}` : "Not connected"}</Text>
     </View>
     {(chargeLogging && !driving) || saved ? <Card>
@@ -519,13 +521,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         {remembered && !connection ? <Button title="Connect" tonal disabled={!permitted || connecting || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void connectTo(remembered, "remembered")} /> : null}
         <Button title={remembered ? "Change dongle" : "Choose dongle"} tonal disabled={!permitted || connecting || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => { setPickerOpen(true); }} />
       </View>
-      <View style={[styles.row, { minHeight: 60 }]}>
-        <View style={styles.rowText}>
-          <Text style={styles.rowLabel}>Vehicle Ready and in Park</Text>
-          <Text style={[styles.caption, { color: tokens.muted }]}>{diagnosisReady ? "Recorded with the battery check: yes" : "Recorded with the battery check: unknown"}</Text>
-        </View>
-        <Switch accessibilityLabel="Vehicle Ready and in Park" value={diagnosisReady} disabled={diagnosing} onValueChange={() => { setDiagnosisReady((value) => !value); }} />
-      </View>
+      <SwitchRow title="Vehicle Ready and in Park" subtitle={diagnosisReady ? "Recorded with the battery check: yes" : "Recorded with the battery check: unknown"} value={diagnosisReady} disabled={diagnosing} onValueChange={setDiagnosisReady} />
       {intent === "charge"
         ? <Button title="Start charge log" disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void chargeLog()} />
         : <Button title="Run battery check" disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void diagnose()} />}
@@ -552,7 +548,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <Button title="Record module codes" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void captureModuleCodes()} />
           {DRIVE_MINUTES.map((minutes) => <Button key={minutes} title={`Record test drive (${String(minutes)} min)`} tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive(minutes)} />)}
           <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive for the chosen length.</Text>
-          {captureStep ? <Text>{captureStep}</Text> : null}
+          {captureStep ? <Text accessibilityLiveRegion="polite">{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
           <TextInput accessibilityLabel="Read-only command" style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
           <Button title="Send (not saved)" tonal disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void send()} />
@@ -568,9 +564,10 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         </> : null}
       </Card>
     </>}
-    <DonglePicker visible={pickerOpen} {...(remembered ? { rememberedId: remembered.id } : {})} onDismiss={() => { setPickerOpen(false); }}
-      onPick={(device) => { setPickerOpen(false); closeDebugSession(); void connectTo(device, "picked"); }} />
-  </Screen>;
+  </Screen>
+  <DonglePicker visible={pickerOpen} {...(remembered ? { rememberedId: remembered.id } : {})} onDismiss={() => { setPickerOpen(false); }}
+    onPick={(device) => { setPickerOpen(false); closeDebugSession(); void connectTo(device, "picked"); }} />
+  </>;
 }
 
 const consoleStyle = { borderWidth: 1, borderRadius: 12, padding: 8, minHeight: 220 };

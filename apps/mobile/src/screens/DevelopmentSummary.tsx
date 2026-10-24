@@ -40,16 +40,16 @@ function DevelopmentSummary({ report }: { report: BatteryDiagnosisReport }) {
     <TextInput accessibilityLabel="Local summary URL" style={[styles.input, inputColors]} value={url} editable={!pending} autoCapitalize="none" autoCorrect={false} onChangeText={(value) => { withdraw(); setUrl(value); }} placeholder="http://192.168.1.20:8788" placeholderTextColor={colors.muted} />
     <TextInput accessibilityLabel="Development access token" style={[styles.input, inputColors]} value={token} editable={!pending} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="off" textContentType="none" onChangeText={(value) => { generation.current++; flow.withdraw(); setAccepted(false); setSummary(undefined); setToken(value); }} placeholder="Separate development access token" placeholderTextColor={colors.muted} />
     <Text style={normal}>{SUMMARY_DISCLOSURE}</Text>
-    <Text style={normal} accessibilityRole="link" onPress={() => { void Linking.openURL("https://openrouter.ai/privacy").catch(() => {}); }}>OpenRouter privacy policy</Text>
-    <Text style={normal} accessibilityRole="link" onPress={() => { void Linking.openURL("https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html").catch(() => {}); }}>DeepSeek privacy policy</Text>
+    <Text style={[normal, { minHeight: 48, textAlignVertical: "center" }]} accessibilityRole="link" onPress={() => { void Linking.openURL("https://openrouter.ai/privacy").catch(() => {}); }}>OpenRouter privacy policy</Text>
+    <Text style={[normal, { minHeight: 48, textAlignVertical: "center" }]} accessibilityRole="link" onPress={() => { void Linking.openURL("https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html").catch(() => {}); }}>DeepSeek privacy policy</Text>
     <View style={styles.row}><Switch accessibilityLabel="Allow OpenRouter and DeepSeek processing" value={accepted} onValueChange={(value) => {
       if (!value) { withdraw(); return; }
       access.configure(url, token); flow.consent(true); setAccepted(true);
     }} /><Text style={normal}>Allow this AI summary session</Text></View>
     <Button title="Request AI summary" disabled={!accepted || pending} onPress={() => { void request(); }} />
     <Button title="Withdraw AI consent" onPress={withdraw} />
-    {pending ? <Text style={normal}>Requesting summary. The offline report remains available.</Text> : null}
-    {summary ? <Text style={normal}>{summary.kind === "llm" ? summary.text : summary.reason}</Text> : null}
+    {pending ? <Text accessibilityLiveRegion="polite" style={normal}>Requesting summary. The offline report remains available.</Text> : null}
+    {summary ? <Text accessibilityLiveRegion="polite" style={normal}>{summary.kind === "llm" ? summary.text : summary.reason}</Text> : null}
     {__DEV__ && summary?.evidence ? <View>
       <Text style={normal}>Development run metadata</Text>
       <Text selectable style={normal}>{JSON.stringify(summary.evidence, null, 2)}</Text>

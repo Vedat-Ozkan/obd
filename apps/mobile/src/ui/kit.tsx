@@ -1,5 +1,5 @@
-import type { ComponentProps, ReactNode } from "react";
-import { ScrollView, StyleSheet, View, type DimensionValue, type Text as NativeText, type TextStyle } from "react-native";
+import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import { AccessibilityInfo, findNodeHandle, ScrollView, StyleSheet, Switch, View, type DimensionValue, type Text as NativeText, type TextStyle } from "react-native";
 import { Card as PaperCard, Icon, Text as PaperText, TouchableRipple, useTheme } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ratingWord } from "obd-battery/rating";
@@ -25,12 +25,36 @@ export function Button({ title, onPress, disabled = false, color, tonal = false 
   </TouchableRipple>;
 }
 
-export function Screen({ scroll = false, blocks = false, children }: { scroll?: boolean; blocks?: boolean; children: ReactNode }) {
+export function useTitleFocus(title: string) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    const node = findNodeHandle(ref.current);
+    if (node !== null) AccessibilityInfo.setAccessibilityFocus(node);
+  }, [title]);
+  return ref;
+}
+
+export function Screen({ scroll = false, blocks = false, hidden = false, children }: { scroll?: boolean; blocks?: boolean; hidden?: boolean; children: ReactNode }) {
   const tokens = useTokens();
   const insets = useSafeAreaInsets();
   const pad = { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, paddingLeft: insets.left + 16, paddingRight: insets.right + 16, ...(blocks ? { gap: 14 } : {}) };
-  if (scroll) return <ScrollView style={{ backgroundColor: tokens.bg }} contentContainerStyle={[styles.garage, pad]}>{children}</ScrollView>;
-  return <View style={[styles.container, pad, { backgroundColor: tokens.bg }]}>{children}</View>;
+  const importance = hidden ? "no-hide-descendants" : "auto";
+  if (scroll) return <ScrollView importantForAccessibility={importance} style={{ backgroundColor: tokens.bg }} contentContainerStyle={[styles.garage, pad]}>{children}</ScrollView>;
+  return <View importantForAccessibility={importance} style={[styles.container, pad, { backgroundColor: tokens.bg }]}>{children}</View>;
+}
+
+export function SwitchRow({ title, subtitle, value, onValueChange, disabled = false }: { title: string; subtitle?: string; value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean }) {
+  const tokens = useTokens();
+  return <TouchableRipple accessibilityRole="switch" accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title} accessibilityState={{ checked: value, disabled }} disabled={disabled} onPress={() => { onValueChange(!value); }}
+    style={styles.listRow}>
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{title}</Text>
+        {subtitle ? <Text style={[styles.caption, { color: tokens.muted }]}>{subtitle}</Text> : null}
+      </View>
+      <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><Switch value={value} disabled={disabled} onValueChange={onValueChange} /></View>
+    </View>
+  </TouchableRipple>;
 }
 
 export function SectionLabel({ children }: { children: string }) {
