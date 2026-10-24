@@ -1,0 +1,9 @@
+appId: com.ev.obd
+---
+- runFlow:
+    when:
+      visible: "USE THIS FOLDER"
+    commands:
+      - tapOn: "Documents"
+      - tapOn: "USE THIS FOLDER"
+      - tapOn: "ALLOW"

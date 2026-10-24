@@ -32,8 +32,13 @@ appId: com.ev.obd
           element: "Run codes report"
       - tapOn: "Run codes report"
       - extendedWaitUntil:
-          visible: ".*(Share sheet opened|NOT SAVED|Saved ).*"
+          visible: ".*(Share sheet opened|NOT SAVED|Saved ).*|USE THIS FOLDER"
           timeout: 240000
+      - runFlow: pick-folder.yaml
+      - scrollUntilVisible:
+          element: ".*(Share sheet opened|NOT SAVED|Saved ).*"
+          direction: UP
+          timeout: 90000
       - assertNotVisible: ".*Queued for beta upload.*"
       - takeScreenshot: 02-off-no-beta-sentence
 
@@ -80,8 +85,13 @@ appId: com.ev.obd
           element: "Run codes report"
       - tapOn: "Run codes report"
       - extendedWaitUntil:
-          visible: ".*Queued for beta upload.*"
+          visible: ".*(Share sheet opened|NOT SAVED|Saved ).*|USE THIS FOLDER"
           timeout: 240000
+      - runFlow: pick-folder.yaml
+      - scrollUntilVisible:
+          element: ".*Queued for beta upload.*"
+          direction: UP
+          timeout: 90000
       - takeScreenshot: 04-on-queued
 
 - runFlow:
@@ -92,8 +102,13 @@ appId: com.ev.obd
           element: "Run capture"
       - tapOn: "Run capture"
       - extendedWaitUntil:
-          visible: ".*Queued for beta upload.*"
+          visible: ".*(Share sheet opened|NOT SAVED|Saved ).*|USE THIS FOLDER"
           timeout: 240000
+      - runFlow: pick-folder.yaml
+      - scrollUntilVisible:
+          element: ".*Queued for beta upload.*"
+          direction: UP
+          timeout: 90000
       - takeScreenshot: 05-airplane-queued
 
 - runFlow:

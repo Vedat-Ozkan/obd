@@ -84,7 +84,12 @@ maestro_flow() {
   local dir="$1" flow="$2"; shift 2
   mkdir -p "$dir"
   local tag="${MAESTRO_TAG:-$flow}"
-  (cd "$dir" && maestro test --test-output-dir "$dir/$tag" "$@" "$SIM/flows/$flow.yaml" > "$dir/maestro-$tag.log" 2>&1)
+  local run=1
+  while :; do
+    (cd "$dir" && maestro test --test-output-dir "$dir/$tag" "$@" "$SIM/flows/$flow.yaml" > "$dir/maestro-$tag.log" 2>&1); local rc=$?
+    if [ $rc = 0 ] || [ $run = 2 ] || grep -q 'COMPLETED\|FAILED' "$dir/maestro-$tag.log"; then return $rc; fi
+    run=2; echo "maestro $tag: driver never ran a step, retrying once" >&2; sleep 5
+  done
 }
 
 collect_sim_misses() { adb logcat -d -s ReactNativeJS 2>/dev/null | grep '\[sim\]' >> "$MISSES"; adb logcat -c; }
