@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { latin1Decode, latin1Encode, parseRecording, type RecordingLine } from "obd-core/recording";
+import { codesReportFromRecording } from "obd-core/report";
 import type { Transport } from "obd-core/transport";
 import { PROMPT_WAIT_MS, runCapture } from "../src/capture.js";
 import { CODES_SCAN_COMMANDS, codesReportMarkdown, codesScanStop } from "../src/codesScan.js";
@@ -15,6 +16,7 @@ const readText = readFileSync as (path: URL, encoding: "utf8" | "latin1") => str
 const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
 const SPIKE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
 const PHONE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl";
+const NEW = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-28-phone-console-2.redacted.jsonl";
 const ARTIFACT = readText(repoFile("packages/obd-core/test/codes-reports.md"), "utf8");
 const load = (rel: string) => parseRecording(readText(repoFile(rel), "latin1"));
 const meta = { car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "Ready", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
@@ -76,7 +78,7 @@ function setup(source: string, overrides: Record<string, string[] | "none" | "th
 afterEach(() => { vi.useRealTimers(); });
 
 describe("codes scan E2E", () => {
-  for (const source of [SPIKE, PHONE]) {
+  for (const source of [SPIKE, PHONE, NEW]) {
     it(`matches the T0.7 artifact block for ${source}`, async () => {
       const { recording, transport, session, run } = setup(source);
       const result = await run();
@@ -95,6 +97,35 @@ describe("codes scan E2E", () => {
       expect(outcome.status).toBe(`Saved ${JSONL} to the capture folder. Saved ${MD} to the capture folder.`);
     });
   }
+});
+
+describe("codes scan field assertions (2026-09-28 recording)", () => {
+  it("replays the recorded tx sequence and reads the counters from the recorded bytes", async () => {
+    const lines = load(NEW);
+    expect(lines.filter((line) => line.dir === "tx").map((line) => line.data)).toEqual(CODES_SCAN_COMMANDS.map((command) => `${command}\r`));
+    const { recording, transport, session, run } = setup(NEW);
+    const result = await run();
+    session.close();
+    expect(result).toEqual({ sent: 19, total: 19 });
+    const report = await codesReportFromRecording(parseRecording(recording.toJsonl()));
+    expect(report.modules.map((m) => m.ecu)).toEqual(["17", "28", "40", "45", "CB"]);
+    const pid = (ecu: string, id: "30" | "31" | "4D" | "4E") => report.modules.find((m) => m.ecu === ecu)?.pids[id];
+    expect(pid("17", "30")).toMatchObject({ status: "read", value: 171 });
+    expect(pid("17", "31")).toMatchObject({ status: "read", value: 8904 });
+    expect(pid("28", "30")).toMatchObject({ status: "read", value: 172 });
+    expect(pid("28", "31")).toMatchObject({ status: "read", value: 8902 });
+    for (const ecu of ["40", "45", "CB"]) {
+      expect(pid(ecu, "30")).toEqual({ status: "unsupported" });
+      expect(pid(ecu, "31")).toEqual({ status: "unsupported" });
+    }
+    for (const ecu of ["17", "28", "40", "45", "CB"]) {
+      expect(pid(ecu, "4D")).toEqual({ status: "unsupported" });
+      expect(pid(ecu, "4E")).toEqual({ status: "unsupported" });
+    }
+    expect(report.recentlyCleared.legs.countersLow).toBe("no");
+    expect(report.recentlyCleared.verdict).toBe("not-indicated");
+    expect(transport.violations).toEqual([]);
+  });
 });
 
 describe("codes scan failures", () => {

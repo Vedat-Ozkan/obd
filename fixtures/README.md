@@ -21,6 +21,7 @@ At this baseline, the tracked real recordings are:
 - `recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl`
 - `recordings/chevrolet-equinox-ev-2024/2026-09-22-spike-2.redacted.jsonl`
 - `recordings/chevrolet-equinox-ev-2024/2026-09-24-phone-console.redacted.jsonl`
+- `recordings/chevrolet-equinox-ev-2024/2026-09-28-phone-console-2.redacted.jsonl`
 
 They are protocol captures, not labeled healthy baseline fixtures.
 

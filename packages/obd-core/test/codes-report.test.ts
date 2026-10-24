@@ -15,11 +15,12 @@ const equinox = "fixtures/recordings/chevrolet-equinox-ev-2024/";
 const SPIKE = `${equinox}2026-09-22-spike.redacted.jsonl`;
 const SPIKE2 = `${equinox}2026-09-22-spike-2.redacted.jsonl`;
 const PHONE = `${equinox}2026-09-24-phone-console.redacted.jsonl`;
+const PHONE2 = `${equinox}2026-09-28-phone-console-2.redacted.jsonl`;
 const CLEARED = "fixtures/synthetic/codes-cleared.jsonl";
 const PERMANENT = "fixtures/synthetic/codes-permanent.jsonl";
 const STORED = "fixtures/synthetic/codes-stored.jsonl";
 const CONFLICT = "fixtures/synthetic/codes-conflict.jsonl";
-const PATHS = [SPIKE, SPIKE2, PHONE, CLEARED, PERMANENT, STORED, CONFLICT];
+const PATHS = [SPIKE, SPIKE2, PHONE, CLEARED, PERMANENT, STORED, CONFLICT, PHONE2];
 
 const report = (rel: string) => codesReportFromRecording(load(rel));
 
