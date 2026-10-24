@@ -30,7 +30,6 @@ async function driveCaptureSummary(lines: readonly RecordingLine[], recording: s
 
 const write = writeFileSync as (path: string, text: string) => void;
 const signals = importObdbMode22(signalsetJson);
-const simTable = JSON.parse(readFileSync(new URL("../src/sim/equinox.table.json", import.meta.url), "utf8")) as SimTable;
 const FILE = "2026-09-29-test-drive.jsonl";
 const META = { synthetic: true, car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "T2.13 test drive (20 min): synthetic fake ELM, T2.13 Stage A2 test", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 const SLOW = 300_000;
@@ -351,6 +350,7 @@ it("D6: the 10 min option stops with its own reason and status lines", async () 
 }, SLOW);
 
 const readText = readFileSync as unknown as (path: string | URL, encoding: string) => string;
+const simTable = JSON.parse(readText(new URL("../src/sim/equinox.table.json", import.meta.url), "utf8")) as SimTable;
 const repo = new URL("../../../", import.meta.url);
 const STORED = "7E80443010133\r\r>";
 const rescanStart = (lines: readonly RecordingLine[]) => lines.findIndex((l) => l.dir === "meta" && l.event === "codes rescan");
@@ -435,7 +435,6 @@ it("C6: drive reports save to their own history and leave a parked-only battery 
 });
 
 const EXPECTED_HEADLINE = "Check incomplete";
-const SPIKE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
 const local = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute);
 
 class TextMemory implements ReportTextStore {
