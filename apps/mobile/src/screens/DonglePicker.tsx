@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { Modal, Portal } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { bleManager } from "../app/runtime.js";
+import { bleManager, simulatedPickerRows } from "../app/runtime.js";
 import { orderDevices, scanDevices, type ScannedDevice } from "../ble/BleTransport.js";
 import { ListRow, SwitchRow, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
@@ -36,6 +36,9 @@ export function DonglePicker({ visible, rememberedId, onPick, onDismiss }: { vis
         {error ? <Text accessibilityLiveRegion="assertive" style={{ color: tokens.error }}>{error}</Text> : null}
         <Text accessibilityLiveRegion="polite" style={{ color: tokens.muted }}>{`${String(shown.length)} ${shown.length === 1 ? "adapter" : "adapters"} found`}</Text>
         <ScrollView style={{ maxHeight: height * 0.7 }}>
+          {simulatedPickerRows().map((row) => <ListRow key={row.id} icon="car" title={row.title} subtitle="Development only: replays recordings, no dongle" onPress={() => {
+            stopScan.current?.(); onPick({ id: row.id, name: row.name });
+          }} />)}
           {shown.map((item) => <ListRow key={item.id} icon="bluetooth" title={item.name ?? "Unnamed device"}
             subtitle={`${item.id === rememberedId ? "Last used with this car · " : ""}${signal(item.rssi)}`} onPress={() => {
               stopScan.current?.(); onPick(item);

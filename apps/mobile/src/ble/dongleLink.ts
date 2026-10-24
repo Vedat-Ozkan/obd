@@ -3,6 +3,11 @@ import type { TextStore } from "../garage/flow.js";
 
 export interface LinkConnection { transport: Transport; deviceId: string; deviceName?: string }
 
+export interface DongleConnection extends LinkConnection {
+  mtu: number; writeCharacteristicUuid: string; notifyCharacteristicUuid: string;
+  transport: Transport & { onError(cb: (e: Error) => void): () => void };
+}
+
 type LinkListener<C> = (connection: C | undefined, lost?: { error: Error | null }) => void;
 
 export function createDongleLink<C extends LinkConnection>(deps: {

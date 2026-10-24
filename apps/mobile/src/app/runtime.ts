@@ -10,13 +10,14 @@ import appJson from "../../app.json";
 import { createBetaClient } from "../beta/client.js";
 import { createBetaOutbox } from "../beta/outbox.js";
 import { betaPhoneFiles, putFile } from "../beta/phoneStore.js";
-import { connectVeepeak, type BleConnection } from "../ble/BleTransport.js";
-import { createDongleLink, createDongleMemory } from "../ble/dongleLink.js";
+import { connectVeepeak } from "../ble/BleTransport.js";
+import { createDongleLink, createDongleMemory, type DongleConnection } from "../ble/dongleLink.js";
 import type { StreamTargets } from "../chargeLogger.js";
 import { createChargeRunRecord } from "../chargeRun.js";
 import { createBatteryReportHistory } from "../batteryReports.js";
 import { batteryReportsDocumentStore } from "../batteryReportsDocumentStore.js";
 import { createChargeSummaryHistory, type SummaryTextStore } from "../chargeSummaries.js";
+import type { RecordingMeta } from "../recording.js";
 import type { RunFile, SaveTargets } from "../runFiles.js";
 import { garageDocumentStore } from "../garage/documentStore.js";
 import { createGarageFlow, type TextStore } from "../garage/flow.js";
@@ -39,6 +40,13 @@ async function requestBlePermission(): Promise<boolean> {
   const result = await PermissionsAndroid.requestMultiple(permissions);
   return permissions.every((permission) => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
 }
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const simulatedCar = (): typeof import("../sim/simulatedCar") | undefined => __DEV__ ? require("../sim/simulatedCar") as typeof import("../sim/simulatedCar") : undefined;
+const isSimulatedId = (id: string | undefined): boolean => simulatedCar()?.isSimulated(id) ?? false;
+const simulatedPickerRows = () => simulatedCar()?.SIM_PICKER_ROWS ?? [];
+const dongleKind = (link: { deviceId: string }): RecordingMeta["dongle"] => isSimulatedId(link.deviceId) ? "simulated" : "veepeak-obdcheck-ble";
+const labelled = (stem: string): string => simulatedCar()?.captureStem(stem, dongleLink.current()) ?? stem;
 
 const garageFlow = createGarageFlow(garageDocumentStore);
 const batteryHistory = createBatteryReportHistory(batteryReportsDocumentStore, garageFlow);
@@ -79,7 +87,7 @@ const phoneTargets: SaveTargets & StreamTargets = {
   keep(file) {
     const dir = new Directory(Paths.document, CAPTURES);
     dir.create({ intermediates: true, idempotent: true });
-    const base = localFilename(file.slug, file.extension); const stem = base.slice(0, -file.extension.length);
+    const base = localFilename(labelled(file.slug), file.extension); const stem = base.slice(0, -file.extension.length);
     let suffix = 1; let kept = new File(dir, base);
     while (kept.exists) { suffix++; kept = new File(dir, `${stem}-${String(suffix)}${file.extension}`); }
     kept.create();
@@ -97,7 +105,7 @@ const phoneTargets: SaveTargets & StreamTargets = {
     try { const remembered = captureFolderFile(); if (remembered.exists) remembered.delete(); } catch { }
   },
   share: (name, file) => Sharing.shareAsync(new File(Paths.document, CAPTURES, name).uri, { mimeType: file.mimeType, dialogTitle: DIALOG_TITLES[file.slug] }),
-  create: () => createCapture("charge-log"),
+  create: () => createCapture(labelled("charge-log")),
   append(name, text) { new File(Paths.document, CAPTURES, name).write(text, { append: true }); },
   async copyToFolder(name) {
     const remembered = captureFolderFile();
@@ -112,7 +120,7 @@ const phoneTargets: SaveTargets & StreamTargets = {
   },
 };
 
-const driveTargets: StreamTargets = { create: () => createCapture("test-drive"), append: (name, text) => { phoneTargets.append(name, text); }, copyToFolder: (name) => phoneTargets.copyToFolder(name) };
+const driveTargets: StreamTargets = { create: () => createCapture(labelled("test-drive")), append: (name, text) => { phoneTargets.append(name, text); }, copyToFolder: (name) => phoneTargets.copyToFolder(name) };
 
 let deferredShare: string | undefined;
 const shareDeferred = () => {
@@ -124,13 +132,13 @@ const shareDeferred = () => {
 AppState.addEventListener("change", shareDeferred);
 const deferShare = (name: string) => { deferredShare = name; shareDeferred(); };
 
-const chargeRun = createChargeRunRecord<BleConnection>();
+const chargeRun = createChargeRunRecord<DongleConnection>();
 
 let manager: BleManager | undefined;
 const bleManager = (): BleManager => (manager ??= new BleManager());
-const dongleLink = createDongleLink<BleConnection>({
-  connect: (deviceId) => connectVeepeak(bleManager(), deviceId),
-  onDisconnected: (deviceId, listener) => bleManager().onDeviceDisconnected(deviceId, (error) => { listener(error); }),
+const dongleLink = createDongleLink<DongleConnection>({
+  connect: (deviceId) => simulatedCar()?.isSimulated(deviceId) ? (simulatedCar()?.connectSimulated(deviceId) ?? Promise.reject(new Error("no simulator"))) : connectVeepeak(bleManager(), deviceId),
+  onDisconnected: (deviceId, listener) => isSimulatedId(deviceId) ? { remove() { } } : bleManager().onDeviceDisconnected(deviceId, (error) => { listener(error); }),
 });
 const dongleStore: TextStore = {
   async read() { const file = new File(Paths.document, "dongles.json"); return file.exists ? file.text() : undefined; },
@@ -171,4 +179,4 @@ const folderLabel = async (): Promise<string | undefined> => {
   return remembered.exists ? new Directory((await remembered.text()).trim()).name : undefined;
 };
 
-export { localDate, requestBlePermission, garageFlow, batteryHistory, chargeSummaryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, driveTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
+export { isSimulatedId, simulatedPickerRows, dongleKind, labelled, localDate, requestBlePermission, garageFlow, batteryHistory, chargeSummaryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, driveTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };

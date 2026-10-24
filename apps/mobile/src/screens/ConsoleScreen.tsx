@@ -4,7 +4,7 @@ import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { Alert, PermissionsAndroid, Platform, ScrollView, TextInput, View } from "react-native";
 import { Icon, IconButton, TouchableRipple } from "react-native-paper";
 import { readLines } from "../beta/phoneStore.js";
-import type { BleConnection } from "../ble/BleTransport.js";
+import type { DongleConnection } from "../ble/dongleLink.js";
 import { runView, type RememberedDongle } from "../ble/dongleLink.js";
 import { runCapture } from "../capture.js";
 import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosisFlow.js";
@@ -23,7 +23,7 @@ import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
 import { saveChargeLogSummary } from "../chargeSummaries.js";
-import { batteryHistory, betaOutbox, chargeSummaryHistory, chargeRun, deferShare, dongleLink, dongleMemory, driveTargets, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
+import { batteryHistory, betaOutbox, chargeSummaryHistory, chargeRun, deferShare, dongleKind, dongleLink, dongleMemory, driveTargets, isSimulatedId, labelled, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
 import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
 import { Button, Card, ListRow, Screen, SectionLabel, styles, SwitchRow, Text, useTitleFocus } from "../ui/kit.js";
 import { DonglePicker } from "./DonglePicker.js";
@@ -38,7 +38,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const tokens = useTokens();
   const inputColors = { backgroundColor: tokens.surface, borderColor: tokens.outline, color: tokens.text };
   const [recording] = useState(() => new RecordingBuffer());
-  const [connection, setConnection] = useState<BleConnection | undefined>(() => dongleLink.current());
+  const [connection, setConnection] = useState<DongleConnection | undefined>(() => dongleLink.current());
   const [remembered, setRemembered] = useState<RememberedDongle>();
   const session = useRef<ConsoleSession | undefined>(undefined);
   const debugSession = useRef<ConsoleSession | undefined>(undefined);
@@ -115,7 +115,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     setStatus(message);
   };
 
-  const watchErrors = (link: BleConnection) => {
+  const watchErrors = (link: DongleConnection) => {
     errorSubscription.current?.();
     errorSubscription.current = link.transport.onError((error) => { setStatus(`Notification error: ${error.message}`); });
   };
@@ -126,7 +126,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       setStatus(`Connecting to ${shown}…`);
       const next = await dongleLink.connect(device.id);
       const name = next.deviceName ?? device.name;
-      void dongleMemory.remember(entry.id, { id: next.deviceId, ...(name === undefined ? {} : { name }) })
+      if (!isSimulatedId(next.deviceId)) void dongleMemory.remember(entry.id, { id: next.deviceId, ...(name === undefined ? {} : { name }) })
         .then(() => dongleMemory.get(entry.id)).then((saved) => { if (mounted.current) setRemembered(saved); }, () => undefined);
       if (!mounted.current) return;
       watchErrors(next);
@@ -165,7 +165,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         const name = live.deviceName ?? (dongle?.id === live.deviceId ? dongle.name : undefined) ?? live.deviceId;
         say(`Connected to ${name}.`);
         watchErrors(live);
-        if (!dongle) void dongleMemory.remember(entry.id, { id: live.deviceId, ...(live.deviceName === undefined ? {} : { name: live.deviceName }) })
+        if (!dongle && !isSimulatedId(live.deviceId)) void dongleMemory.remember(entry.id, { id: live.deviceId, ...(live.deviceName === undefined ? {} : { name: live.deviceName }) })
           .then(() => dongleMemory.get(entry.id)).then((saved) => { if (mounted.current) setRemembered(saved); }, () => undefined);
         return;
       }
@@ -186,7 +186,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   const startRecording = (): ConsoleSession | undefined => {
     if (!canUseEquinoxConsole(vehicle)) { setStatus("Equinox console unavailable for this model year."); return undefined; }
     if (!connection || !note.trim()) { setStatus("Connect and enter a non-empty vehicle-state note before recording."); return undefined; }
-    recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
+    recording.start({ car: "chevrolet-equinox-ev-2024", dongle: dongleKind(connection), note: note.trim(), writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
     session.current = new ConsoleSession(connection.transport, recording);
     setTranscript([]); frozenRef.current = undefined; setReport(undefined);
     return session.current;
@@ -196,7 +196,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     bleOwner.current = "send";
     if (!debugSession.current) {
       const scratch = new RecordingBuffer();
-      scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
+      scratch.start({ car: "chevrolet-equinox-ev-2024", dongle: dongleKind(connection), note: "debug send; not saved", writeChar: connection.writeCharacteristicUuid, notifyChar: connection.notifyCharacteristicUuid, mtu: connection.mtu });
       debugSession.current = new ConsoleSession(connection.transport, scratch);
     }
     const debug = debugSession.current;
@@ -242,7 +242,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     bleOwner.current = "module-codes";
     setCapturing(true); setCaptureStep(""); setCaptureLast(""); setStatus("Recording module codes…");
     const dedicated = new RecordingBuffer();
-    dedicated.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    dedicated.start({ car: "chevrolet-equinox-ev-2024", dongle: dongleKind(active), note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     const view = runView(active.transport); moduleCaptureView.current = view;
     let jsonl: string;
     let summary: string;
@@ -277,7 +277,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     diagnosingRef.current = true; diagnosisScanActive.current = true; setDiagnosing(true); setCanCancelDiagnosis(true);
     const scanRecording = new RecordingBuffer();
     const scannedAt = new Date().toISOString();
-    scanRecording.start(batteryScanMeta(active, diagnosisReady));
+    scanRecording.start(batteryScanMeta(active, diagnosisReady, dongleKind(active)));
     // The scan closes its transport when it ends; on the kept link that closes only this view.
     const view = runView(active.transport); diagnosisView.current = view;
     const scanTransport: Transport = {
@@ -287,7 +287,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       close: async () => { diagnosisCloseExpected.current = true; await view.close(); },
     };
     try {
-      const outcome = await runAndSaveBatteryDiagnosis({ entry, transport: scanTransport, recording: scanRecording, scannedAt, keepScan: keepPrivateBatteryScan, history: batteryHistory, importedSignals: equinoxSignals, getInterruption: () => diagnosisInterruption.current, onProgress: (message) => { if (message === "Keeping private scan") { diagnosisScanActive.current = false; setCanCancelDiagnosis(false); } setStatus(message); } });
+      const outcome = await runAndSaveBatteryDiagnosis({ entry, transport: scanTransport, recording: scanRecording, scannedAt, keepScan: (id, at, jsonl) => keepPrivateBatteryScan(id, at, jsonl, labelled("")), history: batteryHistory, importedSignals: equinoxSignals, getInterruption: () => diagnosisInterruption.current, onProgress: (message) => { if (message === "Keeping private scan") { diagnosisScanActive.current = false; setCanCancelDiagnosis(false); } setStatus(message); } });
       // T2.9: every kept private scan is shared, whatever its outcome.
       const beta = outcome.status === "model-not-confirmed" ? undefined : await queueForBeta("battery-scan", entry, readLines(outcome.recording));
       const betaSentence = beta === undefined ? "" : ` ${beta}`;
@@ -331,7 +331,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       chargeRun.end(line);
     };
     const logRecording = new RecordingBuffer();
-    logRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    logRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: dongleKind(active), note: note.trim(), writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     let connected = false;
     let notified = 0;
     const task = async () => {
@@ -401,7 +401,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       chargeRun.end(line);
     };
     const driveRecording = new RecordingBuffer();
-    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.13 test drive (${String(minutes)} min): ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: dongleKind(active), note: `T2.13 test drive (${String(minutes)} min): ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     let connected = false;
     let notified = 0;
     const driveStart = new Date();

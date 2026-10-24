@@ -31,7 +31,7 @@ export const driveReportsDocumentStore: ReportTextStore = {
   },
 };
 
-export function keepPrivateBatteryScan(garageVehicleId: string, scannedAt: string, jsonl: string): string {
+export function keepPrivateBatteryScan(garageVehicleId: string, scannedAt: string, jsonl: string, stemPrefix = ""): string {
   if (!/^[1-9]\d*$/.test(garageVehicleId)) throw new Error("Invalid garage vehicle ID.");
   const stamp = new Date(scannedAt);
   if (Number.isNaN(stamp.valueOf())) throw new Error("Invalid scan timestamp.");
@@ -39,7 +39,7 @@ export function keepPrivateBatteryScan(garageVehicleId: string, scannedAt: strin
   parent.create({ idempotent: true });
   const folder = new Directory(parent, garageVehicleId);
   folder.create({ idempotent: true });
-  const base = stamp.toISOString().replace(/[:.]/g, "-");
+  const base = stemPrefix + stamp.toISOString().replace(/[:.]/g, "-");
   for (let number = 0; number < 1000; number++) {
     const name = `${base}${number === 0 ? "" : `-${String(number)}`}.jsonl`;
     const destination = new File(folder, name);

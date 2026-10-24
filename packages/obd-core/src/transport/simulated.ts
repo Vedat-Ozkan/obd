@@ -118,7 +118,7 @@ export class SimulatedTransport implements Transport {
     const command = normalise(latin1Decode(bytes));
     const key = simKey(isAt(command) ? "" : this.header, command);
     this.header = nextHeader(this.header, command);
-    const queue = this.scenario === "wrong-model" && command === "0902" ? this.table.wrongModelVin : this.table.replies[key];
+    const queue = this.scenario === "wrong-model" && command === "0902" ? this.table.wrongModelVin : (this.table.replies as Readonly<Record<string, readonly string[] | undefined>>)[key];
     if (queue === undefined || queue.length === 0) {
       this.missed.push(key);
       return Promise.reject(new SimulatedCommandError(key));
