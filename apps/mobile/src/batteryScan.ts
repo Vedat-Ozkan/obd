@@ -1,5 +1,6 @@
 import { Elm327Session, type ElmResponse } from "obd-core/elm/session";
 import { latin1Decode } from "obd-core/recording";
+import { decodeVin } from "obd-core/vin";
 import type { Transport } from "obd-core/transport";
 import { equinoxEv2024Profile, genericProfile, scanMode22Profile } from "obd-core/vehicles";
 import { renderBatteryDiagnosis, type BatteryDiagnosisReport } from "obd-battery/report";
@@ -38,9 +39,10 @@ export function hasEquinoxSocFingerprint(report: BatteryDiagnosisReport): boolea
 
 function vinsFrom(response: ElmResponse): string[] {
   if (response.kind !== "data") return [];
-  return response.frames
-    .filter((frame) => frame.data.length === 20 && frame.data[0] === 0x49 && frame.data[1] === 0x02 && frame.data[2] === 1)
-    .map((frame) => String.fromCharCode(...frame.data.subarray(3)));
+  return response.frames.flatMap((frame) => {
+    const result = decodeVin(frame);
+    return result.ok ? [result.vin] : [];
+  });
 }
 
 class StopOnElmErrorSession extends Elm327Session {
