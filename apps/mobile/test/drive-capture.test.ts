@@ -18,6 +18,8 @@ import { createGarageFlow } from "../src/garage/flow.js";
 import { codesReportFromRecording } from "obd-core/report";
 import { GROUP_RULE_STATUS, UNCONFIRMED_LINE, driveReportFromRecording, renderDriveReport } from "../../../packages/obd-battery/src/driveReport.js";
 import { batteryDiagnosisFromRecording } from "../../../packages/obd-battery/src/report.js";
+import { SimulatedTransport, type SimTable } from "obd-core/transport/simulated";
+import { runAndSaveBatteryDiagnosis } from "../src/batteryDiagnosisFlow.js";
 import { reportSummary } from "../src/app/reportView.js";
 
 async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string): Promise<string> {
@@ -348,6 +350,7 @@ it("D6: the 10 min option stops with its own reason and status lines", async () 
 }, SLOW);
 
 const readText = readFileSync as unknown as (path: string | URL, encoding: string) => string;
+const simTable = JSON.parse(readText(new URL("../src/sim/equinox.table.json", import.meta.url), "utf8")) as SimTable;
 const repo = new URL("../../../", import.meta.url);
 const STORED = "7E80443010133\r\r>";
 const rescanStart = (lines: readonly RecordingLine[]) => lines.findIndex((l) => l.dir === "meta" && l.event === "codes rescan");
@@ -432,7 +435,6 @@ it("C6: drive reports save to their own history and leave a parked-only battery 
 });
 
 const EXPECTED_HEADLINE = "Check incomplete";
-const SPIKE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
 const local = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute);
 
 class TextMemory implements ReportTextStore {
@@ -449,7 +451,10 @@ async function guidedFlow(name: string, plan: Plan, options: { parkedFirst: bool
   const parkedHistory = createBatteryReportHistory(parkedStore, garage);
   const driveHistory = createDriveReportHistory(driveStore);
   const parkedScan = async (label: string, at: Date) => {
-    await parkedHistory.save(await batteryDiagnosisFromRecording(readText(new URL(SPIKE, repo), "latin1"), { garageVehicleId: checked.id, catalogId: "chevrolet-equinox-ev-2024", scannedAt: at.toISOString(), recording: label, scanStatus: "complete" }, signals));
+    const recording = new RecordingBuffer(); recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "simulated", note: "SIMULATED", writeChar: "simulated", notifyChar: "simulated", mtu: 0 });
+    vi.useRealTimers();
+    const result = await runAndSaveBatteryDiagnosis({ entry: checked, transport: new SimulatedTransport(simTable, "equinox"), recording, scannedAt: at.toISOString(), keepScan: () => label, history: parkedHistory, importedSignals: signals, getInterruption: () => undefined, onProgress: () => undefined });
+    expect(result.status).toBe("saved");
   };
   vi.useRealTimers();
   if (options.parkedFirst) await parkedScan("battery-scans/2/pre.jsonl", local(10));
