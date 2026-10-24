@@ -18,6 +18,8 @@ import { createGarageFlow } from "../src/garage/flow.js";
 import { codesReportFromRecording } from "obd-core/report";
 import { GROUP_RULE_STATUS, UNCONFIRMED_LINE, driveReportFromRecording, renderDriveReport } from "../../../packages/obd-battery/src/driveReport.js";
 import { batteryDiagnosisFromRecording } from "../../../packages/obd-battery/src/report.js";
+import { SimulatedTransport, type SimTable } from "obd-core/transport/simulated";
+import { runAndSaveBatteryDiagnosis } from "../src/batteryDiagnosisFlow.js";
 import { reportSummary } from "../src/app/reportView.js";
 
 async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string): Promise<string> {
@@ -28,6 +30,7 @@ async function driveCaptureSummary(lines: readonly RecordingLine[], recording: s
 
 const write = writeFileSync as (path: string, text: string) => void;
 const signals = importObdbMode22(signalsetJson);
+const simTable = JSON.parse(readFileSync(new URL("../src/sim/equinox.table.json", import.meta.url), "utf8")) as SimTable;
 const FILE = "2026-09-29-test-drive.jsonl";
 const META = { synthetic: true, car: "chevrolet-equinox-ev-2024" as const, dongle: "veepeak-obdcheck-ble" as const, note: "T2.13 test drive (20 min): synthetic fake ELM, T2.13 Stage A2 test", writeChar: "fff1", notifyChar: "fff2", mtu: 23 };
 const SLOW = 300_000;
@@ -449,7 +452,10 @@ async function guidedFlow(name: string, plan: Plan, options: { parkedFirst: bool
   const parkedHistory = createBatteryReportHistory(parkedStore, garage);
   const driveHistory = createDriveReportHistory(driveStore);
   const parkedScan = async (label: string, at: Date) => {
-    await parkedHistory.save(await batteryDiagnosisFromRecording(readText(new URL(SPIKE, repo), "latin1"), { garageVehicleId: checked.id, catalogId: "chevrolet-equinox-ev-2024", scannedAt: at.toISOString(), recording: label, scanStatus: "complete" }, signals));
+    const recording = new RecordingBuffer(); recording.start({ car: "chevrolet-equinox-ev-2024", dongle: "simulated", note: "SIMULATED", writeChar: "simulated", notifyChar: "simulated", mtu: 0 });
+    vi.useRealTimers();
+    const result = await runAndSaveBatteryDiagnosis({ entry: checked, transport: new SimulatedTransport(simTable, "equinox"), recording, scannedAt: at.toISOString(), keepScan: () => label, history: parkedHistory, importedSignals: signals, getInterruption: () => undefined, onProgress: () => undefined });
+    expect(result.status).toBe("saved");
   };
   vi.useRealTimers();
   if (options.parkedFirst) await parkedScan("battery-scans/2/pre.jsonl", local(10));
