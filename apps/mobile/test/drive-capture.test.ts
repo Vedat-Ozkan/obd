@@ -12,12 +12,13 @@ import { RECOVERY_WAIT_S, type StreamTargets } from "../src/chargeLogger.js";
 import { CONTEXT_DIDS, CONTEXT_EVERY, DRIVE_SILENT_S, GROUP_DIDS, runDriveCapture, type DriveCaptureResult } from "../src/driveCapture.js";
 import { RecordingBuffer } from "../src/recording.js";
 import { CODES_SCAN_COMMANDS } from "../src/codesScan.js";
-import { createDriveReportHistory, preDriveReport } from "../src/driveReports.js";
+import { createDriveReportHistory, preDriveReport, saveDriveReport } from "../src/driveReports.js";
 import { createBatteryReportHistory, type ReportTextStore } from "../src/batteryReports.js";
 import { createGarageFlow } from "../src/garage/flow.js";
 import { codesReportFromRecording } from "obd-core/report";
-import { driveReportFromRecording, renderDriveReport } from "../../../packages/obd-battery/src/driveReport.js";
+import { GROUP_RULE_STATUS, UNCONFIRMED_LINE, driveReportFromRecording, renderDriveReport } from "../../../packages/obd-battery/src/driveReport.js";
 import { batteryDiagnosisFromRecording } from "../../../packages/obd-battery/src/report.js";
+import { reportSummary } from "../src/app/reportView.js";
 
 async function driveCaptureSummary(lines: readonly RecordingLine[], recording: string): Promise<string> {
   const script = new URL("../../../packages/obd-battery/scripts/drive-capture.ts", import.meta.url).href;
@@ -429,3 +430,75 @@ it("C6: drive reports save to their own history and leave a parked-only battery 
   expect(preDriveReport(list, laterSameDay)?.scannedAt).toBe(parked.scannedAt);
   expect(preDriveReport(list, nextDay)).toBeUndefined();
 });
+
+const EXPECTED_HEADLINE = "Check incomplete";
+const SPIKE = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-22-spike.redacted.jsonl";
+const local = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute);
+
+class TextMemory implements ReportTextStore {
+  value?: string;
+  read() { return Promise.resolve(this.value); }
+  write(value: string) { this.value = value; return Promise.resolve(); }
+}
+
+async function guidedFlow(name: string, plan: Plan, options: { parkedFirst: boolean }) {
+  const garageStore = new TextMemory(); const parkedStore = new TextMemory(); const driveStore = new TextMemory();
+  const garage = createGarageFlow(garageStore);
+  await garage.add("chevrolet-equinox-ev-2024", "mine");
+  const checked = (await garage.add("chevrolet-equinox-ev-2024", "checked")).vehicles[1];
+  const parkedHistory = createBatteryReportHistory(parkedStore, garage);
+  const driveHistory = createDriveReportHistory(driveStore);
+  const parkedScan = async (label: string, at: Date) => {
+    await parkedHistory.save(await batteryDiagnosisFromRecording(readText(new URL(SPIKE, repo), "latin1"), { garageVehicleId: checked.id, catalogId: "chevrolet-equinox-ev-2024", scannedAt: at.toISOString(), recording: label, scanStatus: "complete" }, signals));
+  };
+  vi.useRealTimers();
+  if (options.parkedFirst) await parkedScan("battery-scans/2/pre.jsonl", local(10));
+  vi.useFakeTimers({ now: new Date("2026-09-29T00:00:00Z") });
+  const r = await run(name, plan);
+  const saved = await saveDriveReport({
+    entryId: checked.id, drive: r.result, minutes: 20, driveStart: local(11),
+    readRecording: () => Promise.resolve(r.text), parkedHistory, driveHistory, signals, now: () => local(11, 30),
+  });
+  return { r, saved, parkedScan, garage, garageStore, parkedStore, driveStore, checked };
+}
+
+it("E1: parked check, short drive, post-drive parked check on a checked entry", async () => {
+  const flow = await guidedFlow("e1-guided", { amps: drivePlan, inject: storedAnswer }, { parkedFirst: true });
+  await flow.parkedScan("battery-scans/2/post.jsonl", local(13));
+  expect(flow.saved.status).toBe("saved");
+  if (flow.saved.status !== "saved") return;
+  const parkedReports = await createBatteryReportHistory(flow.parkedStore, createGarageFlow(flow.garageStore)).list("2");
+  const driveReports = await createDriveReportHistory(flow.driveStore).list("2");
+  expect(parkedReports.map((x) => x.recording).sort()).toEqual(["battery-scans/2/post.jsonl", "battery-scans/2/pre.jsonl"]);
+  expect(driveReports).toHaveLength(1);
+  expect(await createDriveReportHistory(flow.driveStore).list("1")).toEqual([]);
+  const pre = parkedReports.find((x) => x.recording === "battery-scans/2/pre.jsonl");
+  const post = parkedReports.find((x) => x.recording === "battery-scans/2/post.jsonl");
+  expect(driveReports[0]?.preDrive).toEqual({ scannedAt: pre?.scannedAt, recording: "battery-scans/2/pre.jsonl" });
+  expect(driveReports[0]?.codes.status).toBe("compared");
+  expect(post).toBeDefined();
+  const verdict = reportSummary(post as NonNullable<typeof post>).verdict;
+  const text = flow.saved.text;
+  expect(text).toContain(UNCONFIRMED_LINE);
+  expect(GROUP_RULE_STATUS).toBe("unconfirmed");
+  for (const word of ["passed", "validated", "no red flags"]) expect(text.toLowerCase()).not.toContain(word);
+  expect(verdict.headline).toBe(EXPECTED_HEADLINE);
+  write("/tmp/t2.18-e1.md", `${text}\n\n${verdict.headline}\n${verdict.coverage.map((c) => `- ${c.check}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`).join("\n")}\n`);
+}, SLOW);
+
+it("E2: a drive with no earlier same-day parked report has no pre-drive pointer and is still saved", async () => {
+  const flow = await guidedFlow("e2-no-pre", { amps: drivePlan }, { parkedFirst: false });
+  expect(flow.saved.status).toBe("saved");
+  if (flow.saved.status !== "saved") return;
+  expect(flow.saved.report.preDrive).toBeUndefined();
+  expect(flow.saved.text).toContain("No pre-drive scan to compare.");
+  expect(await createDriveReportHistory(flow.driveStore).list("2")).toHaveLength(1);
+}, SLOW);
+
+it("E3: a car-off stop saves a report with codes not-run and starts no parked scan", async () => {
+  const flow = await guidedFlow("e3-car-off", { amps: drivePlan, offAt: 60 }, { parkedFirst: true });
+  expect(flow.saved.status).toBe("saved");
+  if (flow.saved.status !== "saved") return;
+  expect(flow.saved.report.codes).toEqual({ status: "not-run", reason: "car off" });
+  expect(await createBatteryReportHistory(flow.parkedStore, flow.garage).list("2")).toHaveLength(1);
+}, SLOW);

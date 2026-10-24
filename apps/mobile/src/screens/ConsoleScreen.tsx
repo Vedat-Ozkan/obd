@@ -11,8 +11,7 @@ import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosis
 import { runChargeLog } from "../chargeLogger.js";
 import { DRIVE_MINUTES, runDriveCapture } from "../driveCapture.js";
 import { driveReportsDocumentStore, keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
-import { createDriveReportHistory, preDriveReport } from "../driveReports.js";
-import { driveReportFromRecording, renderDriveReport } from "../../../../packages/obd-battery/src/driveReport.js";
+import { createDriveReportHistory, saveDriveReport } from "../driveReports.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
 import { RecordingBuffer } from "../recording.js";
@@ -30,9 +29,11 @@ import { DonglePicker } from "./DonglePicker.js";
 import { useTokens } from "../ui/theme.js";
 
 let driveMinutes: 10 | 20 = 20;
+const DRIVE_NOTE = "Equinox Ready, Park; guided short drive";
+const DRIVE_BUTTONS = [...DRIVE_MINUTES].reverse();
 
 function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
-  vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>;
+  vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge" | "drive"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>;
   onLockChange: (locked: boolean) => void;
 }) {
   const tokens = useTokens();
@@ -378,7 +379,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   };
   const testDrive = async (minutes: 10 | 20) => {
     const active = dongleLink.current();
-    if (!active || bleBusy() || !note.trim() || !canUseEquinoxConsole(vehicle)) return;
+    if (!active || bleBusy() || !canUseEquinoxConsole(vehicle)) return;
     closeDebugSession();
     const notStarted = (line: string) => { chargeStarting.current = false; setStatus(line); };
     chargeStarting.current = true; setStatus("Starting the test drive…");
@@ -401,7 +402,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       chargeRun.end(line);
     };
     const driveRecording = new RecordingBuffer();
-    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.13 test drive (${String(minutes)} min): ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
+    driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.13 test drive (${String(minutes)} min): ${DRIVE_NOTE}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     let connected = false;
     let notified = 0;
     const driveStart = new Date();
@@ -423,19 +424,14 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         stream: driveTargets,
         stopRequested: () => run.stop,
       }, minutes);
-      let driveText = "";
-      if (result.file !== "") {
-        try {
-          let jsonl = "";
-          for await (const line of readLines(`captures/${result.file}`)) jsonl += `${line}\n`;
-          const parked = preDriveReport(await batteryHistory.list(entry.id), driveStart);
-          const driveReport = await driveReportFromRecording(jsonl, { garageVehicleId: entry.id, scannedAt: new Date().toISOString(), recording: result.file, minutes, stopReason: result.stopReason, signals: equinoxSignals }, parked);
-          await createDriveReportHistory(driveReportsDocumentStore).save(driveReport);
-          driveText = renderDriveReport(driveReport);
-          if (mounted.current) setReport(driveText);
-        } catch (error) { driveText = ` Drive report not made: ${error instanceof Error ? error.message : String(error)}.`; }
-      }
-      try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}${driveText.startsWith(" ") ? driveText : ""}`); }
+      const made = await saveDriveReport({
+        entryId: entry.id, drive: result, minutes, driveStart,
+        readRecording: async (file) => { let jsonl = ""; for await (const line of readLines(`captures/${file}`)) jsonl += `${line}\n`; return jsonl; },
+        parkedHistory: batteryHistory, driveHistory: createDriveReportHistory(driveReportsDocumentStore), signals: equinoxSignals, now: () => new Date(),
+      });
+      if (made.status === "saved" && mounted.current) setReport(made.text);
+      const driveText = made.status === "saved" ? " The drive report is in Report history." : result.file === "" ? "" : ` Drive report not made: ${made.reason}.`;
+      try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}${driveText} Park the car, then run the battery check.`); }
       finally { await foregroundService.stop(); }
     };
     try {
@@ -498,7 +494,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
 
   const saved = chargeStep(status) === 5;
   const driving = chargeLogging && chargeRun.current()?.kind === "drive";
-  const title = driving ? "Test drive" : chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : "Battery check";
+  const title = driving ? "Test drive" : chargeLogging ? "Charge log" : intent === "charge" ? "Log a charge" : intent === "drive" ? "Short drive" : "Battery check";
   const titleRef = useTitleFocus(title);
   const marks = stepMarks(reached, saved);
   const MARK = {
@@ -551,6 +547,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
       {intent === "charge"
         ? <Button title="Start charge log" disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void chargeLog()} />
         : <Button title="Run battery check" disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void diagnose()} />}
+      {intent === "drive" ? DRIVE_BUTTONS.map((minutes) => <Button key={minutes} title={`Start short drive (${String(minutes)} min)`} disabled={!canUseEquinoxConsole(vehicle) || !connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive(minutes)} />) : null}
       {diagnosing ? <Button title="Cancel check" tonal disabled={!canCancelDiagnosis} onPress={cancelDiagnosis} /> : null}
       {disconnect}
       <Card>
@@ -572,8 +569,6 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
           <Button title="Record module codes" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void captureModuleCodes()} />
-          {DRIVE_MINUTES.map((minutes) => <Button key={minutes} title={`Record test drive (${String(minutes)} min)`} tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void testDrive(minutes)} />)}
-          <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive for the chosen length.</Text>
           {captureStep ? <Text accessibilityLiveRegion="polite">{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
           <TextInput accessibilityLabel="Read-only command" style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />

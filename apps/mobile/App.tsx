@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { BatteryDiagnosisReport } from "obd-battery/report";
+import type { DriveReport } from "../../packages/obd-battery/src/driveReport.js";
 import { Alert, AppState, BackHandler, StatusBar, View } from "react-native";
 import { useFonts } from "expo-font";
 import { Manrope_500Medium } from "@expo-google-fonts/manrope/500Medium";
@@ -14,6 +15,8 @@ import { SUPPORTED_VEHICLES, canUseEquinoxConsole } from "./src/garage/catalog.j
 import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { back, type Route } from "./src/app/navigation.js";
 import { findReport } from "./src/app/reportView.js";
+import { driveReportsDocumentStore } from "./src/batteryReportsDocumentStore.js";
+import { createDriveReportHistory, preDriveReport } from "./src/driveReports.js";
 import { batteryHistory, betaOutbox, garageFlow, loadThemePreference } from "./src/app/runtime.js";
 import { Button, Screen, styles, Text, useTitleFocus } from "./src/ui/kit.js";
 import { FONTS, paperTheme, setThemePreference, useScheme, useTokens } from "./src/ui/theme.js";
@@ -23,7 +26,7 @@ import { ConsentScreen } from "./src/screens/ConsentScreen.js";
 import { EquinoxConsole } from "./src/screens/ConsoleScreen.js";
 import { GarageScreen } from "./src/screens/GarageScreen.js";
 import { DevelopmentSummary } from "./src/screens/DevelopmentSummary.js";
-import { ReportHistory, ReportSummary } from "./src/screens/ReportScreens.js";
+import { DriveReportView, ReportHistory, ReportSummary } from "./src/screens/ReportScreens.js";
 import { CodesScreen, ModuleScreen, SECTION_TITLES, SectionScreen } from "./src/screens/SectionScreens.js";
 import { BetaScreen, LicensesScreen, PrivacyScreen, SaveFolderScreen, SettingsScreen, ThemeScreen } from "./src/screens/SettingsScreens.js";
 
@@ -44,6 +47,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [stack, setStack] = useState<readonly Route[]>([{ name: "garage" }]);
   const [historyReports, setHistoryReports] = useState<readonly BatteryDiagnosisReport[]>([]);
+  const [driveReports, setDriveReports] = useState<readonly DriveReport[]>([]);
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState<number>();
@@ -98,7 +102,7 @@ export function App() {
     setInterestSaved(!!saved); push(saved ? { name: "interest", saved } : { name: "interest" });
   };
   const listReports = async (id: string) => {
-    try { const reports = await batteryHistory.list(id); setHistoryReports(reports); return true; }
+    try { const reports = await batteryHistory.list(id); setDriveReports(await createDriveReportHistory(driveReportsDocumentStore).list(id)); setHistoryReports(reports); return true; }
     catch (cause) { setError(`Battery report history error: ${cause instanceof Error ? cause.message : String(cause)}`); return false; }
   };
   const openCar = async (id: string) => { setError(""); if (await listReports(id)) push({ name: "car", entryId: id }); };
@@ -160,19 +164,22 @@ export function App() {
 
   if (route.name === "car" && selectedEntry && selectedVehicle) return page(vehicleName, <CarScreen entry={selectedEntry} vehicle={selectedVehicle} reports={historyReports} busy={busy} change={change}
     openReport={openReport} openCheck={(intent) => { push({ name: "check", entryId: selectedEntry.id, intent }); }} openHistory={() => { void openHistory(selectedEntry.id); }} onRemoved={pop} />);
-  const routeReport = "scannedAt" in route ? findReport(historyReports, route) : undefined;
+  const routeReport = "recording" in route ? findReport(historyReports, route) : undefined;
   if (routeReport && selectedEntry && selectedVehicle) {
     const key = { entryId: selectedEntry.id, scannedAt: routeReport.scannedAt, recording: routeReport.recording };
     const canCheck = canUseEquinoxConsole(selectedVehicle);
-    const openCheck = (intent: "check" | "charge") => { push({ name: "check", entryId: selectedEntry.id, intent }); };
-    if (route.name === "report") return page("Battery report", <ReportSummary report={routeReport} canCheck={canCheck} busy={busy} openSection={(section) => { push({ name: "section", ...key, section }); }}
-      openCodes={() => { push({ name: "codes", ...key }); }} openCheck={() => { openCheck("check"); }} openAiSummary={() => { push({ name: "aiSummary", ...key }); }} />);
+    const latestToday = preDriveReport(historyReports, new Date());
+    const openCheck = (intent: "check" | "charge" | "drive") => { push({ name: "check", entryId: selectedEntry.id, intent }); };
+    if (route.name === "report") return page("Battery report", <ReportSummary report={routeReport} canCheck={canCheck} canDrive={latestToday?.scannedAt === routeReport.scannedAt && latestToday.recording === routeReport.recording} busy={busy} openSection={(section) => { push({ name: "section", ...key, section }); }}
+      openCodes={() => { push({ name: "codes", ...key }); }} openCheck={() => { openCheck("check"); }} openDrive={() => { openCheck("drive"); }} openAiSummary={() => { push({ name: "aiSummary", ...key }); }} />);
     if (route.name === "section") return page(SECTION_TITLES[route.section], <SectionScreen report={routeReport} section={route.section} history={historyReports} canCheck={canCheck} busy={busy} openCharge={() => { openCheck("charge"); }} />);
     if (route.name === "codes") return page("Diagnostic codes", <CodesScreen codes={routeReport.codes} busy={busy} openModule={(ecu) => { push({ name: "module", ...key, ecu }); }} />);
     if (route.name === "module") return page(`Module ${route.ecu}`, <ModuleScreen codes={routeReport.codes} ecu={route.ecu} />);
     if (route.name === "aiSummary" && __DEV__) return page("AI summary (development)", <DevelopmentSummary key={`${routeReport.scannedAt}-${routeReport.recording}`} report={routeReport} />);
   }
-  if (route.name === "history") return page("Report history", <ReportHistory historyReports={historyReports} openReport={openReport} />);
+  const routeDrive = route.name === "driveReport" ? driveReports.find((item) => item.scannedAt === route.scannedAt && item.garageVehicleId === route.entryId) : undefined;
+  if (routeDrive) return page("Drive report", <DriveReportView report={routeDrive} />);
+  if (route.name === "history") return page("Report history", <ReportHistory historyReports={historyReports} driveReports={driveReports} openReport={openReport} openDriveReport={(report) => { push({ name: "driveReport", entryId: report.garageVehicleId, scannedAt: report.scannedAt }); }} />);
   if (route.name === "addVehicle") return page("Add a vehicle", <AddVehicleScreen make={make} setMake={setMake} model={model} setModel={setModel} year={year} setYear={setYear} tag={tag} setTag={setTag} busy={busy} change={change} onAdded={pop} reopenInterest={reopenInterest} interests={state.interests} />);
   if (route.name === "interest") return page("Unsupported vehicle interest", <InterestScreen interest={interest} setInterest={setInterest} interestSaved={interestSaved} setInterestSaved={setInterestSaved} busy={busy} change={change} />);
   if (route.name === "settings") return page("Settings", <SettingsScreen beta={beta} openBeta={() => { push({ name: "beta" }); }} openSaveFolder={() => { push({ name: "saveFolder" }); }}

@@ -1,6 +1,6 @@
 # Test drive feasibility, 2026-09 (T2.12)
 
-Findings for `docs/specs/T2.12-test-drive-capture.md`, Stage C. Two real drives on the 2024 Chevrolet Equinox EV, recorded 2026-09-30 by the Record test drive button. Written 2026-10-01 from the redacted copies:
+Findings for `docs/specs/T2.12-test-drive-capture.md`, Stage C. Two real drives on the 2024 Chevrolet Equinox EV, recorded 2026-09-30 by the Record test drive button (since T2.18 the path is report > Add a short drive). Written 2026-10-01 from the redacted copies:
 
 - Drive 1: `fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-drive.redacted.jsonl` (79672 lines).
 - Drive 2: `fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-drive-2.redacted.jsonl` (24097 lines).

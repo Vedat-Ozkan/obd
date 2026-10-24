@@ -52,7 +52,7 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 
 | # | Item | Source | Unblocks |
 |---|---|---|---|
-| R1 | T2.13 Stage B confirming drive (do it on the Stage C build once merged, so it also covers the rescan check H-C): Developer tools > Record test drive; pass = `checked`, no flag, Skew bracket median < 1.843 s | `rec/T2.13.md:11, 13` | T2.13 Stage C, T2.18 |
+| R1 | T2.13 Stage B confirming drive (do it on the Stage C build once merged, so it also covers the rescan check H-C): report > Add a short drive on a `checked` entry; pass = `checked`, no flag, Skew bracket median < 1.843 s | `rec/T2.13.md:11, 13` | T2.13 Stage C, T2.18 |
 
 ## One overnight charge
 

@@ -21,7 +21,7 @@ function checkedOn(scannedAt: string): string {
 
 function CarScreen({ entry, vehicle, reports, busy, change, openReport, openCheck, openHistory, onRemoved }: {
   entry: GarageVehicle; vehicle: CatalogVehicle; reports: readonly BatteryDiagnosisReport[]; busy: boolean; change: Change;
-  openReport: (report: BatteryDiagnosisReport) => void; openCheck: (intent: "check" | "charge") => void; openHistory: () => void; onRemoved: () => void;
+  openReport: (report: BatteryDiagnosisReport) => void; openCheck: (intent: "check" | "charge" | "drive") => void; openHistory: () => void; onRemoved: () => void;
 }) {
   const tokens = useTokens();
   const latest = reports.at(0);
