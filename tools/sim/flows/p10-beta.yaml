@@ -1,0 +1,112 @@
+appId: com.ev.obd
+---
+- runFlow:
+    when:
+      true: ${STEP == 'off'}
+    commands:
+      - runFlow: launch.yaml
+      - tapOn: "Settings"
+      - tapOn: "Beta data sharing"
+      - assertVisible: "Beta data sharing is off.*"
+      - takeScreenshot: 01-consent-off
+      - back
+      - back
+      - tapOn:
+          text: "2024 Chevrolet Equinox EV"
+          index: 0
+      - tapOn: "Run check"
+      - extendedWaitUntil:
+          visible: "Choose your OBD dongle"
+          timeout: 30000
+      - tapOn: "Simulated car \\(Equinox EV\\)"
+      - extendedWaitUntil:
+          visible: "Run battery check"
+          timeout: 30000
+      - scrollUntilVisible:
+          element: "Developer tools"
+      - tapOn: "Developer tools"
+      - tapOn: "Vehicle-state note"
+      - inputText: "simulated beta check"
+      - hideKeyboard
+      - scrollUntilVisible:
+          element: "Run codes report"
+      - tapOn: "Run codes report"
+      - extendedWaitUntil:
+          visible: "Capture complete.*|Capture stopped.*"
+          timeout: 240000
+      - assertNotVisible: ".*Queued for beta upload.*"
+      - takeScreenshot: 02-off-no-beta-sentence
+
+- runFlow:
+    when:
+      true: ${STEP == 'on'}
+    commands:
+      - stopApp
+      - runFlow: launch.yaml
+      - tapOn: "Settings"
+      - tapOn: "Beta data sharing"
+      - tapOn: "Share my data to improve the app"
+      - extendedWaitUntil:
+          visible: "Help improve battery checks.*"
+          timeout: 10000
+      - tapOn: "Share my data to improve the app"
+      - scrollUntilVisible:
+          element: "Continue"
+      - tapOn: "Continue"
+      - extendedWaitUntil:
+          visible: "Beta data sharing is on.*|Beta ID.*"
+          timeout: 30000
+      - takeScreenshot: 03-consent-on
+      - back
+      - back
+      - tapOn:
+          text: "2024 Chevrolet Equinox EV"
+          index: 0
+      - tapOn: "Run check"
+      - extendedWaitUntil:
+          visible: "Choose your OBD dongle"
+          timeout: 30000
+      - tapOn: "Simulated car \\(Equinox EV\\)"
+      - extendedWaitUntil:
+          visible: "Run battery check"
+          timeout: 30000
+      - scrollUntilVisible:
+          element: "Developer tools"
+      - tapOn: "Developer tools"
+      - tapOn: "Vehicle-state note"
+      - inputText: "simulated beta check"
+      - hideKeyboard
+      - scrollUntilVisible:
+          element: "Run codes report"
+      - tapOn: "Run codes report"
+      - extendedWaitUntil:
+          visible: ".*Queued for beta upload.*"
+          timeout: 240000
+      - takeScreenshot: 04-on-queued
+
+- runFlow:
+    when:
+      true: ${STEP == 'again'}
+    commands:
+      - scrollUntilVisible:
+          element: "Run codes report"
+      - tapOn: "Run codes report"
+      - extendedWaitUntil:
+          visible: ".*Queued for beta upload.*"
+          timeout: 240000
+      - takeScreenshot: 05-airplane-queued
+
+- runFlow:
+    when:
+      true: ${STEP == 'delete'}
+    commands:
+      - stopApp
+      - runFlow: launch.yaml
+      - tapOn: "Settings"
+      - tapOn: "Beta data sharing"
+      - tapOn: "Delete my data"
+      - tapOn: "Delete"
+      - extendedWaitUntil:
+          visible: "Beta data sharing is off.*"
+          timeout: 60000
+      - takeScreenshot: 06-deleted

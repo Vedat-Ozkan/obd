@@ -1,0 +1,22 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- tapOn: "Run check"
+- extendedWaitUntil:
+    visible: "Choose your OBD dongle|Run battery check"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "Choose your OBD dongle"
+    commands:
+      - tapOn: "Simulated car \\(Equinox EV\\)"
+- extendedWaitUntil:
+    visible: "Run battery check"
+    timeout: 30000
+- tapOn: "Run battery check"
+- extendedWaitUntil:
+    visible: "Battery report"
+    timeout: 240000

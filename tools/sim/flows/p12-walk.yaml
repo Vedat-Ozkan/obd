@@ -1,0 +1,117 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- assertVisible: "Garage"
+- takeScreenshot: 01-garage
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- takeScreenshot: 02-settings
+- tapOn: "Beta data sharing"
+- assertVisible: "Beta data sharing"
+- takeScreenshot: 03-beta
+- tapOn: "Share my data to improve the app"
+- extendedWaitUntil:
+    visible: "Help improve battery checks.*"
+    timeout: 10000
+- takeScreenshot: 04-consent
+- scrollUntilVisible:
+    element: "Continue"
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Beta data sharing"
+    timeout: 10000
+- back
+- scrollUntilVisible:
+    element: "Save folder"
+- tapOn: "Save folder"
+- assertVisible: "Save folder"
+- takeScreenshot: 05-save-folder
+- back
+- scrollUntilVisible:
+    element: "Theme"
+- tapOn: "Theme"
+- assertVisible: "Theme"
+- takeScreenshot: 06-theme
+- back
+- scrollUntilVisible:
+    element: "Privacy note"
+- tapOn: "Privacy note"
+- assertVisible: "Privacy note"
+- takeScreenshot: 07-privacy
+- back
+- scrollUntilVisible:
+    element: "Open-source licenses"
+- tapOn: "Open-source licenses"
+- assertVisible: "Open-source licenses"
+- takeScreenshot: 08-licenses
+- back
+- back
+- tapOn: "Add a vehicle"
+- assertVisible: "Add a vehicle"
+- takeScreenshot: 09-add-vehicle
+- back
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- takeScreenshot: 10-car
+- scrollUntilVisible:
+    element: "Trends"
+- takeScreenshot: 11-car-trends
+- scrollUntilVisible:
+    element: "Report history"
+- tapOn: "Report history"
+- assertVisible: "Report history"
+- takeScreenshot: 12-history
+- tapOn:
+    text: ".*Complete scan.*|.*Partial scan.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Battery report"
+    timeout: 20000
+- takeScreenshot: 13-report
+- scrollUntilVisible:
+    element: "Cell balance"
+- tapOn: "Cell balance"
+- assertVisible: "Cell balance"
+- takeScreenshot: 14-cells
+- back
+- scrollUntilVisible:
+    element: "Capacity"
+- tapOn: "Capacity"
+- assertVisible: "Capacity"
+- takeScreenshot: 15-capacity
+- back
+- scrollUntilVisible:
+    element: "12 V battery"
+- tapOn: "12 V battery"
+- assertVisible: "12 V battery"
+- takeScreenshot: 16-twelve-volt
+- back
+- scrollUntilVisible:
+    element: "Diagnostic codes"
+- tapOn: "Diagnostic codes"
+- assertVisible: "Diagnostic codes"
+- takeScreenshot: 17-codes
+- scrollUntilVisible:
+    element: "Module .*"
+- tapOn:
+    text: "Module .*"
+    index: 0
+- assertVisible: "Module .*"
+- takeScreenshot: 18-module
+- back
+- back
+- tapOn: "State of charge.*"
+- assertVisible: "State of charge"
+- takeScreenshot: 19-soc
+- back
+- scrollUntilVisible:
+    element: "Run a new check"
+- tapOn: "Run a new check"
+- extendedWaitUntil:
+    visible: "Choose your OBD dongle|Run battery check"
+    timeout: 60000
+- takeScreenshot: 20-console-or-picker

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: tools/sim/run-flows.sh p4 p9 p2
+# Usage: tools/sim/run-flows.sh p4 p9 p2 p10 p12 p13
 # SIMULATED: no car, no dongle; closes no OWNER-QUEUE item. Setup: tools/sim/README.md
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -20,7 +20,14 @@ STARTED=()
 MISSES="$OUT/sim-misses.txt"
 : > "$MISSES"
 
-cleanup() { for pid in "${STARTED[@]}"; do kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; done; }
+reset_display() {
+  adb shell settings put system font_scale 1.0 2>/dev/null
+  adb shell cmd uimode night no > /dev/null 2>&1
+  adb shell settings put system user_rotation 0 2>/dev/null
+  adb shell settings put system accelerometer_rotation 1 2>/dev/null
+  adb shell cmd connectivity airplane-mode disable > /dev/null 2>&1
+}
+cleanup() { reset_display; for pid in "${STARTED[@]}"; do kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; done; }
 trap cleanup EXIT
 
 {
@@ -45,8 +52,9 @@ boot_emulator() {
 
 start_metro() {
   if curl -s -o /dev/null http://localhost:8081/status; then return; fi
-  (cd "$ROOT/apps/mobile" && CI=1 setsid pnpm exec expo start --dev-client --port 8081 > "$OUT/metro.log" 2>&1 & echo $! > "$OUT/metro.pid")
+  (cd "$ROOT/apps/mobile" && CI=1 EXPO_PUBLIC_BETA_URL="${BETA_URL:-}" setsid pnpm exec expo start --dev-client --clear --port 8081 > "$OUT/metro.log" 2>&1 & echo $! > "$OUT/metro.pid")
   STARTED+=("$(cat "$OUT/metro.pid")")
+  METRO_OURS=1
   until curl -s -o /dev/null http://localhost:8081/status; do sleep 2; done
 }
 
@@ -69,7 +77,8 @@ app_ls() { adb shell "run-as $APP ls files/$1" 2>/dev/null | tr -d '\r'; }
 maestro_flow() {
   local dir="$1" flow="$2"; shift 2
   mkdir -p "$dir"
-  (cd "$dir" && maestro test --test-output-dir "$dir/$flow" "$@" "$SIM/flows/$flow.yaml" > "$dir/maestro-$flow.log" 2>&1)
+  local tag="${MAESTRO_TAG:-$flow}"
+  (cd "$dir" && maestro test --test-output-dir "$dir/$tag" "$@" "$SIM/flows/$flow.yaml" > "$dir/maestro-$tag.log" 2>&1)
 }
 
 collect_sim_misses() { adb logcat -d -s ReactNativeJS 2>/dev/null | grep '\[sim\]' >> "$MISSES"; adb logcat -c; }
@@ -154,7 +163,102 @@ flow_p2() {
   record p2 "$result" "$notes"
 }
 
+set_display() {
+  adb shell settings put system font_scale "$1"
+  adb shell cmd uimode night "$2" > /dev/null
+  adb shell settings put system accelerometer_rotation 0
+  adb shell settings put system user_rotation "$3"
+  sleep 3
+}
+
+flow_p12() {
+  local dir="$OUT/p12"; mkdir -p "$dir"
+  local result=PASS notes=""
+  printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
+  fresh_app; seed garage.json "$dir/garage.json"
+  reset_display
+  MAESTRO_TAG=setup maestro_flow "$dir" p12-setup || { result=FAIL; notes="setup (battery check to get a report) failed;"; }
+  local density; density="$(adb shell wm density | grep -o '[0-9]*$' | tail -1)"
+  local ran=0 failed=0 combo
+  for font in 1.0 2.0; do for night in no yes; do for rot in 0 1; do
+    combo="font${font}-$([ $night = yes ] && echo dark || echo light)-$([ $rot = 1 ] && echo landscape || echo portrait)"
+    set_display "$font" "$night" "$rot"
+    ran=$((ran+1))
+    if ! MAESTRO_TAG="walk-$combo" maestro_flow "$dir" p12-walk; then failed=$((failed+1)); notes="$notes $combo FAILED;"; fi
+    adb shell uiautomator dump /sdcard/a11y.xml > /dev/null 2>&1 && adb pull /sdcard/a11y.xml "$dir/a11y-$combo.xml" > /dev/null 2>&1
+  done; done; done
+  reset_display
+  [ $failed = 0 ] || result=FAIL
+  notes="$notes $((ran-failed))/$ran combinations walked (font 1.0/2.0 x light/dark x portrait/landscape);"
+  (cd "$ROOT" && pnpm exec tsx tools/sim/a11y-audit.ts "$density" "$dir"/a11y-*.xml > "$dir/a11y-audit.md" 2>&1); local audit=$?
+  if [ $audit = 0 ]; then notes="$notes a11y audit in p12/a11y-audit.md (findings listed, not fixed);"; else notes="$notes a11y audit NOT CHECKED for some dumps (see p12/a11y-audit.md);"; fi
+  collect_sim_misses
+  record p12 "$result" "$notes"
+}
+
+flow_p13() {
+  local dir="$OUT/p13"; mkdir -p "$dir"
+  local result=PASS notes=""
+  printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
+  fresh_app; seed garage.json "$dir/garage.json"
+  MAESTRO_TAG=empty maestro_flow "$dir" p13-trends -e "EXPECT=Appears after a battery check or a charge log." && notes="$notes empty state shown;" || { result=FAIL; notes="$notes empty state not shown;"; }
+  (cd "$ROOT" && pnpm exec tsx tools/sim/seed-trend.ts "$dir/charge-summaries.json" 1 > "$dir/seed-trend.log" 2>&1) || { result=FAIL; notes="$notes seed-trend failed;"; }
+  fresh_app; seed garage.json "$dir/garage.json"; seed charge-summaries.json "$dir/charge-summaries.json"
+  MAESTRO_TAG=populated maestro_flow "$dir" p13-trends -e "EXPECT=BMS-referenced capacity index.*" && notes="$notes populated state shown (2 SYNTHETIC charge summaries from fixtures/synthetic/charge-log-rested.jsonl via saveChargeLogSummary; too few sessions for a slope, so the caption says not enough data);" || { result=FAIL; notes="$notes populated state not shown;"; }
+  collect_sim_misses
+  record p13 "$result" "$notes"
+}
+
+BETA_TOKEN=simadmin
+manifest_keys() { curl -s -H "Authorization: Bearer $BETA_TOKEN" "http://localhost:8787/admin/manifests"; }
+manifest_count() { manifest_keys | grep -o 'manifest.json' | wc -l; }
+
+flow_p10() {
+  local dir="$OUT/p10"; mkdir -p "$dir"
+  local result=PASS notes=""
+  if [ -z "${BETA_URL:-}" ] || [ "${METRO_OURS:-0}" != 1 ]; then record p10 FAIL "Metro was already running without EXPO_PUBLIC_BETA_URL; stop it and rerun;"; return; fi
+  (cd "$ROOT/tools/beta-backend" && WRANGLER_SEND_METRICS=false CI=1 setsid pnpm dlx wrangler@4.142.0 dev --local --ip 0.0.0.0 --port 8787 --persist-to "$dir/wrangler-state" --var "ADMIN_TOKEN:$BETA_TOKEN" > "$dir/wrangler.log" 2>&1 & echo $! > "$dir/wrangler.pid")
+  STARTED+=("$(cat "$dir/wrangler.pid")")
+  local n=0; until curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $BETA_TOKEN" http://localhost:8787/admin/manifests | grep -q 200; do sleep 2; n=$((n+1)); [ $n -gt 90 ] && { record p10 FAIL "wrangler dev did not start (see p10/wrangler.log);"; return; }; done
+  printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
+  fresh_app; seed garage.json "$dir/garage.json"
+  local base; base="$(manifest_count)"; echo "objects before: $base" > "$dir/objects.txt"
+
+  MAESTRO_TAG=off maestro_flow "$dir" p10-beta -e STEP=off && notes="$notes consent off: no beta sentence;" || { result=FAIL; notes="$notes consent-off step failed;"; }
+  local c1; c1="$(manifest_count)"; echo "after consent off: $c1" >> "$dir/objects.txt"
+  [ "$c1" = "$base" ] && notes="$notes no object while off ($c1);" || { result=FAIL; notes="$notes object appeared while sharing off;"; }
+
+  MAESTRO_TAG=on maestro_flow "$dir" p10-beta -e STEP=on && notes="$notes consent on: 'Queued for beta upload.' shown;" || { result=FAIL; notes="$notes consent-on step failed;"; }
+  n=0; until [ "$(manifest_count)" -gt "$c1" ] || [ $n -gt 30 ]; do sleep 2; n=$((n+1)); done
+  local c2; c2="$(manifest_count)"; echo "after on (codes-scan queued, online): $c2" >> "$dir/objects.txt"
+  [ "$c2" -gt "$c1" ] && notes="$notes codes-scan object arrived ($c1 -> $c2);" || { result=FAIL; notes="$notes no object after sharing on;"; }
+
+  adb shell cmd connectivity airplane-mode enable > /dev/null; sleep 5
+  MAESTRO_TAG=airplane maestro_flow "$dir" p10-beta -e STEP=again || { result=FAIL; notes="$notes airplane queue step failed;"; }
+  sleep 10
+  local c3; c3="$(manifest_count)"; echo "airplane, queued: $c3" >> "$dir/objects.txt"
+  [ "$c3" = "$c2" ] && notes="$notes airplane: queued, not uploaded ($c3);" || { result=FAIL; notes="$notes object count changed in airplane mode;"; }
+  adb shell cmd connectivity airplane-mode disable > /dev/null; sleep 8
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  adb shell monkey -p $APP -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+  n=0; until [ "$(manifest_count)" -gt "$c3" ] || [ $n -gt 45 ]; do sleep 2; n=$((n+1)); done
+  local c4; c4="$(manifest_count)"; echo "airplane off, foregrounded: $c4" >> "$dir/objects.txt"
+  [ "$c4" -gt "$c3" ] && notes="$notes foreground upload with no tap ($c3 -> $c4);" || { result=FAIL; notes="$notes no upload after foreground;"; }
+
+  manifest_keys > "$dir/manifests-before-delete.json"
+  MAESTRO_TAG=delete maestro_flow "$dir" p10-beta -e STEP=delete || { result=FAIL; notes="$notes Delete my data step failed;"; }
+  sleep 5
+  local c5; c5="$(manifest_count)"; echo "after Delete my data: $c5" >> "$dir/objects.txt"
+  manifest_keys > "$dir/manifests-after-delete.json"
+  [ "$c5" = 0 ] && notes="$notes Delete my data left 0 manifest objects (was $c4);" || { result=FAIL; notes="$notes $c5 manifests remain after delete;"; }
+  find "$dir/wrangler-state" -type f 2>/dev/null | wc -l | sed 's/^/local bucket state files (informational): /' >> "$dir/objects.txt"
+  notes="$notes step 5 (intake into fixtures/recordings) NOT RUN by design;"
+  collect_sim_misses
+  record p10 "$result" "$notes"
+}
+
 boot_emulator
+BETA_URL=""; case " ${FLOWS[*]} " in *" p10 "*) BETA_URL=http://10.0.2.2:8787 ;; esac
 start_metro
 install_app
 adb reverse tcp:8081 tcp:8081 > /dev/null
@@ -164,6 +268,9 @@ for f in "${FLOWS[@]}"; do
     p4) flow_p4 ;;
     p9) flow_p9 ;;
     p2) flow_p2 ;;
+    p10) flow_p10 ;;
+    p12) flow_p12 ;;
+    p13) flow_p13 ;;
     *) record "$f" FAIL "unknown flow" ;;
   esac
 done
