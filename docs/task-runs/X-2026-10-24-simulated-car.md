@@ -27,3 +27,4 @@
 
 - architecture architect: spec written; owner answered Q1 and confirmed scope
 - prerequisite recording-analyst: key coverage over committed redacted files. Missing: default/014D, default/014E (codes scan, battery scan, drive rescan); 19 02 FF on 17/28/40/45/CB (none). `0121`/`0130`/`0131` ARE covered (discovery-targeted:144/157/163), correcting the spec's provisional list. DA1DF1/22 33E5 has NO DATA only (spike-2:144); count as covered, flagged. 0902 only in spike files. Mode 09/VIN and charge-log keys fully covered (charge values are parked/drive values, not charging).
+- D3 approved by owner 2026-10-24: redacted copy committed 0a33d4d (no VIN in source; adds 014D/014E NO DATA). Stage A implementer told to merge it; remaining gap 19 02 FF only.

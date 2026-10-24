@@ -10,7 +10,6 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 |---|---|---|---|
 | D1 | Push main to origin; hosted CI has not seen `1c74db4..4919240` | `git status -sb` | hosted CI |
 | D2 | T2.3: keep or drop the "agent proposal precision against the owner's verdicts" requirement; discovery ran as scripted laptop sessions (T2.3a/T2.3b), not agent-driven | `docs/PLAN.md` T2.3 row | T2.3 |
-| D3 | Approve redacting the local `2026-09-28-phone-console-2.jsonl` (likely the 19-command codes scan behind the committed `2026-09-28-codes-report.md`), then replay and reconcile T0.9 Stage B at the desk | `rec/T0.9.md:8`, `rec/T0.9b.md:9` | T0.9 |
 | D4 | Tick PLAN T0.2: the worksheet is now filled from the committed redacted recordings, Gate A GO | `docs/spike-2026-09.md` §6 | T0.2 |
 | D5 | T2.7: may it tick on software evidence plus the manual run; confirm no scan-time ownership tag | `rec/T2.7.md:8` | T2.7 |
 | D6 | Choose the privacy-note contact email; review consent and privacy wording | `rec/T2.9.md:44, 65` | T2.9 Stage E |
