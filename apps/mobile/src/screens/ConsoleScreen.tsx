@@ -546,7 +546,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           </View>
         </TouchableRipple>
         {devOpen ? <>
-          <TextInput style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
+          <TextInput accessibilityLabel="Vehicle-state note" style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />
           <Button title="Record module codes" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void captureModuleCodes()} />
@@ -554,12 +554,12 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           <Text style={{ color: tokens.muted }}>Car in Ready, parked. Tap once, then drive for the chosen length.</Text>
           {captureStep ? <Text>{captureStep}</Text> : null}
           {captureLast ? <Text style={{ color: tokens.muted }}>{captureLast}</Text> : null}
-          <TextInput style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
+          <TextInput accessibilityLabel="Read-only command" style={[inputStyle, inputColors]} value={command} onChangeText={setCommand} placeholder="Read-only command" placeholderTextColor={tokens.muted} autoCapitalize="characters" editable={!diagnosing} />
           <Button title="Send (not saved)" tonal disabled={!connection || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void send()} />
           {__DEV__ && connection ? <>
             <SectionLabel>Relay</SectionLabel>
-            <TextInput style={[inputStyle, inputColors]} value={relayUrl} onChangeText={setRelayUrl} placeholder="ws://<WSL-host>:8765" placeholderTextColor={tokens.muted} autoCapitalize="none" autoCorrect={false} editable={!relaying} />
-            <TextInput style={[inputStyle, inputColors]} value={relayToken} onChangeText={setRelayToken} placeholder="Relay token" placeholderTextColor={tokens.muted} secureTextEntry autoCapitalize="none" autoCorrect={false} editable={!relaying} />
+            <TextInput accessibilityLabel="Relay URL" style={[inputStyle, inputColors]} value={relayUrl} onChangeText={setRelayUrl} placeholder="ws://<WSL-host>:8765" placeholderTextColor={tokens.muted} autoCapitalize="none" autoCorrect={false} editable={!relaying} />
+            <TextInput accessibilityLabel="Relay token" style={[inputStyle, inputColors]} value={relayToken} onChangeText={setRelayToken} placeholder="Relay token" placeholderTextColor={tokens.muted} secureTextEntry autoCapitalize="none" autoCorrect={false} editable={!relaying} />
             <Button title={relaying ? "Disconnect relay" : "Connect relay"} tonal disabled={!relaying && bleBusy()} onPress={relaying ? disconnectRelay : connectRelay} />
             <Text style={{ color: tokens.muted }}>{relayStatus}</Text>
           </> : null}
@@ -573,7 +573,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
   </Screen>;
 }
 
-const consoleStyle = { borderWidth: 1, borderRadius: 12, padding: 8, height: 220 };
+const consoleStyle = { borderWidth: 1, borderRadius: 12, padding: 8, minHeight: 220 };
 const inputStyle = { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, minHeight: 48 };
 
 export { EquinoxConsole };

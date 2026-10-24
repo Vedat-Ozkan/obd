@@ -38,6 +38,10 @@ export function ScanHistory({ points }: { points: readonly { scannedAt: string; 
   </View>;
 }
 
+export function cellRangeSummary(minMv: number, avgMv: number, maxMv: number): string {
+  return `Cell voltage: lowest ${minMv.toFixed(1)}, average ${avgMv.toFixed(1)}, highest ${maxMv.toFixed(1)} millivolts.`;
+}
+
 export function CellRangeStrip({ minMv, avgMv, maxMv }: { minMv: number; avgMv: number; maxMv: number }) {
   const tokens = useTokens();
   const pad = Math.max(maxMv - minMv, 1);
@@ -45,7 +49,7 @@ export function CellRangeStrip({ minMv, avgMv, maxMv }: { minMv: number; avgMv: 
   const span = maxMv + pad - lo;
   const at = (value: number) => (value - lo) / span;
   const label = (word: string, value: number) => <Text style={[styles.caption, { color: tokens.onContainer }]}>{`${word} ${value.toFixed(1)}`}</Text>;
-  return <View accessible accessibilityLabel={`Cell voltage: lowest ${minMv.toFixed(1)}, average ${avgMv.toFixed(1)}, highest ${maxMv.toFixed(1)} millivolts.`} style={styles.strip}>
+  return <View accessible accessibilityLabel={cellRangeSummary(minMv, avgMv, maxMv)} style={styles.strip}>
     <View style={[styles.track, { backgroundColor: tokens.track }]}>
       <View style={[styles.range, { left: pct(at(minMv)), width: pct(at(maxMv) - at(minMv)), backgroundColor: tokens.chart.data }]} />
       <View style={[styles.avg, { left: pct(at(avgMv)), backgroundColor: tokens.onContainer }]} />
@@ -57,7 +61,7 @@ export function CellRangeStrip({ minMv, avgMv, maxMv }: { minMv: number; avgMv: 
 
 const styles = StyleSheet.create({
   caption: { fontSize: 13 },
-  history: { gap: 8 }, historyBody: { flexDirection: "row", gap: 8, height: 132 }, axis: { justifyContent: "space-between" },
+  history: { gap: 8 }, historyBody: { flexDirection: "row", gap: 8, minHeight: 132 }, axis: { justifyContent: "space-between" },
   plot: { flex: 1, borderLeftWidth: 1, borderBottomWidth: 1, marginVertical: 8, marginRight: 8 },
   dot: { position: "absolute" },
   legend: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 },
