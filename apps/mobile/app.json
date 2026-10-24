@@ -3,7 +3,7 @@
     "name": "OBD",
     "slug": "obd",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "automatic",
     "platforms": [
       "android"
