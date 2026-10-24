@@ -8,9 +8,9 @@
 - Verdicts: APPROVE (2026-09-29); reviewer reproduced `pnpm check` PASS.
 - Decisions in effect: owner 2026-09-29: keep the DeepSeek host; replace the strict `json_schema` request with plain JSON mode on DeepSeek-hosted pins; rely on server and phone schema validation plus the number check.
 - Owner authorizations: the fix itself; owner 2026-09-29 confirmed the spec's scope (JSON mode on all four arms and the summary, v2 summary prompt) and answered the open question: yes, record the upstream HTTP status code (number only) for `provider-error`, folded into this task. No lint-config change (owner declined). No paid call authorized by this task; the owner re-runs the T2.10 phone gate afterwards.
-- NOT RUN: owner D1 phone re-run.
+- (superseded 2026-10-23: D1 re-run done, see rec T2.10.md:47-48) NOT RUN: owner D1 phone re-run.
 - Blocker: none (T2.11b Stage 1b committed f241ee3).
-- Next action: owner re-runs the D1 phone gate (restart wrangler dev, reload Metro); the orchestrator records the ledger row and any `provider-error:NNN` in `docs/task-runs/T2.10.md`.
+- (superseded 2026-10-23: D1 re-run done, see rec T2.10.md:47-48) Next action: owner re-runs the D1 phone gate (restart wrangler dev, reload Metro); the orchestrator records the ledger row and any `provider-error:NNN` in `docs/task-runs/T2.10.md`.
 
 ## Baseline
 

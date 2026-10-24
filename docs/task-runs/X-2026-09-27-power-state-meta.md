@@ -2,13 +2,14 @@
 
 ## Current state (as of 2026-09-27)
 
-- **Stage:** architecture done (spec written). Open questions 1–6 await orchestrator or owner decisions. No implementation yet.
+- (superseded 2026-10-23: implemented, committed 05c7c94) **Stage:** architecture done (spec written). Open questions 1–6 await orchestrator or owner decisions. No implementation yet.
 - **Repair count:** 0 of 2. **Escalations:** 0.
-- **Verification:** none run for this task. Baselines checked by the architect at `8dcc0e7`:
+- (superseded 2026-10-23: superseded by implementation, see implementer section) **Verification:** none run for this task. Baselines checked by the architect at `8dcc0e7`:
   - PASS: the Stage A scrub summary regenerates to `452e139309cd680f824106b1205e50bcb00b973c4697ba86702ebaa7ebacb94b`.
   - PASS: `battery-diagnosis.ts` on `2026-09-22-spike.redacted.jsonl` gives no diff against `packages/obd-battery/test/battery-diagnosis-spike.md`.
-- **NOT RUN:** everything in the spec's Verification section. Implementation has not started.
-- **Next action:** see below.
+- (superseded 2026-10-23: implemented, committed 05c7c94) **NOT RUN:** everything in the spec's Verification section. Implementation has not started.
+- (superseded 2026-10-23: implemented, committed 05c7c94) **Next action:** see below.
+- Next action (2026-10-23): none; implementation committed 05c7c94 (per git).
 
 ## Ownership
 
@@ -43,7 +44,7 @@
 
 ## Next action
 
-- Orchestrator: decide open questions 1–6, record them in the spec's §Decisions, then spawn the implementer.
+- (superseded 2026-10-23: implementer spawned) Orchestrator: decide open questions 1–6, record them in the spec's §Decisions, then spawn the implementer.
 - 2026-09-27, orchestrator: open questions 1–6 decided as recommended (spec §Orchestrator decisions). Implementer spawned; repair count 0 of 2.
 
 ## Implementer (Claude, 2026-09-27)

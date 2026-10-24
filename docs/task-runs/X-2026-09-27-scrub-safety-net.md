@@ -12,7 +12,7 @@
 - Verification: independent reviewer PASS: focused cases (2 passed), isolated `/tmp` R2 and R5 counterfactuals each fail `Error: accepted` and pass after restore, `pnpm -F obd-core test` (238/238), full `pnpm check` (exit 0), and `git diff --check`. Source `scrub.ts` unchanged from HEAD and baseline, SHA-256 `f2fc2afbf14f6e29f2cb2a6e7e73edd44716312eb802b36db9fc4f3741dc42ea`; scoped diff empty. Hardware NOT RUN because this test-only follow-up has no hardware gate.
 - Review findings: original Stage A reviewer noted R2/R5 mutation gaps; these are covered and independently confirmed. Follow-up reviewer APPROVE with no remaining findings.
 - Blocker: none known.
-- Next action: none for this scoped follow-up. Changes remain uncommitted under the Codex workflow; do not infer hardware verification or reopen the approved T2.9 Stage A milestone.
+- Next action: none for this scoped follow-up. Changes remain uncommitted under the Codex workflow; do not infer hardware verification or reopen the approved T2.9 Stage A milestone. (committed later: 892435d, per git, 2026-10-23)
 
 ## Historical reference
 

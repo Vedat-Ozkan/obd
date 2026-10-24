@@ -21,6 +21,7 @@ It is a portfolio and personal-use project first, showcasing applied AI engineer
 | How the architect/implementer/reviewer loop runs | `docs/WORKFLOW.md` |
 | Why things were decided | `docs/DECISIONS.md` |
 | Spec template | `docs/specs/README.md` |
+| Open owner items (car, phone, builds, accounts, decisions) | `docs/OWNER-QUEUE.md` |
 
 ## Repository map (target layout; see PLAN.md T0.1 for what exists)
 

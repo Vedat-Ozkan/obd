@@ -10,7 +10,7 @@
 - Owner authorizations: this change; scope is the owner's chosen fix (no separate confirmation). No paid call; the owner re-runs the phone summary afterwards.
 - NOT RUN: none. Owner phone re-run PASS 2026-09-29 (`498a2d47…`, llm, 773 output tokens, no doubled value).
 - Blocker: none.
-- Next action: owner phone re-run. Follow-up (test gap): assert that no `get_session`/`get_codes` trace fact ID matches `/^(codes-(stored|pending|permanent)|readiness)$/` in `assistant-replay.test.ts`.
+- (superseded 2026-10-23: phone re-run PASS, see line 11) Next action: owner phone re-run. Follow-up (test gap): assert that no `get_session`/`get_codes` trace fact ID matches `/^(codes-(stored|pending|permanent)|readiness)$/` in `assistant-replay.test.ts`.
 
 ## Baseline
 

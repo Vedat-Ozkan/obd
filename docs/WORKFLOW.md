@@ -72,6 +72,7 @@ Rules, the same for both tools:
 6. **Collapse an approved, committed stage to one line:** `<stage> <role>: <VERDICT> (repairs N/2) — commit <sha>`. Fixed findings and their detail drop from the record; git history keeps them.
 7. **Log entries cite spec sections instead of restating spec text**, and record each round's check results once, as PASS/FAIL, not as full transcripts. Other files never cite a record's history sections by heading (they get collapsed); cite the spec, a commit, or `git show <sha>:docs/task-runs/<id>.md`.
 8. **Soft-cap the record at ~8KB.** Past that, collapse closed stages first.
+9. **Owner-only items also go in `docs/OWNER-QUEUE.md`,** one row each with a link back to the record line. When one is done, record the result in the record and delete the row.
 
 Takeover prompt for a Claude session: `/feature <task-id>` reads the record first and does the reconciliation itself. For Codex, `CODEX.md` has the equivalent.
 

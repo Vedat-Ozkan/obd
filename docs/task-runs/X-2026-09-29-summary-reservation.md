@@ -8,9 +8,9 @@
 - Verdicts: APPROVE after repair 1 (2026-09-29).
 - Decisions in effect (owner, 2026-09-29): Q1 (c) no use count, the US$1 budget alone limits calls. Migration of the live local D1 state: owner authorizes the orchestrator to apply the reviewed schema after review, with a read-only before/after SELECT.
 - Owner authorizations: 2026-09-29 owner asked for this task ("do 1-4 in any order you want ... adjust reserve to the real size").
-- NOT RUN: paid phone gate (T2.10d).
+- (superseded 2026-10-23: D1 phone gate later PASS, see rec T2.10.md:49) NOT RUN: paid phone gate (T2.10d).
 - Blocker: none.
-- Next action: none for this task; the paid phone gate belongs to T2.10d.
+- (superseded 2026-10-23: gate later run, see rec T2.10.md:49) Next action: none for this task; the paid phone gate belongs to T2.10d.
 
 ## Baseline
 

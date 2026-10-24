@@ -12,7 +12,7 @@
 - Verification: final reviewer PASS: focused pytest twice (4/4), byte-identical artifact SHA-256 `61d161c595e979d2a61776550e0ce4ae58d0d2583015a3e7dde2dfba79af476b`, three deliberate counterfactual mutants failed at expected assertions, `uv run ruff check ../spike`, `uv run --no-project --with pytest pytest tools/spike` (68/68 in the final shared tree), full `pnpm check` (exit 0, session 11463), and `git diff --check`. Hardware NOT RUN because this is an offline queue repair and the spec requires none.
 - Review findings: initial REQUEST_CHANGES for missing boundary, independent charging-time, and state-reset coverage; repaired and independently confirmed. Final verdict APPROVE with no remaining findings. Original T2.3b finding is resolved by this follow-up.
 - Blocker: none.
-- Next action: none for this scoped follow-up. Changes remain uncommitted under the Codex workflow; do not infer new hardware verification or reopen the completed T2.3b milestone.
+- Next action: none for this scoped follow-up. Changes remain uncommitted under the Codex workflow; do not infer new hardware verification or reopen the completed T2.3b milestone. (committed later: 892435d, 8e22d78, 8072e9a, per git, 2026-10-23)
 
 ## Historical reference
 

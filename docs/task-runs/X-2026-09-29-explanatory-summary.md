@@ -10,7 +10,7 @@
 - Owner authorizations: this change; 2026-09-29 answers: build now, thresholds task next; 28-word list accepted. No paid call; the owner re-runs the phone summary afterwards.
 - NOT RUN: none. Owner phone run PASS after the claim-split follow-up (`498a2d47…`, 2026-09-29).
 - Blocker: none. Implementation must follow X-2026-09-29-summary-placeholders Stage 4 (both edit `tools/summary-backend/openrouter.ts`).
-- Next action: owner phone summary run; then open the thresholds task (cell balance, 12 V) and fold in the `codeList` duplicate.
+- (superseded 2026-10-23: phone run PASS, see line 11) Next action: owner phone summary run; then open the thresholds task (cell balance, 12 V) and fold in the `codeList` duplicate.
 
 ## Baseline
 

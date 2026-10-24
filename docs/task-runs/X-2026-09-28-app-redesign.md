@@ -2,13 +2,14 @@
 
 ## Current state (as of 2026-09-28)
 
-- **Stage:** architecture done (spec written). Open questions 1–10 in the spec wait for owner decisions. No implementation yet.
+- (superseded 2026-10-23: Stages A-C4 done and committed (1f41022..37041bb)) **Stage:** architecture done (spec written). Open questions 1–10 in the spec wait for owner decisions. No implementation yet.
 - **Repair count:** 0 of 2. **Escalations:** 0.
-- **Verification:** none run for this task. Baseline checked by the architect at `78cd7d6`:
+- (superseded 2026-10-23: superseded by stage records) **Verification:** none run for this task. Baseline checked by the architect at `78cd7d6`:
   - PASS: `pnpm -F mobile test` passed 304/304 across 14 files. This includes Codex's uncommitted T2.10 edits in the working tree.
-- **NOT RUN:** everything in the spec's Verification section. Implementation has not started.
-- **Blocker:** Stage A cannot start until Codex commits or releases `apps/mobile/App.tsx`, `apps/mobile/package.json`, the root `package.json`, `eslint.config.js`, `.gitignore` and `pnpm-lock.yaml` (spec §Sequencing and ownership; open question 7).
-- **Next action:** see the Next action section below.
+- (superseded 2026-10-23: stages done, see stage records) **NOT RUN:** everything in the spec's Verification section. Implementation has not started.
+- (superseded 2026-10-23: Stage A done) **Blocker:** Stage A cannot start until Codex commits or releases `apps/mobile/App.tsx`, `apps/mobile/package.json`, the root `package.json`, `eslint.config.js`, `.gitignore` and `pnpm-lock.yaml` (spec §Sequencing and ownership; open question 7).
+- (superseded 2026-10-23: Stages A-C4 done) **Next action:** see the Next action section below.
+- Next action (2026-10-23): see docs/OWNER-QUEUE.md B1.
 
 ## Ownership
 
@@ -54,7 +55,7 @@
 
 ## Next action
 
-- Orchestrator: take spec open questions 1–10 to the owner and record the answers in the spec's §Decisions. Get Codex to release `App.tsx` (open question 7). Then spawn the Stage A implementer.
+- (superseded 2026-10-23: Stages A-C4 done) Orchestrator: take spec open questions 1–10 to the owner and record the answers in the spec's §Decisions. Get Codex to release `App.tsx` (open question 7). Then spawn the Stage A implementer.
 - 2026-09-28, orchestrator: all 10 open questions are settled (spec §Decisions). Owner:
   - 1: codes rating as recommended.
   - 6: ADR-021 accepted and appended to DECISIONS.md.
