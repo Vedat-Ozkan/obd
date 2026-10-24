@@ -23,3 +23,11 @@ appId: com.ev.obd
 - extendedWaitUntil:
     visible: "Add a vehicle"
     timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 4000
+- runFlow:
+    when:
+      visible: "Go home"
+    commands:
+      - back
+- assertVisible: "Add a vehicle"

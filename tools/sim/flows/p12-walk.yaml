@@ -62,6 +62,7 @@ appId: com.ev.obd
 - takeScreenshot: 11-car-trends
 - scrollUntilVisible:
     element: "Report history"
+    direction: UP
 - tapOn: "Report history"
 - assertVisible: "Report history"
 - takeScreenshot: 12-history

@@ -27,7 +27,12 @@ reset_display() {
   adb shell settings put system accelerometer_rotation 1 2>/dev/null
   adb shell cmd connectivity airplane-mode disable > /dev/null 2>&1
 }
-cleanup() { reset_display; for pid in "${STARTED[@]}"; do kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; done; }
+cleanup() {
+  reset_display
+  for pid in "${STARTED[@]}"; do kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; done
+  sleep 3
+  for pid in "${STARTED[@]}"; do kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null; done
+}
 trap cleanup EXIT
 
 {
@@ -52,7 +57,8 @@ boot_emulator() {
 
 start_metro() {
   if curl -s -o /dev/null http://localhost:8081/status; then return; fi
-  (cd "$ROOT/apps/mobile" && CI=1 EXPO_PUBLIC_BETA_URL="${BETA_URL:-}" setsid pnpm exec expo start --dev-client --clear --port 8081 > "$OUT/metro.log" 2>&1 & echo $! > "$OUT/metro.pid")
+  (cd "$ROOT/apps/mobile" && CI=1 EXPO_PUBLIC_BETA_URL="${BETA_URL:-}" setsid bash -c 'echo $$ > "$0"; exec pnpm exec expo start --dev-client --clear --port 8081' "$OUT/metro.pid" > "$OUT/metro.log" 2>&1 &)
+  until [ -s "$OUT/metro.pid" ]; do sleep 0.2; done
   STARTED+=("$(cat "$OUT/metro.pid")")
   METRO_OURS=1
   until curl -s -o /dev/null http://localhost:8081/status; do sleep 2; done
@@ -210,48 +216,77 @@ flow_p13() {
 }
 
 BETA_TOKEN=simadmin
-manifest_keys() { curl -s -H "Authorization: Bearer $BETA_TOKEN" "http://localhost:8787/admin/manifests"; }
-manifest_count() { manifest_keys | grep -o 'manifest.json' | wc -l; }
+BETA_HOST=http://localhost:8787
+admin_get() { curl -s -H "Authorization: Bearer $BETA_TOKEN" "$BETA_HOST$1"; }
+admin_code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $BETA_TOKEN" "$BETA_HOST$1"; }
+manifest_keys() {
+  local body; body="$(admin_get /admin/manifests)"
+  case "$body" in '{"keys":['*) echo "$body" | grep -o 'files/[^"]*manifest.json' ;; *) touch "$OUT/p10/count-error"; return 1 ;; esac
+}
+manifest_count() { manifest_keys | wc -l; }
 
 flow_p10() {
   local dir="$OUT/p10"; mkdir -p "$dir"
   local result=PASS notes=""
   if [ -z "${BETA_URL:-}" ] || [ "${METRO_OURS:-0}" != 1 ]; then record p10 FAIL "Metro was already running without EXPO_PUBLIC_BETA_URL; stop it and rerun;"; return; fi
-  (cd "$ROOT/tools/beta-backend" && WRANGLER_SEND_METRICS=false CI=1 setsid pnpm dlx wrangler@4.142.0 dev --local --ip 0.0.0.0 --port 8787 --persist-to "$dir/wrangler-state" --var "ADMIN_TOKEN:$BETA_TOKEN" > "$dir/wrangler.log" 2>&1 & echo $! > "$dir/wrangler.pid")
+  (cd "$ROOT/tools/beta-backend" && WRANGLER_SEND_METRICS=false CI=1 setsid bash -c 'echo $$ > "$0"; exec pnpm dlx wrangler@4.142.0 dev --local --ip 0.0.0.0 --port 8787 --persist-to "$1" --var "ADMIN_TOKEN:$2"' "$dir/wrangler.pid" "$dir/wrangler-state" "$BETA_TOKEN" > "$dir/wrangler.log" 2>&1 &)
+  until [ -s "$dir/wrangler.pid" ]; do sleep 0.2; done
   STARTED+=("$(cat "$dir/wrangler.pid")")
-  local n=0; until curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $BETA_TOKEN" http://localhost:8787/admin/manifests | grep -q 200; do sleep 2; n=$((n+1)); [ $n -gt 90 ] && { record p10 FAIL "wrangler dev did not start (see p10/wrangler.log);"; return; }; done
+  local n=0; until [ "$(admin_code /admin/manifests)" = 200 ]; do sleep 2; n=$((n+1)); [ $n -gt 90 ] && { record p10 FAIL "wrangler dev did not start (see p10/wrangler.log);"; return; }; done
   printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
   fresh_app; seed garage.json "$dir/garage.json"
   local base; base="$(manifest_count)"; echo "objects before: $base" > "$dir/objects.txt"
 
-  MAESTRO_TAG=off maestro_flow "$dir" p10-beta -e STEP=off && notes="$notes consent off: no beta sentence;" || { result=FAIL; notes="$notes consent-off step failed;"; }
+  MAESTRO_TAG=off maestro_flow "$dir" p10-beta -e STEP=off && notes="$notes consent off: run saved with no beta sentence;" || { result=FAIL; notes="$notes consent-off step failed;"; }
+  sleep 5
   local c1; c1="$(manifest_count)"; echo "after consent off: $c1" >> "$dir/objects.txt"
   [ "$c1" = "$base" ] && notes="$notes no object while off ($c1);" || { result=FAIL; notes="$notes object appeared while sharing off;"; }
 
   MAESTRO_TAG=on maestro_flow "$dir" p10-beta -e STEP=on && notes="$notes consent on: 'Queued for beta upload.' shown;" || { result=FAIL; notes="$notes consent-on step failed;"; }
   n=0; until [ "$(manifest_count)" -gt "$c1" ] || [ $n -gt 30 ]; do sleep 2; n=$((n+1)); done
-  local c2; c2="$(manifest_count)"; echo "after on (codes-scan queued, online): $c2" >> "$dir/objects.txt"
+  local c2; c2="$(manifest_count)"; echo "after on (codes-scan, online): $c2" >> "$dir/objects.txt"
   [ "$c2" -gt "$c1" ] && notes="$notes codes-scan object arrived ($c1 -> $c2);" || { result=FAIL; notes="$notes no object after sharing on;"; }
 
   adb shell cmd connectivity airplane-mode enable > /dev/null; sleep 5
-  MAESTRO_TAG=airplane maestro_flow "$dir" p10-beta -e STEP=again || { result=FAIL; notes="$notes airplane queue step failed;"; }
+  MAESTRO_TAG=airplane maestro_flow "$dir" p10-beta -e STEP=again || { result=FAIL; notes="$notes airplane capture step failed;"; }
   sleep 10
-  local c3; c3="$(manifest_count)"; echo "airplane, queued: $c3" >> "$dir/objects.txt"
-  [ "$c3" = "$c2" ] && notes="$notes airplane: queued, not uploaded ($c3);" || { result=FAIL; notes="$notes object count changed in airplane mode;"; }
-  adb shell cmd connectivity airplane-mode disable > /dev/null; sleep 8
+  local c3; c3="$(manifest_count)"; echo "airplane, capture queued: $c3" >> "$dir/objects.txt"
+  [ "$c3" = "$c2" ] && notes="$notes airplane: capture queued, not uploaded ($c3);" || { result=FAIL; notes="$notes object count changed in airplane mode;"; }
+  adb shell cmd connectivity airplane-mode disable > /dev/null
+  sleep 75
   adb shell input keyevent KEYCODE_HOME; sleep 2
   adb shell monkey -p $APP -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-  n=0; until [ "$(manifest_count)" -gt "$c3" ] || [ $n -gt 45 ]; do sleep 2; n=$((n+1)); done
-  local c4; c4="$(manifest_count)"; echo "airplane off, foregrounded: $c4" >> "$dir/objects.txt"
+  n=0; until [ "$(manifest_count)" -gt "$c3" ] || [ $n -gt 30 ]; do sleep 2; n=$((n+1)); done
+  local c4; c4="$(manifest_count)"; echo "airplane off, 75 s backoff elapsed, foregrounded: $c4" >> "$dir/objects.txt"
   [ "$c4" -gt "$c3" ] && notes="$notes foreground upload with no tap ($c3 -> $c4);" || { result=FAIL; notes="$notes no upload after foreground;"; }
 
-  manifest_keys > "$dir/manifests-before-delete.json"
+  MAESTRO_TAG=scan maestro_flow "$dir" p10-beta -e STEP=scan || { result=FAIL; notes="$notes battery check step failed;"; }
+  n=0; until [ "$(manifest_count)" -gt "$c4" ] || [ $n -gt 30 ]; do sleep 2; n=$((n+1)); done
+  local c5; c5="$(manifest_count)"; echo "after battery check: $c5" >> "$dir/objects.txt"
+  manifest_keys > "$dir/manifests-before-delete.txt"
+  local kinds=""; local key
+  while read -r key; do kinds="$kinds $(admin_get "/admin/objects/$key" | grep -o '"kind":"[a-z-]*"' | head -1)"; done < "$dir/manifests-before-delete.txt"
+  echo "kinds:$kinds" >> "$dir/objects.txt"
+  if [ "$c5" -gt "$c4" ] && echo "$kinds" | grep -q '"kind":"battery-scan"'; then notes="$notes battery-scan object arrived (kinds:$kinds);"; else result=FAIL; notes="$notes no battery-scan object (kinds:$kinds);"; fi
+
+  : > "$dir/objects-before-delete.txt"
+  while read -r key; do
+    echo "$key" >> "$dir/objects-before-delete.txt"
+    local parts; parts="$(admin_get "/admin/objects/$key" | grep -o '"bytes"' | wc -l)"; local i=0
+    while [ $i -lt "$parts" ]; do echo "${key%manifest.json}part-$(printf %03d $i).jsonl" >> "$dir/objects-before-delete.txt"; i=$((i+1)); done
+  done < "$dir/manifests-before-delete.txt"
+  local install; install="$(head -1 "$dir/manifests-before-delete.txt" | cut -d/ -f2)"
+
   MAESTRO_TAG=delete maestro_flow "$dir" p10-beta -e STEP=delete || { result=FAIL; notes="$notes Delete my data step failed;"; }
   sleep 5
-  local c5; c5="$(manifest_count)"; echo "after Delete my data: $c5" >> "$dir/objects.txt"
-  manifest_keys > "$dir/manifests-after-delete.json"
-  [ "$c5" = 0 ] && notes="$notes Delete my data left 0 manifest objects (was $c4);" || { result=FAIL; notes="$notes $c5 manifests remain after delete;"; }
-  find "$dir/wrangler-state" -type f 2>/dev/null | wc -l | sed 's/^/local bucket state files (informational): /' >> "$dir/objects.txt"
+  local c6; c6="$(manifest_count)"; echo "after Delete my data: $c6 manifests" >> "$dir/objects.txt"
+  local total=0 remain=0
+  while read -r key; do total=$((total+1)); [ "$(admin_code "/admin/objects/$key")" = 404 ] || remain=$((remain+1)); done < "$dir/objects-before-delete.txt"
+  echo "objects under files/$install/ before delete: $total, still present after: $remain" >> "$dir/objects.txt"
+  admin_get /admin/tombstones > "$dir/tombstones.json"
+  if [ -f "$dir/count-error" ]; then result=FAIL; notes="$notes admin listing failed at least once, NOT CHECKED: see p10/count-error;"
+  elif [ "$total" -gt 0 ] && [ "$remain" = 0 ] && grep -q "$install" "$dir/tombstones.json"; then notes="$notes Delete my data: all $total objects under files/<installId>/ are gone, tombstone present;"
+  else result=FAIL; notes="$notes after delete: $remain of $total objects remain or no tombstone;"; fi
   notes="$notes step 5 (intake into fixtures/recordings) NOT RUN by design;"
   collect_sim_misses
   record p10 "$result" "$notes"

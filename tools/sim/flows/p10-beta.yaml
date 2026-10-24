@@ -32,7 +32,7 @@ appId: com.ev.obd
           element: "Run codes report"
       - tapOn: "Run codes report"
       - extendedWaitUntil:
-          visible: "Capture complete.*|Capture stopped.*"
+          visible: ".*(Share sheet opened|NOT SAVED|Saved ).*"
           timeout: 240000
       - assertNotVisible: ".*Queued for beta upload.*"
       - takeScreenshot: 02-off-no-beta-sentence
@@ -89,12 +89,35 @@ appId: com.ev.obd
       true: ${STEP == 'again'}
     commands:
       - scrollUntilVisible:
-          element: "Run codes report"
-      - tapOn: "Run codes report"
+          element: "Run capture"
+      - tapOn: "Run capture"
       - extendedWaitUntil:
           visible: ".*Queued for beta upload.*"
           timeout: 240000
       - takeScreenshot: 05-airplane-queued
+
+- runFlow:
+    when:
+      true: ${STEP == 'scan'}
+    commands:
+      - stopApp
+      - runFlow: launch.yaml
+      - tapOn:
+          text: "2024 Chevrolet Equinox EV"
+          index: 0
+      - tapOn: "Run check"
+      - extendedWaitUntil:
+          visible: "Choose your OBD dongle"
+          timeout: 30000
+      - tapOn: "Simulated car \\(Equinox EV\\)"
+      - extendedWaitUntil:
+          visible: "Run battery check"
+          timeout: 30000
+      - tapOn: "Run battery check"
+      - extendedWaitUntil:
+          visible: "Battery report"
+          timeout: 240000
+      - takeScreenshot: 06-battery-scan
 
 - runFlow:
     when:
@@ -107,6 +130,6 @@ appId: com.ev.obd
       - tapOn: "Delete my data"
       - tapOn: "Delete"
       - extendedWaitUntil:
-          visible: "Beta data sharing is off.*"
+          visible: ".*(deleted|is off).*"
           timeout: 60000
-      - takeScreenshot: 06-deleted
+      - takeScreenshot: 07-deleted
