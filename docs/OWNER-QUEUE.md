@@ -54,7 +54,7 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 
 | # | Item | Source | Unblocks |
 |---|---|---|---|
-| C1 | T2.4 B2 driveway check the same evening; watch the rest/no-current misattribution and the BleManager remount race | `rec/T2.4.md:31, 74-75` | T2.4 Stage C |
+| C1 | T2.4 B2 driveway check the same evening; watch the rest/no-current misattribution and the BleManager remount race; the three 2026-09-28 attempts (header "Ready, Park") got only `UNABLE TO CONNECT` to `ATSP0` `0100` and never reached `ATSP7`, so confirm the car is Ready and the logger gets past init | `rec/T2.4.md:31, 74-75` | T2.4 Stage C |
 | C2 | One real multi-hour charge log, screen off, rested windows at both ends (the 2026-09-28 charge-log files are car-off failures) | `rec/T2.4.md:32, 75` | T2.4, T2.6 capacity gate, T0.10, T2.8, BM1+ |
 
 ## Accounts and outward steps
