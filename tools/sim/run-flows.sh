@@ -114,29 +114,32 @@ flow_p2() {
   local ip=10.0.2.2 port=8765 token=simtoken
   local result=PASS notes=""
   local envs=(-e "RELAY_URL=ws://$ip:$port" -e "RELAY_TOKEN=$token")
-  probe() { (cd "$ROOT" && OBD_RELAY_TOKEN=$token OBD_RELAY_PORT=$port setsid pnpm exec tsx tools/sim/relay-probe.ts "$1" "$scratch" > "$dir/probe-$1.log" 2>&1 & echo $! > "$dir/probe-$1.pid"); cat "$dir/probe-$1.pid"; }
+  stop_probe() { kill "$(cat "$scratch/probe.pid" 2>/dev/null)" 2>/dev/null; rm -f "$scratch/probe.pid" "$scratch/go"; sleep 1; }
+  probe() { (cd "$ROOT" && OBD_RELAY_TOKEN=$token OBD_RELAY_PORT=$port setsid pnpm exec tsx tools/sim/relay-probe.ts "$1" "$scratch" > "$dir/probe-$1.log" 2>&1 < /dev/null & echo $! > "$dir/probe-$1.pid"); PROBE_PID="$(cat "$dir/probe-$1.pid")"; }
   await_probe() { local n=0; until grep -q "$2" "$dir/probe-$1.log" 2>/dev/null; do sleep 1; n=$((n+1)); [ $n -gt "${3:-120}" ] && return 1; done; }
   printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
 
   fresh_app; seed garage.json "$dir/garage.json"
-  local pid; pid="$(probe smoke)"; STARTED+=("$pid")
-  maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect failed;"; }
-  if await_probe smoke "Replay matched live response" 120; then notes="$notes hil smoke matched live and replay;"; else result=FAIL; notes="$notes hil smoke did not finish;"; fi
-  kill -- "-$pid" 2>/dev/null
+  local pid; probe smoke; pid="$PROBE_PID"; STARTED+=("$pid")
+  maestro_flow "$dir" p2-relay-connect "${envs[@]}"
+  if await_probe smoke "hil:smoke: REFUSED relay: the connected phone is a simulated car" 120; then notes="$notes hil:smoke refused the simulated phone, no recording written;"; else result=FAIL; notes="$notes hil:smoke did not refuse the simulated phone;"; fi
+  [ -z "$(find "$scratch" -name '*.jsonl' 2>/dev/null)" ] || { result=FAIL; notes="$notes recording written by smoke;"; }
+  stop_probe
 
   fresh_app; seed garage.json "$dir/garage.json"
-  pid="$(probe guard)"; STARTED+=("$pid")
+  probe guard; pid="$PROBE_PID"; STARTED+=("$pid")
   maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect (guard) failed;"; }
-  await_probe guard "PHONE CONNECTED" 60
+  await_probe guard "PHONE CONNECTED" 60; touch "$scratch/go"
   maestro_flow "$dir" p2-relay-cancel || { result=FAIL; notes="$notes Mode 04 Cancel flow failed;"; }
   if await_probe guard "^04: REFUSED" 30 && grep -q '^2E F190 00: REFUSED' "$dir/probe-guard.log"; then notes="$notes 2E refused by guard, 04 denied on phone;"; else result=FAIL; notes="$notes 2E/04 outcome missing;"; fi
-  kill -- "-$pid" 2>/dev/null
+  stop_probe
 
   fresh_app; seed garage.json "$dir/garage.json"
-  pid="$(probe hold04)"; STARTED+=("$pid")
+  probe hold04; pid="$PROBE_PID"; STARTED+=("$pid")
   maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect (hold) failed;"; }
+  touch "$scratch/go"
   maestro_flow "$dir" p2-relay-killed || { result=FAIL; notes="$notes prompt not shown before kill;"; }
-  kill -- "-$pid" 2>/dev/null
+  stop_probe
   maestro_flow "$dir" p2-relay-ended || { result=FAIL; notes="$notes 'Relay ended mid-command' not shown;"; }
   [ "$result" = FAIL ] || notes="$notes relay killed mid-command shows 'Relay ended mid-command';"
 

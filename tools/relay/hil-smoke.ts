@@ -12,6 +12,7 @@ export async function main(broker = new RelayBroker()): Promise<void> {
   const until = Date.now() + 300_000;
   while (!broker.isConnected() && Date.now() < until) await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   if (!broker.isConnected()) { await broker.close(); throw new Error("relay: no authenticated phone after 5 minutes"); }
+  if (broker.phoneDongle() === "simulated") { await broker.close(); throw new Error("relay: the connected phone is a simulated car; hil:smoke writes under fixtures/recordings and refuses simulated phones"); }
   const path = pathForToday(broker.root);
   const live: string[] = [];
   try {

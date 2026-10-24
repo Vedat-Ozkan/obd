@@ -20,7 +20,7 @@ The simulator (`packages/obd-core/src/transport/simulated.ts`) answers only from
 |---|---|
 | p4 | A remembered fake real dongle id stays in `dongles.json` after a simulated run; the saved report is listed under its garage entry and absent from a second same-model entry after force-stop and reopen. |
 | p9 | Picker shows both simulated rows with a BLE scan error (Bluetooth is disabled for this flow); the Equinox run saves a scan with an rx `4902` reply; the wrong-model row shows the mismatch message and saves nothing. |
-| p2 | Relay mode, Mode 04 Cancel, 2E refusal, relay killed mid-command. Blocked, see Limits. |
+| p2 | Relay mode over `relay-probe.ts` on 10.0.2.2:8765: `hil-smoke` refuses the simulated phone and writes no recording; the guard refuses 2E; the Mode 04 prompt is cancelled and no tx 04 is sent; killing the relay while the 04 prompt is open shows "Relay ended mid-command". |
 
 `relay-probe.ts` is the laptop side of p2. It uses a scratch root so nothing lands in `fixtures/recordings/` (`pnpm hil:smoke` writes there and never sends 2E).
 
@@ -30,4 +30,4 @@ The simulator (`packages/obd-core/src/transport/simulated.ts`) answers only from
 - Recorded as `NO DATA` only: `|014D`, `|014E`, `DA1DF1|22 33E5`. Source: `pnpm sim:coverage`.
 - `labelled()` (apps/mobile/src/app/runtime.ts) reads the link's dongle kind at save time. A link swapped mid-run labels the file by the final link.
 - The emulator has Bluetooth but no dongles. A remembered real dongle id makes the console auto-connect and wait about 30 s before "Could not reach".
-- P2 is blocked: the relay broker (`tools/relay/broker.ts`, hello schema) accepts only `dongle: "veepeak-obdcheck-ble"` and `mtu > 0`, and the simulated link has `mtu 0`. The relay drops the phone right after the hello ("Relay disconnected."). Relay code is out of scope for this task, so p2 is NOT RUN.
+- The relay hello from a simulated link says `dongle: "simulated"` with `mtu 0`; the broker accepts that pair only together, and `pnpm hil:smoke` refuses a simulated phone so nothing simulated lands in `fixtures/recordings/`. p2 therefore cannot show a smoke recording; it shows the refusal.
