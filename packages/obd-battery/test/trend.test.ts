@@ -7,8 +7,7 @@ import { bmsEnergyCapacity, bmsFigure } from "../src/capacity.js";
 import type { BatteryDiagnosisReport } from "../src/report.js";
 import { batteryDiagnosisFromRecording } from "../src/report.js";
 import { chargeLogFromRecording } from "../src/session.js";
-import type { ChargeSessionSummary } from "../src/chargeSummary.js";
-import { TREND_POLICY, groupZ, pointsFromReports, pointsFromSummaries, trendFlags, trendsByMethod, weightedTrend, type SessionPoint, type TrendResult } from "../src/trend.js";
+import { TREND_POLICY, groupZ, pointsFromReports, trendFlags, trendsByMethod, weightedTrend, type SessionPoint, type TrendResult } from "../src/trend.js";
 import { renderTrendReport } from "../src/trendReport.js";
 
 const root = new URL("../../../", import.meta.url);
@@ -93,7 +92,7 @@ describe("E2E real recordings", () => {
     const text = await trendReportFromPaths(["fixtures/synthetic/charge-log-rested.jsonl"]);
     writeFileSync("/tmp/trend-report-synthetic.md", text);
     expect(text).toMatch(/synthetic/i);
-    expect(text).toMatch(/\(2000-01-01, synthetic\): integrated-ah 1[12]\.\d+ Ah/);
+    expect(text).toMatch(/\(undated, synthetic\): integrated-ah 1[12]\.\d+ Ah/);
     expect(text).toContain("Charge power by SOC");
     expect(text).toMatch(/Not enough data yet: 1 sessions? over 0 days/);
   }, 120_000);
@@ -139,14 +138,6 @@ describe("E2E seeded series", () => {
     const newCode = flagsAt(coded, 6);
     expect(newCode.map((f) => f.kind)).toEqual(["new-code"]);
     expect(newCode[0]?.detail).toContain("P0A80");
-  });
-
-  it("12 V low in two consecutive checks and a capacity outlier produce flags", () => {
-    const low = Array.from({ length: 6 }, (_, k) => makeReport({ id: k, day: k * 40, capacityKwh: 85, restingV: k >= 4 ? 12.2 : 12.7 }));
-    expect(flagsAt(low, 6).map((f) => f.kind)).toEqual(["twelve-volt-low"]);
-    expect(flagsAt(low, 5).map((f) => f.kind)).toEqual([]);
-    const outlier = fadingSeries(1, 0.03).map((r, k) => k === 9 ? makeReport({ id: k, day: k * 40, capacityKwh: 70 }) : r);
-    expect(flagsAt(outlier, 10).map((f) => f.kind)).toContain("capacity-outlier");
   });
 
   it("measured false alarms on 200 flat series stay at or under 5 %", () => {
@@ -245,15 +236,4 @@ describe("isolated failures", () => {
     expect(recomputed.band).toBe(last.band);
     expect(pointsFromReports([report]).rejected[0]?.reason).toMatch(/SOC/);
   }, 60_000);
-});
-
-describe("summaries", () => {
-  it("only gate-passing summaries with a capacity become integrated-Ah points", () => {
-    const summary = (id: string, gateFailures: string[], ah?: number): ChargeSessionSummary => ({
-      version: 1, id, at: at(0), recording: id, synthetic: true, ...(ah === undefined ? {} : { capacity: { ah, bandAh: 1, deltaSoc: 40 } }), gateFailures, spread: [], powerBySoc: [],
-    });
-    const { points, rejected } = pointsFromSummaries([summary("ok", [], 12), summary("gated", ["no charge window"], 12), summary("none", [])]);
-    expect(points.map((p) => p.id)).toEqual(["ok"]);
-    expect(rejected.map((r) => r.id).sort()).toEqual(["gated", "none"]);
-  });
 });

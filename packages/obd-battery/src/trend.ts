@@ -19,6 +19,7 @@ export const TREND_POLICY = {
 } as const;
 
 export const SPREAD_SIGMA_MV = 0.1;
+export const UNDATED_AT = "2000-01-01T00:00:00.000Z";
 
 const DAY_MS = 86_400_000;
 const YEAR_DAYS = 365.25;

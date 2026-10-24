@@ -6,16 +6,15 @@ import { importObdbMode22 } from "../../obd-core/src/vehicles/obdb/import.js";
 import { summariseChargeLog, type ChargeSessionSummary } from "../src/chargeSummary.js";
 import { parseBatteryDiagnosis, batteryDiagnosisFromRecording, type BatteryDiagnosisReport } from "../src/report.js";
 import { chargeLogFromRecording } from "../src/session.js";
-import type { Rejected } from "../src/trend.js";
+import { UNDATED_AT, type Rejected } from "../src/trend.js";
 import { renderTrendReport } from "../src/trendReport.js";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
-const UNDATED_SYNTHETIC_AT = "2000-01-01T00:00:00.000Z";
 
 function sessionDate(path: string, synthetic: boolean): string {
   const date = /\d{4}-\d{2}-\d{2}/.exec(basename(path))?.[0];
   if (date !== undefined) return `${date}T00:00:00.000Z`;
-  if (synthetic) return UNDATED_SYNTHETIC_AT;
+  if (synthetic) return UNDATED_AT;
   throw new Error(`no YYYY-MM-DD date in the file name: ${path}`);
 }
 

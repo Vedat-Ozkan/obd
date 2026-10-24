@@ -1,11 +1,11 @@
 import type { BatteryDiagnosisReport } from "./report.js";
 import type { ChargeSessionSummary } from "./chargeSummary.js";
-import { pointsFromReports, pointsFromSummaries, spreadSeries, spreadTrend, trendFlags, trendsByMethod, type Rejected, type SessionPoint, type TrendResult } from "./trend.js";
+import { SPREAD_SIGMA_MV, TREND_POLICY, UNDATED_AT, pointsFromReports, pointsFromSummaries, spreadSeries, spreadTrend, trendFlags, trendsByMethod, type Rejected, type SessionPoint, type TrendResult } from "./trend.js";
 
 const LABEL = "BMS-referenced capacity index, not state of health";
 const LIMITATION = "Limits come from one car; self-comparison can miss even pack-wide degradation or reflect a sensor offset.";
 const ASSUMPTION = "Assumption: each point's uncertainty is sigma = band / 2, where band is the worst-case bound of the half-count terms. This is not a calibrated error; BM2 replaces it.";
-const day = (at: string) => at.slice(0, 10);
+const day = (at: string) => (at === UNDATED_AT ? "undated" : at.slice(0, 10));
 const fixed = (value: number, digits = 2) => value.toFixed(digits);
 
 function pointLine(p: SessionPoint, summaries: readonly ChargeSessionSummary[]): string {
@@ -28,7 +28,7 @@ function methodSection(result: TrendResult): string[] {
 function powerSection(summary: ChargeSessionSummary): string[] {
   return [
     `#### ${summary.id}${summary.synthetic ? " (synthetic)" : ""}`, "",
-    ...(summary.powerBySoc.length === 0 ? ["No charge window with paired current and voltage."] : ["| SOC bin | Median power | Samples |", "|---|---|---|", ...summary.powerBySoc.map((b) => `| ${String(b.socBin)}-${String(b.socBin + 5)} % | ${fixed(b.medianKw)} kW | ${String(b.n)} |`)]), "",
+    ...(summary.powerBySoc.length === 0 ? ["No charge window with paired current and voltage."] : ["| SOC bin | Median power | Samples |", "|---|---|---|", ...summary.powerBySoc.map((b) => `| ${String(b.socBin)}-${String(b.socBin + TREND_POLICY.powerBinPct)} % | ${fixed(b.medianKw)} kW | ${String(b.n)} |`)]), "",
   ];
 }
 
@@ -51,10 +51,10 @@ export function renderTrendReport(input: { reports: readonly BatteryDiagnosisRep
     ...(rejected.length === 0 ? ["None."] : rejected.map((r) => `- ${r.id}: ${r.reason}`)), "",
     "## Capacity index", "", ...trends.flatMap(methodSection),
     "## Cell-group spread", "",
-    spread.length === 0 ? "No complete parked check with 80 group voltages in the 40-80 % SOC bin." : spread.map((s) => `${day(s.at)}: ${fixed(s.mv, 1)} mV`).join("; "),
+    spread.length === 0 ? `No complete parked check with 80 group voltages in the ${String(TREND_POLICY.socBin.minPct)}-${String(TREND_POLICY.socBin.maxPct)} % SOC bin.` : spread.map((s) => `${day(s.at)}: ${fixed(s.mv, 1)} mV`).join("; "),
     "",
     spreadFit.fit === undefined
-      ? `Not enough data yet: ${String(spreadFit.n)} sessions over ${String(spreadFit.spanDays)} days (spread sigma 0.1 mV from the group voltage tick).`
+      ? `Not enough data yet: ${String(spreadFit.n)} sessions over ${String(spreadFit.spanDays)} days (spread sigma ${String(SPREAD_SIGMA_MV)} mV from the group voltage tick).`
       : `Spread trend: ${fixed(spreadFit.fit.slopeMvPerYear)} mV per year +- ${fixed(2 * spreadFit.fit.seMvPerYear)} mV (2 SE).`,
     "", "## Flags", "",
     ...(flags.length === 0 ? ["None."] : flags.map((f) => `- ${f.kind} (${day(f.at)}): ${f.detail}`)), "",
