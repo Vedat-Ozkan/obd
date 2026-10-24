@@ -83,7 +83,7 @@ export function integratedCurrentCapacity(log: ChargeLog, phases: ChargePhases):
   };
 }
 
-function bmsFigure(energy: Point, soc: Point): CapacityEstimate {
+export function bmsFigure(energy: Point, soc: Point): CapacityEstimate {
   const value = energy.value / (soc.value / 100);
   return {
     status: "estimated", method: "bms-energy-over-soc", label: BMS_LABEL, value,
