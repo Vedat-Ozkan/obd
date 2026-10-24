@@ -32,3 +32,4 @@
 - Stage A+B reviewer: APPROVE at 6015bb1, with fixes before C1: (1) sim:coverage must flag NO DATA-only keys (|014D, |014E, DA1DF1|22 33E5); (2) batteryScanMeta dongle param required. Accepted: batteryReportsDocumentStore.ts Files deviation (stemPrefix), eslint-disable for dev-only require. Deferred to C1: RelayClient meta dongle type; README note on labelled() at save time. Fixes 1-2 sent to Codex (repairs 1/2).
 - Stage A+B re-review: APPROVE (repairs 1/2) at 8e4dbc3; `requested` getter accepted.
 - Stage A+B integrator: merged 6a8102b, gate PASS, worktree removed.
+- Owner 2026-10-24: add agent-driven visual tests for key flows beyond automated runs. A subagent drives the emulator over adb (screencap, uiautomator dump, input; Maestro may reach start states), reads its own screenshots, and reports problems. Sonnet 5.5 medium by default; Opus only by lead decision on escalation. Architect to amend spec with a stage for it.
