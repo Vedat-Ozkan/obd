@@ -43,6 +43,8 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 | P9 | T2.8a picker UI and native persistence check | `rec/T2.8.md:7, 9` | T2.8 (partial) |
 | P10 | T2.9 Stage D phone steps 1–6 against `wrangler dev --local` | `docs/specs/T2.9-beta-data-upload.md:580-592`, `rec/T2.9.md:229` | T2.9 |
 | P11 | Only if the dash SOC is far from 70 %, and with the laptop: `uv run tools/spike/go.py` capture with a dash note | `rec/T2.2.md:8` | T2.2 |
+| P12 | T2.19 Stage B: TalkBack walkthrough of every screen plus a real check with TalkBack on; Accessibility Scanner at font 1.0 and 2.0, light and dark; rotate each screen (after T2.19 merges) | `docs/specs/T2.19-mobile-accessibility.md` Stage B | T2.19 |
+| P13 | T2.20 Stage B phone run: Trends section and saved charge summaries (after T2.20 B merges) | `docs/specs/T2.20-battery-trends.md` Stage B | T2.20 B |
 
 ## One 10-minute drive
 
@@ -55,7 +57,7 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 | # | Item | Source | Unblocks |
 |---|---|---|---|
 | C1 | T2.4 B2 driveway check the same evening; watch the rest/no-current misattribution and the BleManager remount race; the three 2026-09-28 attempts (header "Ready, Park") got only `UNABLE TO CONNECT` to `ATSP0` `0100` and never reached `ATSP7`, so confirm the car is Ready and the logger gets past init | `rec/T2.4.md:31, 74-75` | T2.4 Stage C |
-| C2 | One real multi-hour charge log, screen off, rested windows at both ends (the 2026-09-28 charge-log files are car-off failures) | `rec/T2.4.md:32, 75` | T2.4, T2.6 capacity gate, T0.10, T2.8, BM1+ |
+| C2 | One real multi-hour charge log, screen off, rested windows at both ends (the 2026-09-28 charge-log files are failed attempts); do it with TalkBack on if P12 is still open | `rec/T2.4.md:32, 75` | T2.4, T2.6 capacity gate, T0.10, T2.8, T2.20 C, BM1+ |
 
 ## Accounts and outward steps
 
