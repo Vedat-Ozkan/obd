@@ -1,13 +1,19 @@
 appId: com.ev.obd
 ---
 - runFlow: launch.yaml
-- assertVisible: "Garage"
+- scrollUntilVisible:
+    element: "Garage"
+    direction: UP
 - takeScreenshot: 01-garage
 - tapOn: "Settings"
-- assertVisible: "Settings"
+- scrollUntilVisible:
+    element: "Settings"
+    direction: UP
 - takeScreenshot: 02-settings
 - tapOn: "Beta data sharing"
-- assertVisible: "Beta data sharing"
+- scrollUntilVisible:
+    element: "Beta data sharing"
+    direction: UP
 - takeScreenshot: 03-beta
 - tapOn: "Share my data to improve the app"
 - extendedWaitUntil:
@@ -24,47 +30,62 @@ appId: com.ev.obd
 - scrollUntilVisible:
     element: "Save folder"
 - tapOn: "Save folder"
-- assertVisible: "Save folder"
+- scrollUntilVisible:
+    element: "Save folder"
+    direction: UP
 - takeScreenshot: 05-save-folder
 - back
 - scrollUntilVisible:
     element: "Theme"
 - tapOn: "Theme"
-- assertVisible: "Theme"
+- scrollUntilVisible:
+    element: "Theme"
+    direction: UP
 - takeScreenshot: 06-theme
 - back
 - scrollUntilVisible:
     element: "Privacy note"
 - tapOn: "Privacy note"
-- assertVisible: "Privacy note"
+- scrollUntilVisible:
+    element: "Privacy note"
+    direction: UP
 - takeScreenshot: 07-privacy
 - back
 - scrollUntilVisible:
     element: "Open-source licenses"
 - tapOn: "Open-source licenses"
-- assertVisible: "Open-source licenses"
+- scrollUntilVisible:
+    element: "Open-source licenses"
+    direction: UP
 - takeScreenshot: 08-licenses
 - back
 - back
 - tapOn: "Add a vehicle"
-- assertVisible: "Add a vehicle"
+- scrollUntilVisible:
+    element: "Add a vehicle"
+    direction: UP
 - takeScreenshot: 09-add-vehicle
 - back
 - tapOn:
     text: "2024 Chevrolet Equinox EV"
     index: 0
 - extendedWaitUntil:
-    visible: "Report history"
+    visible: "Run check|Report history"
     timeout: 20000
 - takeScreenshot: 10-car
 - scrollUntilVisible:
     element: "Trends"
 - takeScreenshot: 11-car-trends
+- runFlow:
+    when:
+      notVisible: "Report history"
+    commands:
+      - scrollUntilVisible:
+          element: "Report history"
+- tapOn: "Report history"
 - scrollUntilVisible:
     element: "Report history"
     direction: UP
-- tapOn: "Report history"
-- assertVisible: "Report history"
 - takeScreenshot: 12-history
 - tapOn:
     text: ".*Complete scan.*|.*Partial scan.*"
@@ -76,37 +97,52 @@ appId: com.ev.obd
 - scrollUntilVisible:
     element: "Cell balance"
 - tapOn: "Cell balance"
-- assertVisible: "Cell balance"
+- scrollUntilVisible:
+    element: "Cell balance"
+    direction: UP
 - takeScreenshot: 14-cells
 - back
 - scrollUntilVisible:
     element: "Capacity"
 - tapOn: "Capacity"
-- assertVisible: "Capacity"
+- scrollUntilVisible:
+    element: "Capacity"
+    direction: UP
 - takeScreenshot: 15-capacity
 - back
 - scrollUntilVisible:
     element: "12 V battery"
 - tapOn: "12 V battery"
-- assertVisible: "12 V battery"
+- scrollUntilVisible:
+    element: "12 V battery"
+    direction: UP
 - takeScreenshot: 16-twelve-volt
 - back
 - scrollUntilVisible:
     element: "Diagnostic codes"
 - tapOn: "Diagnostic codes"
-- assertVisible: "Diagnostic codes"
+- scrollUntilVisible:
+    element: "Diagnostic codes"
+    direction: UP
 - takeScreenshot: 17-codes
 - scrollUntilVisible:
     element: "Module .*"
 - tapOn:
     text: "Module .*"
     index: 0
-- assertVisible: "Module .*"
+- scrollUntilVisible:
+    element: "Module .*"
+    direction: UP
 - takeScreenshot: 18-module
 - back
 - back
+- scrollUntilVisible:
+    element: "State of charge.*"
+    direction: UP
 - tapOn: "State of charge.*"
-- assertVisible: "State of charge"
+- scrollUntilVisible:
+    element: "State of charge"
+    direction: UP
 - takeScreenshot: 19-soc
 - back
 - scrollUntilVisible:
