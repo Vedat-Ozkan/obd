@@ -21,6 +21,7 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 | D11 | T2.20 Stage B choices: car removal is blocked while charge summaries exist (matches reports), or delete them with the car; summary date = save time; "1 sessions" wording | `rec/T2.20.md` | T2.20 |
 | D12 | Approve a toolchain edit so root vitest excludes `.claude/worktrees/**`: leftover worktrees duplicate tests and made `worker.test.ts` fail with `Address already in use` | `rec/T2.20.md` | reliable `pnpm check` |
 | D13 | Confirm T2.8b's provisional rules: an unreadable VIN blocks the check ("could not confirm"); a mismatched scan is neither kept nor queued for beta; no override; checked on every battery scan; charge logs not covered | `docs/specs/T2.8b-garage-gates.md` Open questions | T2.8 |
+| D14 | T2.13 Stage C defaults: the "not yet confirmed" label wording; pre-drive report = latest parked report of the same car earlier that day; rescan also on Disconnect; one drive on the Stage C build serves as both Stage B and the rescan check | `docs/specs/T2.13-drive-check.md` Risks Q7 | T2.13 |
 
 ## Build first
 
@@ -52,7 +53,7 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 
 | # | Item | Source | Unblocks |
 |---|---|---|---|
-| R1 | T2.13 Stage B confirming drive: Developer tools > Record test drive; pass = `checked`, no flag, Skew bracket median < 1.843 s | `rec/T2.13.md:11, 13` | T2.13 Stage C, T2.18 |
+| R1 | T2.13 Stage B confirming drive (do it on the Stage C build once merged, so it also covers the rescan check H-C): Developer tools > Record test drive; pass = `checked`, no flag, Skew bracket median < 1.843 s | `rec/T2.13.md:11, 13` | T2.13 Stage C, T2.18 |
 
 ## One overnight charge
 
