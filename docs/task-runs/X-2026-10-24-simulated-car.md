@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-10-24)
 
-- **Stage:** Stage A+B integrating (approved head 8e4dbc3)
+- **Stage:** Stage A+B merged 6a8102b (gate PASS per integrator; per-package counts looked low, re-verified in the T2.18 gate)
 - **Next action:** after merge, Stage C1 (emulator, Maestro, P4/P9/P2 flows).
 
 ## Ownership
@@ -31,3 +31,4 @@
 - Stage A+B implementer: done, head 6015bb1; Stage A/B checks PASS per implementer; picker on real phone NOT RUN (hardware); emulator BleManager NOT RUN (Stage C1). Deviations: batteryReportsDocumentStore.ts stemPrefix (outside Files), batteryScanMeta dongle default, two eslint-disable for dev-only require, 33E5 NO DATA flag deferred to C1.
 - Stage A+B reviewer: APPROVE at 6015bb1, with fixes before C1: (1) sim:coverage must flag NO DATA-only keys (|014D, |014E, DA1DF1|22 33E5); (2) batteryScanMeta dongle param required. Accepted: batteryReportsDocumentStore.ts Files deviation (stemPrefix), eslint-disable for dev-only require. Deferred to C1: RelayClient meta dongle type; README note on labelled() at save time. Fixes 1-2 sent to Codex (repairs 1/2).
 - Stage A+B re-review: APPROVE (repairs 1/2) at 8e4dbc3; `requested` getter accepted.
+- Stage A+B integrator: merged 6a8102b, gate PASS, worktree removed.
