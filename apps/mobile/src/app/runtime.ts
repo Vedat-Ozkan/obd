@@ -16,6 +16,7 @@ import type { StreamTargets } from "../chargeLogger.js";
 import { createChargeRunRecord } from "../chargeRun.js";
 import { createBatteryReportHistory } from "../batteryReports.js";
 import { batteryReportsDocumentStore } from "../batteryReportsDocumentStore.js";
+import { createChargeSummaryHistory, type SummaryTextStore } from "../chargeSummaries.js";
 import type { RunFile, SaveTargets } from "../runFiles.js";
 import { garageDocumentStore } from "../garage/documentStore.js";
 import { createGarageFlow, type TextStore } from "../garage/flow.js";
@@ -41,6 +42,20 @@ async function requestBlePermission(): Promise<boolean> {
 
 const garageFlow = createGarageFlow(garageDocumentStore);
 const batteryHistory = createBatteryReportHistory(batteryReportsDocumentStore, garageFlow);
+const chargeSummaryStore: SummaryTextStore = {
+  async read() {
+    const file = new File(Paths.document, "charge-summaries.json");
+    return file.exists ? file.text() : undefined;
+  },
+  async write(text) {
+    const pending = new File(Paths.document, "charge-summaries.pending.json");
+    if (pending.exists) pending.delete();
+    pending.create();
+    pending.write(text);
+    await pending.move(new File(Paths.document, "charge-summaries.json"), { overwrite: true });
+  },
+};
+const chargeSummaryHistory = createChargeSummaryHistory(chargeSummaryStore, garageFlow);
 const equinoxSignals = importObdbMode22(signalsetJson);
 
 const DIALOG_TITLES: Record<RunFile["slug"], string> = { "phone-console": "Export OBD recording", "codes-report": "Share codes report" };
@@ -156,4 +171,4 @@ const folderLabel = async (): Promise<string | undefined> => {
   return remembered.exists ? new Directory((await remembered.text()).trim()).name : undefined;
 };
 
-export { localDate, requestBlePermission, garageFlow, batteryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, driveTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
+export { localDate, requestBlePermission, garageFlow, batteryHistory, chargeSummaryHistory, equinoxSignals, NOTIFICATION_INTERVAL_MS, phoneTargets, driveTargets, deferShare, chargeRun, bleManager, dongleLink, dongleMemory, betaOutbox, queueForBeta, foregroundService, loadThemePreference, saveThemePreference, folderLabel };
