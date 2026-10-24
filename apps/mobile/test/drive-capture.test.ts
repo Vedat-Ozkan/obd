@@ -423,6 +423,9 @@ it("C6: drive reports save to their own history and leave a parked-only battery 
   const list = await reloaded.list("1");
   expect(list).toHaveLength(1);
   expect(batteryText).not.toContain("groupRule");
-  expect(preDriveReport(list, new Date("2026-09-29T00:00:00Z"))?.scannedAt).toBe(parked.scannedAt);
-  expect(preDriveReport(list, new Date("2026-09-30T00:00:00Z"))).toBeUndefined();
+  const scanned = new Date(parked.scannedAt);
+  const laterSameDay = new Date(scanned.getFullYear(), scanned.getMonth(), scanned.getDate(), 23, 59, 59, 999);
+  const nextDay = new Date(scanned.getFullYear(), scanned.getMonth(), scanned.getDate() + 1, 12);
+  expect(preDriveReport(list, laterSameDay)?.scannedAt).toBe(parked.scannedAt);
+  expect(preDriveReport(list, nextDay)).toBeUndefined();
 });
