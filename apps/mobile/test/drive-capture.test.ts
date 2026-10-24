@@ -122,7 +122,7 @@ interface Options {
   minutes?: 10 | 20;
 }
 
-interface Run { result: DriveCaptureResult; lines: RecordingLine[]; summary: string; connects: number; endS: number; statuses: string[] }
+interface Run { result: DriveCaptureResult; lines: RecordingLine[]; summary: string; connects: number; endS: number; statuses: string[]; text: string }
 
 const isBoundary = (l: RecordingLine) => l.dir === "meta" && l.event === "charge-log session";
 const boundaries = (lines: readonly RecordingLine[]) => lines.filter(isBoundary).map((l) => (l.dir === "meta" ? l.reason : undefined));
@@ -183,7 +183,7 @@ async function run(name: string, plan: Plan, options: Options = {}): Promise<Run
   expect(last?.dir === "meta" && String(last.note)).toContain(result.stopReason);
   const summary = await driveCaptureSummary(lines, `/tmp/t2.13-${name}.jsonl`);
   write(`/tmp/t2.13-${name}-summary.md`, summary);
-  return { result, lines, summary, connects, endS, statuses };
+  return { result, lines, summary, connects, endS, statuses, text: stream.content };
 }
 
 const value = (summary: string, prefix: string, label: string): number => {
@@ -368,7 +368,7 @@ it("D7: the cap rescans the codes in the same recording and the report compares 
   expect(commands(after)).toEqual(CODES_SCAN_COMMANDS);
   expect(r.result.rescan).toBe("ran");
   const parked = await parkedReport();
-  const report = await driveReportFromRecording(readText("/tmp/t2.13-d7-rescan.jsonl", "latin1"), driveInput(r.result.stopReason), parked);
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason), parked);
   const text = renderDriveReport(report);
   write("/tmp/t2.13-c-d7.md", text);
   expect(report.codes.status).toBe("compared");
@@ -380,7 +380,7 @@ it("D8: car off sends no rescan and the report says car off", async () => {
   const r = await run("d8-car-off", { amps: drivePlan, offAt: 60 });
   expect(rescanStart(r.lines)).toBe(-1);
   expect(r.result.rescan).toBe("not run");
-  const report = await driveReportFromRecording(readText("/tmp/t2.13-d8-car-off.jsonl", "latin1"), driveInput(r.result.stopReason));
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason));
   expect(report.codes).toEqual({ status: "not-run", reason: "car off" });
 }, SLOW);
 
@@ -396,7 +396,7 @@ it("D10: a rescan refused with UNABLE TO CONNECT is not-run with that reason and
   const r = await run("d10-refused", { amps: drivePlan, inject: (command, s) => command === "0100" && s >= 20 * 60 ? "UNABLE TO CONNECT\r\r>" : undefined });
   expect(r.result.saved).toBe(`Saved ${FILE} to the capture folder.`);
   expect(r.result.stopReason).toBe("20 min recorded");
-  const report = await driveReportFromRecording(readText("/tmp/t2.13-d10-refused.jsonl", "latin1"), driveInput(r.result.stopReason));
+  const report = await driveReportFromRecording(r.text, driveInput(r.result.stopReason));
   expect(report.codes.status).toBe("not-run");
   expect(JSON.stringify(report.codes)).toContain("UNABLE TO CONNECT");
   expect(report.groups.status).toBe("checked");
@@ -407,7 +407,8 @@ it("C6: drive reports save to their own history and leave a parked-only battery 
   let batteryText: string | undefined;
   const memory = (get: () => string | undefined, set: (t: string) => void): ReportTextStore => ({ read: () => Promise.resolve(get()), write: (t) => { set(t); return Promise.resolve(); } });
   const drives = createDriveReportHistory(memory(() => driveText, (t) => { driveText = t; }));
-  const report = await driveReportFromRecording(readText("/tmp/t2.13-d7-rescan.jsonl", "latin1"), driveInput("20 min recorded"));
+  const r = await run("c6-history", { amps: drivePlan });
+  const report = await driveReportFromRecording(r.text, driveInput("20 min recorded"));
   await drives.save(report);
   expect((await drives.list("1")).map((x) => x.recording)).toEqual([FILE]);
   expect(await drives.list("2")).toEqual([]);

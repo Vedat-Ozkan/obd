@@ -8,7 +8,7 @@ import { chargeLogFromRecording } from "./session.js";
 
 export const GROUP_RULE_STATUS: "unconfirmed" | "confirmed" = "unconfirmed";
 
-export const UNCONFIRMED_LINE = "Group rule: not yet confirmed on a second healthy drive (project policy, set from one car).";
+export const UNCONFIRMED_LINE = "Group rule: not yet confirmed on a second drive (project policy, set from one car).";
 const NO_PRE_DRIVE = "No pre-drive scan to compare.";
 const NO_RESCAN = "no codes rescan in this recording";
 

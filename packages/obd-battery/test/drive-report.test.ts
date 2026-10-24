@@ -20,7 +20,6 @@ const before = "fixtures/synthetic/codes-compare-before.jsonl";
 const after = "fixtures/synthetic/codes-compare-after.jsonl";
 const input = (recording: string, stopReason: string) => ({ garageVehicleId: "1", scannedAt: "2026-09-30T18:00:00.000Z", recording, minutes: 20 as const, stopReason, signals });
 const banned = /passed|validated|healthy|no red flags/i;
-const withoutLabel = (text: string) => text.replace(UNCONFIRMED_LINE, "");
 
 const parked = async (recording: string) => {
   const full = "fixtures/synthetic/battery-diagnosis-full-scan.jsonl";
@@ -40,7 +39,7 @@ describe("drive report, committed drives", () => {
     expect(text).toContain("No group stood out in this drive. Provisional until the rule is confirmed.");
     expect(text).toContain("Rescan not run: no codes rescan in this recording.");
     expect(text).not.toMatch(/mΩ|mohm/i);
-    expect(withoutLabel(text)).not.toMatch(banned);
+    expect(text).not.toMatch(banned);
   }, 60_000);
 
   it("C2: drive 2 keeps the label and flags nothing, with the status as found", async () => {
@@ -51,7 +50,7 @@ describe("drive report, committed drives", () => {
     expect(text).toContain(UNCONFIRMED_LINE);
     expect(text).toContain(report.groups.status === "checked" ? "No group stood out in this drive. Provisional" : "Groups not checked:");
     expect(report.codes).toEqual({ status: "not-run", reason: "no codes rescan in this recording" });
-    expect(withoutLabel(text)).not.toMatch(banned);
+    expect(text).not.toMatch(banned);
   }, 60_000);
 
   it("C3: a synthetic 4L excess in one group is named, provisionally, in a separate synthetic table", async () => {
