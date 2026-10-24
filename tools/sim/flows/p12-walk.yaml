@@ -136,9 +136,12 @@ appId: com.ev.obd
 - takeScreenshot: 18-module
 - back
 - back
-- scrollUntilVisible:
-    element: "State of charge.*"
-    direction: UP
+- runFlow:
+    when:
+      notVisible: "State of charge.*"
+    commands:
+      - scrollUntilVisible:
+          element: "State of charge.*"
 - tapOn: "State of charge.*"
 - scrollUntilVisible:
     element: "State of charge"
