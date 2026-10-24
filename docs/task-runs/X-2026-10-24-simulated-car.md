@@ -2,7 +2,7 @@
 
 ## Current state (as of 2026-10-24)
 
-- **Stage:** Stage C1 review (head da53b6c)
+- **Stage:** C1 merged 0ca9b1f; Stage C2 implementation
 - **Next action:** relay C1 report, review, integrate; then C2 and C3.
 
 ## Ownership
@@ -37,3 +37,4 @@
 - C1 implementer: head 80e755e; build PASS (prebuild + assembleDebug x86_64), P4 PASS, P9 PASS (runs/20261024-105939); P2 blocked: broker hello accepts only veepeak + mtu>0. Lead decision 2026-10-24 (amends non-goal "no relay changes"): broker hello accepts dongle "simulated" with mtu 0 allowed only for it, plus a server.test.ts case; ConsoleScreen relay hello sends dongleKind(active); pnpm hil:smoke refuses a simulated phone so nothing simulated lands in fixtures/recordings. Sent back to the C1 implementer.
 - C1 implementer round 2: head da53b6c; P2 PASS (runs/20261024-122711: hil:smoke refuses simulated, 2E refused by guard, Mode 04 Cancel -> confirmation-denied, no tx 04, relay killed -> "Relay ended mid-command"); P4, P9 PASS (runs/20261024-123720); scoped checks PASS. C1 reviewer spawned.
 - C1 reviewer: APPROVE (repairs 1/2 unchanged; artifacts inspected, emulator not rerun). Minor 1 fixed by quick-fix 926782d (empty captures no longer pass; lead checked the 4-line diff). Integrating.
+- C1 integrator: merged 0ca9b1f, gate PASS (relay 65), worktree removed, tools/sim/runs kept on main (gitignored). C2 implementer spawned.
