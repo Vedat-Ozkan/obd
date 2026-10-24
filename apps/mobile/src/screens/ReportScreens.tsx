@@ -1,5 +1,6 @@
 import type { BatteryDiagnosisReport } from "obd-battery/report";
 import { View } from "react-native";
+import { renderDriveReport, type DriveReport } from "../../../../packages/obd-battery/src/driveReport.js";
 import { historyPoints, reportSummary } from "../app/reportView.js";
 import { ScanHistory } from "../ui/charts.js";
 import { Button, Chip, Hero, ListRow, SectionLabel, Text } from "../ui/kit.js";
@@ -9,7 +10,10 @@ function checkedOn(scannedAt: string): string {
   return new Date(scannedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function ReportHistory({ historyReports, openReport }: { historyReports: readonly BatteryDiagnosisReport[]; openReport: (report: BatteryDiagnosisReport) => void }) {
+function ReportHistory({ historyReports, driveReports, openReport, openDriveReport }: {
+  historyReports: readonly BatteryDiagnosisReport[]; driveReports: readonly DriveReport[];
+  openReport: (report: BatteryDiagnosisReport) => void; openDriveReport: (report: DriveReport) => void;
+}) {
   const tokens = useTokens();
   const muted = { color: tokens.muted };
   const when = (scannedAt: string) => new Date(scannedAt).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -24,6 +28,12 @@ function ReportHistory({ historyReports, openReport }: { historyReports: readonl
       {historyReports.map((report) => <ListRow key={`${report.scannedAt}-${report.recording}`} icon="car-battery" title={when(report.scannedAt)}
         subtitle={report.scanStatus === "partial" ? "Partial scan" : "Complete scan"} onPress={() => { openReport(report); }} />)}
     </View>
+    <View>
+      <SectionLabel>Drive reports</SectionLabel>
+      {driveReports.length === 0 ? <Text style={muted}>No drive reports saved for this car.</Text> : null}
+      {driveReports.map((report) => <ListRow key={`${report.scannedAt}-${report.recording}`} icon="car-arrow-right" title={when(report.scannedAt)}
+        subtitle={`${String(report.minutes)} min drive`} onPress={() => { openDriveReport(report); }} />)}
+    </View>
     <View style={{ gap: 8 }}>
       <SectionLabel>Charge logs</SectionLabel>
       <Text style={muted}>Charge logs are saved to your capture folder. Their capacity trend is on the car's Trends section.</Text>
@@ -31,9 +41,13 @@ function ReportHistory({ historyReports, openReport }: { historyReports: readonl
   </>;
 }
 
-function ReportSummary({ report, canCheck, busy, openSection, openCodes, openCheck, openAiSummary }: {
-  report: BatteryDiagnosisReport; canCheck: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
-  openCodes: () => void; openCheck: () => void; openAiSummary: () => void;
+function DriveReportView({ report }: { report: DriveReport }) {
+  return <Text>{renderDriveReport(report)}</Text>;
+}
+
+function ReportSummary({ report, canCheck, canDrive, busy, openSection, openCodes, openCheck, openDrive, openAiSummary }: {
+  report: BatteryDiagnosisReport; canCheck: boolean; canDrive?: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
+  openCodes: () => void; openCheck: () => void; openDrive?: () => void; openAiSummary: () => void;
 }) {
   const summary = reportSummary(report);
   const tokens = useTokens();
@@ -62,7 +76,8 @@ function ReportSummary({ report, canCheck, busy, openSection, openCodes, openChe
       {__DEV__ ? <ListRow icon="creation-outline" title="AI summary (development)" disabled={busy} onPress={openAiSummary} /> : null}
     </View>
     <Button title="Run a new check" disabled={busy || !canCheck} onPress={openCheck} />
+    {canDrive && openDrive ? <Button title="Add a short drive" tonal disabled={busy || !canCheck} onPress={openDrive} /> : null}
   </>;
 }
 
-export { ReportHistory, ReportSummary };
+export { DriveReportView, ReportHistory, ReportSummary };
