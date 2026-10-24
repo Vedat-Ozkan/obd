@@ -16,7 +16,7 @@ export interface RelayWebSocket {
 
 export interface RelayPhoneMeta {
   vehicle: "chevrolet-equinox-ev-2024";
-  dongle: "veepeak-obdcheck-ble";
+  dongle: "veepeak-obdcheck-ble" | "simulated";
   writeChar: string;
   notifyChar: string;
   mtu: number;

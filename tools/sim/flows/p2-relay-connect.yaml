@@ -1,0 +1,29 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- tapOn: "Run check"
+- extendedWaitUntil:
+    visible: "Choose your OBD dongle"
+    timeout: 30000
+- tapOn: "Simulated car \\(Equinox EV\\)"
+- extendedWaitUntil:
+    visible: "Run battery check"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Developer tools"
+- tapOn: "Developer tools"
+- scrollUntilVisible:
+    element: "Connect relay"
+- tapOn: "Relay URL"
+- inputText: ${RELAY_URL}
+- tapOn: "Relay token"
+- inputText: ${RELAY_TOKEN}
+- hideKeyboard
+- tapOn: "Connect relay"
+- extendedWaitUntil:
+    visible: "Disconnect relay"
+    timeout: 20000
+- takeScreenshot: 01-relay-connected

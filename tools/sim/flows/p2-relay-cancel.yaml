@@ -1,0 +1,8 @@
+appId: com.ev.obd
+---
+- extendedWaitUntil:
+    visible: "Clear trouble codes\\?"
+    timeout: 60000
+- takeScreenshot: 02-mode04-prompt
+- tapOn: "Cancel"
+- takeScreenshot: 03-cancelled

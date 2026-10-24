@@ -1,0 +1,25 @@
+appId: com.ev.obd
+---
+- stopApp
+- openLink: exp+obd://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081
+- extendedWaitUntil:
+    visible: "This is the developer menu.*"
+    timeout: 120000
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Go home"
+    timeout: 60000
+- back
+- extendedWaitUntil:
+    visible: "Help improve battery checks.*|Add a vehicle"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Help improve battery checks.*"
+    commands:
+      - scrollUntilVisible:
+          element: "Continue"
+      - tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Add a vehicle"
+    timeout: 60000

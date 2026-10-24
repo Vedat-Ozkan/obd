@@ -1,0 +1,6 @@
+appId: com.ev.obd
+---
+- extendedWaitUntil:
+    visible: "Clear trouble codes\\?"
+    timeout: 60000
+- takeScreenshot: 04-prompt-before-relay-killed

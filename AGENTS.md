@@ -37,6 +37,7 @@ apps/mobile/            Expo (Android): BLE transport, console, relay mode, char
 tools/relay/            Node in WSL2: phone relay and car MCP server with a read-only allowlist
 tools/hil-bridge/       Python (laptop near the car): fallback bridge
 tools/spike/            Python: laptop capture scripts (spike, discovery, targeted watch, VIN redaction)
+tools/sim/              simulated car harness: emulator runner, Maestro flows, table generator (desk checks, never closes an item)
 tools/beta-backend/     Cloudflare Worker for beta uploads (ADR-019)
 tools/beta-intake/      Node: owner-side beta intake, re-scrub and deletion
 tools/ml/               planned isolated Python battery modeling (not implemented)
