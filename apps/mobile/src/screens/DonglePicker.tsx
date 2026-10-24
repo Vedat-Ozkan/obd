@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, Switch, useWindowDimensions, View } from "react-native";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 import { Modal, Portal } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bleManager } from "../app/runtime.js";
 import { orderDevices, scanDevices, type ScannedDevice } from "../ble/BleTransport.js";
-import { ListRow, styles, Text } from "../ui/kit.js";
+import { ListRow, SwitchRow, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 
 const signal = (rssi: number | undefined) => rssi === undefined ? "Signal unknown" : `Signal ${String(rssi).replace("-", "−")} dBm`;
@@ -33,20 +33,15 @@ export function DonglePicker({ visible, rememberedId, onPick, onDismiss }: { vis
       contentContainerStyle={{ backgroundColor: tokens.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, justifyContent: "flex-start", paddingBottom: insets.bottom }}>
       <View style={{ padding: 16, gap: 8 }}>
         <Text accessibilityRole="header" style={{ fontSize: 20, fontWeight: "700" }}>Choose your OBD dongle</Text>
-        {error ? <Text style={{ color: tokens.error }}>{error}</Text> : null}
+        {error ? <Text accessibilityLiveRegion="assertive" style={{ color: tokens.error }}>{error}</Text> : null}
+        <Text accessibilityLiveRegion="polite" style={{ color: tokens.muted }}>{`${String(shown.length)} ${shown.length === 1 ? "adapter" : "adapters"} found`}</Text>
         <ScrollView style={{ maxHeight: height * 0.7 }}>
           {shown.map((item) => <ListRow key={item.id} icon="bluetooth" title={item.name ?? "Unnamed device"}
             subtitle={`${item.id === rememberedId ? "Last used with this car · " : ""}${signal(item.rssi)}`} onPress={() => {
               stopScan.current?.(); onPick(item);
             }} />)}
           {!showAll && shown.length === 0 ? <Text style={{ color: tokens.muted, paddingVertical: 8 }}>No OBD adapters found yet. Check the dongle is plugged in, or show all devices.</Text> : null}
-          <View style={[styles.row, { minHeight: 60 }]}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Show all devices</Text>
-              <Text style={[styles.caption, { color: tokens.muted }]}>{showAll ? "Showing every device found" : `${String(hidden)} other ${hidden === 1 ? "device" : "devices"} hidden`}</Text>
-            </View>
-            <Switch accessibilityLabel="Show all devices" value={showAll} onValueChange={setShowAll} />
-          </View>
+          <SwitchRow title="Show all devices" subtitle={showAll ? "Showing every device found" : `${String(hidden)} other ${hidden === 1 ? "device" : "devices"} hidden`} value={showAll} onValueChange={setShowAll} />
         </ScrollView>
       </View>
     </Modal>

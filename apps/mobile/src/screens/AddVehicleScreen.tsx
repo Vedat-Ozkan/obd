@@ -2,7 +2,7 @@ import { TextInput, View } from "react-native";
 import { SUPPORTED_VEHICLES, vehicleAvailability, vehicleEvidence, type CatalogVehicle } from "../garage/catalog.js";
 import { LOCAL_INTEREST_NOTICE, type GarageState, type Interest, type Ownership } from "../garage/flow.js";
 import { garageFlow } from "../app/runtime.js";
-import { Button, Card, ListRow, SectionLabel, styles, Text } from "../ui/kit.js";
+import { Button, Card, ListRow, SectionLabel, styles, SwitchRow, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 
 type Change = (action: () => Promise<GarageState>, after?: () => void) => Promise<void>;
@@ -62,7 +62,7 @@ function InterestScreen({ interest, setInterest, interestSaved, setInterestSaved
     <TextInput accessibilityLabel="Make" style={[styles.input, inputColors]} value={interest.make} onChangeText={(value) => { setInterest({ ...interest, make: value }); setInterestSaved(false); }} placeholder="Make" placeholderTextColor={colors.muted} />
     <TextInput accessibilityLabel="Model" style={[styles.input, inputColors]} value={interest.model} onChangeText={(value) => { setInterest({ ...interest, model: value }); setInterestSaved(false); }} placeholder="Model" placeholderTextColor={colors.muted} />
     <TextInput accessibilityLabel="Model year" style={[styles.input, inputColors]} value={interest.year} onChangeText={(value) => { setInterest({ ...interest, year: value }); setInterestSaved(false); }} placeholder="Model year" keyboardType="number-pad" placeholderTextColor={colors.muted} />
-    <Button title={`Join future beta interest: ${interest.joinBeta ? "yes" : "no"}`} onPress={() => { setInterest({ ...interest, joinBeta: !interest.joinBeta }); setInterestSaved(false); }} />
+    <SwitchRow title="Join future beta interest" value={interest.joinBeta} onValueChange={(value) => { setInterest({ ...interest, joinBeta: value }); setInterestSaved(false); }} />
     <Button title="Save interest on this phone" disabled={busy} onPress={() => void change(() => garageFlow.saveInterest({ make: interest.make, model: interest.model, year: Number(interest.year), joinBeta: interest.joinBeta }), () => { setInterestSaved(true); })} />
     {interestSaved ? <Text style={normal}>{LOCAL_INTEREST_NOTICE}</Text> : null}
   </>;

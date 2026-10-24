@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Switch, View } from "react-native";
+import { View } from "react-native";
 import { Button as TextButton } from "react-native-paper";
 import appJson from "../../app.json";
 import { CONSENT_SWITCH_LABEL, PRIVACY_NOTE } from "../beta/consent.js";
 import type { BetaStatus } from "../beta/outbox.js";
 import { LICENSES, OBDB_ATTRIBUTION } from "../app/licenses.js";
 import { folderLabel, phoneTargets, saveThemePreference } from "../app/runtime.js";
-import { Button, ListRow, SectionLabel, styles, Text } from "../ui/kit.js";
+import { Button, ListRow, SectionLabel, styles, SwitchRow, Text } from "../ui/kit.js";
 import { noteBlocks, type ThemePreference } from "../ui/text.js";
 import { setThemePreference, useThemePreference, useTokens } from "../ui/theme.js";
 
@@ -48,13 +48,10 @@ function BetaScreen({ beta, betaMessage, busy, decideBeta, setConsentOpen, delet
 }) {
   const tokens = useTokens();
   return <>
-    <View style={[styles.row, { minHeight: 60 }]}>
-      <Text style={[styles.rowLabel, { flex: 1 }]}>{CONSENT_SWITCH_LABEL}</Text>
-      <Switch accessibilityLabel={CONSENT_SWITCH_LABEL} value={beta.sharing} disabled={busy} onValueChange={(on) => { if (on) setConsentOpen(true); else void decideBeta(false); }} />
-    </View>
+    <SwitchRow title={CONSENT_SWITCH_LABEL} value={beta.sharing} disabled={busy} onValueChange={(on) => { if (on) setConsentOpen(true); else void decideBeta(false); }} />
     <Text style={{ color: tokens.muted }}>{beta.line}</Text>
     {beta.betaId ? <Text>Beta ID: {beta.betaId}</Text> : null}
-    {betaMessage ? <Text>{betaMessage}</Text> : null}
+    {betaMessage ? <Text accessibilityLiveRegion="polite">{betaMessage}</Text> : null}
     <View style={{ alignItems: "flex-start" }}>
       <TextButton mode="text" textColor={tokens.error} disabled={busy} onPress={deleteBeta} style={{ minHeight: 48, justifyContent: "center" }}>Delete my data</TextButton>
     </View>
