@@ -2,7 +2,7 @@
   "name": "obd-battery",
   "private": true,
   "type": "module",
-  "exports": { "./capacity": "./src/capacity.ts", "./rating": "./src/rating.ts", "./report": "./src/report.ts", "./session": "./src/session.ts" },
+  "exports": { "./capacity": "./src/capacity.ts", "./rating": "./src/rating.ts", "./report": "./src/report.ts", "./session": "./src/session.ts", "./chargeSummary": "./src/chargeSummary.ts", "./trend": "./src/trend.ts", "./trendReport": "./src/trendReport.ts" },
   "dependencies": { "obd-core": "workspace:*", "zod": "^4.6.5" },
   "scripts": {
     "test": "vitest run"
