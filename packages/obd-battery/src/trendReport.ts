@@ -15,11 +15,11 @@ function pointLine(p: SessionPoint, summaries: readonly ChargeSessionSummary[]):
 
 function methodSection(result: TrendResult): string[] {
   const heading = `### ${result.method} (${result.method === "bms-kwh" ? "kWh" : "Ah"})`;
-  if (result.status === "not-enough-data") return [heading, "", `Not enough data yet: ${String(result.n)} sessions over ${String(result.spanDays)} days (${result.reason}).`, ""];
+  if (result.status === "not-enough-data") return [heading, "", `Not enough data yet: ${sessions(result.n)} over ${String(result.spanDays)} days (${result.reason}).`, ""];
   const { fit } = result;
   return [
     heading, "",
-    `Trend: ${fixed(fit.fadePctPerYear)} % per year fade +- ${fixed(2 * fit.sePerYear * 100)} % (2 SE), ${String(fit.n)} sessions over ${String(fit.spanDays)} days, SE inflation ${fixed(fit.chi2Inflation)}. Reference value ${fixed(result.cRef)}.`,
+    `Trend: ${fixed(fit.fadePctPerYear)} % per year fade +- ${fixed(2 * fit.sePerYear * 100)} % (2 SE), ${sessions(fit.n)} over ${String(fit.spanDays)} days, SE inflation ${fixed(fit.chi2Inflation)}. Reference value ${fixed(result.cRef)}.`,
     "", "| Date | Value | Index |", "|---|---|---|",
     ...result.points.map((p) => `| ${day(p.at)} | ${fixed(p.value)} ${p.unit} | ${fixed(p.index, 4)} |`), "",
   ];
@@ -54,7 +54,7 @@ export function renderTrendReport(input: { reports: readonly BatteryDiagnosisRep
     spread.length === 0 ? `No complete parked check with 80 group voltages in the ${String(TREND_POLICY.socBin.minPct)}-${String(TREND_POLICY.socBin.maxPct)} % SOC bin.` : spread.map((s) => `${day(s.at)}: ${fixed(s.mv, 1)} mV`).join("; "),
     "",
     spreadFit.fit === undefined
-      ? `Not enough data yet: ${String(spreadFit.n)} sessions over ${String(spreadFit.spanDays)} days (spread sigma ${String(SPREAD_SIGMA_MV)} mV from the group voltage tick).`
+      ? `Not enough data yet: ${sessions(spreadFit.n)} over ${String(spreadFit.spanDays)} days (spread sigma ${String(SPREAD_SIGMA_MV)} mV from the group voltage tick).`
       : `Spread trend: ${fixed(spreadFit.fit.slopeMvPerYear)} mV per year +- ${fixed(2 * spreadFit.fit.seMvPerYear)} mV (2 SE).`,
     "", "## Flags", "",
     ...(flags.length === 0 ? ["None."] : flags.map((f) => `- ${f.kind} (${day(f.at)}): ${f.detail}`)), "",
@@ -64,3 +64,5 @@ export function renderTrendReport(input: { reports: readonly BatteryDiagnosisRep
     ...(input.summaries.length === 0 ? ["No charge sessions."] : input.summaries.flatMap(powerSection)),
   ].join("\n") + "\n";
 }
+
+const sessions = (n: number): string => `${String(n)} ${n === 1 ? "session" : "sessions"}`;
