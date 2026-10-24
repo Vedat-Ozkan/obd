@@ -2,8 +2,8 @@
 
 ## Current state (as of 2026-10-24)
 
-- **Stage:** Stage A+B merged 6a8102b (gate PASS per integrator; per-package counts looked low, re-verified in the T2.18 gate)
-- **Next action:** after merge, Stage C1 (emulator, Maestro, P4/P9/P2 flows).
+- **Stage:** Stage C1 implementation (implementer spawned)
+- **Next action:** relay C1 report, review, integrate; then C2 and C3.
 
 ## Ownership
 
@@ -33,3 +33,4 @@
 - Stage A+B re-review: APPROVE (repairs 1/2) at 8e4dbc3; `requested` getter accepted.
 - Stage A+B integrator: merged 6a8102b, gate PASS, worktree removed.
 - Owner 2026-10-24: add agent-driven visual tests for key flows beyond automated runs. A subagent drives the emulator over adb (screencap, uiautomator dump, input; Maestro may reach start states), reads its own screenshots, and reports problems. Sonnet 5.5 medium by default; Opus only by lead decision on escalation. Architect to amend spec with a stage for it.
+- Spec amended (C3 visual pass, D folded in, C1 follow-ups). Orchestrator took defaults for open questions 9-11 and the drive question: do not lint build-table.ts; C3 is its own stage; visual run once per release candidate, Opus only for flagged ambiguous screens; flow 4 drives once (1.0, light) and re-views saved reports in the other combinations.

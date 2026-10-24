@@ -16,7 +16,7 @@ Test-visible outcome: `pnpm -F mobile test` runs the real battery scan, codes sc
 - No TalkBack automation, no Accessibility Scanner automation, no BLE emulation, no EAS build, no iOS.
 - No new recordings, no unredacted files bundled, no sim output copied into `fixtures/recordings/`.
 - No closing or editing of OWNER-QUEUE rows (the coverage table below is a plan, not a status).
-- The T2.18 flow is written in Stage D, after T2.18 merges.
+- The T2.18 flow is folded into Stage C3 (visual pass, flow 4); T2.18 is merged (c9b7731).
 
 ## Interfaces
 
@@ -83,13 +83,20 @@ Stage C1 (emulator, runner, flows P4/P9/P2):
 - `.gitignore` - modify - `apps/mobile/android/`, `tools/sim/runs/`.
 - `docs/WORKFLOW.md` - modify - line 50 ("Nobody simulates the dongle to make a check pass") now says simulated runs may de-risk but are labelled and never tick an item.
 - `AGENTS.md` - modify - add `tools/sim/` to the repository map.
+- `apps/mobile/src/relay/RelayClient.ts` - modify - `RelayPhoneMeta.dongle` (line 19) becomes `"veepeak-obdcheck-ble" | "simulated"` (review follow-up; the relay sends the link's kind).
+- `tools/sim/README.md` (same file as above) also notes that `labelled()` reads the link's dongle kind at save time, so a link swapped mid-run labels by the final link (review follow-up).
+- eslint: `tools/sim/build-table.ts` is not in the `files` glob of `eslint.config.*` (line 29), so it is not linted. Default: leave it (a dev script, typechecked by tsx use; the config is a toolchain file needing the unlock). Open question 9.
 
 Stage C2 (P10, P12, P13):
 - `tools/sim/flows/p10-beta.yaml`, `p12-walk.yaml`, `p13-trends.yaml` - create.
 - `tools/sim/a11y-audit.ts` - create - parses `adb shell uiautomator dump` XML: clickable nodes under 48 dp, clickable nodes with neither text nor content-desc.
 - `tools/sim/run-flows.sh` - modify - font scale / theme / rotation matrix, wrangler start and stop, local-bucket object count.
 
-Stage D (after T2.18 merges): `tools/sim/flows/t218-guided-flow.yaml` - create.
+Stage C3 (agent-driven visual pass; after C1, uses C2's matrix switches if C2 is done, else sets them itself; absorbs the former Stage D):
+- `.claude/agents/visual-tester.md` - create - frontmatter modelled on `reviewer.md`: `name: visual-tester`, `tools: Read, Bash, Write`, `model: sonnet`, `effort: medium`, `disallowedTools: Edit, MultiEdit, NotebookEdit`, `maxTurns` about 120. Body: drives the emulator only through `adb` (`exec-out screencap -p`, `uiautomator dump`, `input tap/text/keyevent`, `settings put system font_scale`, `cmd uimode night`, `user_rotation`); Maestro only to reach a start state (`tools/sim/flows/start-*.yaml`); reads each screenshot with Read; writes only under `tools/sim/runs/<date>-visual/` (screenshots, `summary.md`); never edits source, never touches `fixtures/`, never sends Mode 04 or any write; every report labelled SIMULATED, closes no OWNER-QUEUE item. Model rule: Sonnet 5.5 medium; Opus only when the lead escalates; never Fable.
+- `CLAUDE.md` - modify - add `visual-tester` to the agent list (line 7) and to the Sonnet 5.5, medium list in model tiering (line 16).
+- `tools/sim/flows/start-report.yaml`, `start-t218.yaml` - create - Maestro start states only (connected simulated car and a saved report; a saved parked report for the T2.18 flow). No assertions beyond arrival.
+- `tools/sim/visual-flows.md` - create - the six flows as step lists the agent follows (below), so the agent prompt stays short.
 
 ## Sources
 
@@ -150,9 +157,21 @@ Prerequisite (orchestrator to the `recording-analyst`, before Stage A sign-off):
 - [ ] P13: Trends section opens and shows its empty state; populated state only if a saved charge summary can be seeded from `fixtures/synthetic/charge-log-rested.jsonl` through an existing summary function in at most about 30 lines of helper, else it stays empty-state only (limit stated in the summary).
 - [ ] P10: `wrangler dev --local --ip 0.0.0.0` in `tools/beta-backend` (started and stopped by PID); `EXPO_PUBLIC_BETA_URL=http://10.0.2.2:8787` set when Metro starts. Steps 1-4 and 6 of the T2.9 Stage D list run: consent off then on, "Queued for beta upload." status, airplane mode (`cmd connectivity airplane-mode enable`) then foreground upload, battery-scan object arrives, Delete my data empties `files/<installId>/` in the local bucket directory (count in summary). Step 5 (intake into `fixtures/recordings/`) is not run: sim files never go there.
 
-### Stage D
+### Stage C3
 
-- [ ] `t218-guided-flow.yaml` follows the merged T2.18 spec's Verification. The drive wait is real time (`DRIVE_MINUTES`).
+Key flows, each in light and dark at font scale 1.0 and 2.0 (portrait; one landscape pass on flows 1 and 4):
+1. Connect to the simulated car, run a battery check, open the report and each section.
+2. Codes report.
+3. Garage: add a car, the picker, the wrong-model mismatch.
+4. T2.18: report, "Add a short drive", the drive report, reopen from Report history. The simulated drive runs the real `DRIVE_MINUTES` unless the flow stops at the cap; the 20-minute wait is real time, so run it once, at font scale 1.0 light, then re-view the saved reports (not a new drive) in the other three combinations.
+5. Trends (empty state; populated only if C2 P13 seeded it).
+6. Beta consent screens (consent off and on; backend not required to view them).
+
+- [ ] The lead launches `visual-tester` (Sonnet 5.5 medium) with `tools/sim/visual-flows.md`; run produces `tools/sim/runs/<date>-visual/summary.md` and screenshots beside it.
+- [ ] `summary.md` starts with the SIMULATED header and lists each finding as `severity | screen | issue | screenshot path` (severity high/med/low). Categories checked and stated as checked or not reached: layout, text, truncation, contrast, dark mode, font scale 2.0, rotation, flow. Every finding's screenshot exists. A flow that could not be reached says so; no silent skips.
+- [ ] Reviewer opens at least three listed screenshots (one per severity found, or the first three) and confirms the finding matches; reviewer also checks the agent wrote only under `tools/sim/runs/` (`git status --short` shows no source change).
+- [ ] Findings are listed, not auto-fixed. They go to the lead as candidates for tasks; nothing closes an OWNER-QUEUE or ACCESSIBILITY row, and the summary says so.
+- [ ] Not E2E-automatable by design: subjective judgement (is it ugly, is contrast adequate on a real panel). The pass finds candidates; real-phone and real-car checks stay owner items.
 
 ## Tools and dependencies (hard rule 7)
 
@@ -193,7 +212,7 @@ Covered at desk = every check in the row can run on the simulator. Flow only = a
 | R1 | Flow only | drive UI and rescan run 10 real minutes over recorded drive data; the pass criterion (skew median) is a real-car result |
 | C1 | Car only | needs the real car Ready and ELM init |
 | C2 | Car only | multi-hour charge |
-| T2.18 flow | Flow only (Stage D) | after merge |
+| T2.18 flow | Flow only (Stage C3, flow 4) | merged c9b7731 |
 | D*, A* | out of scope | decisions and accounts |
 
 ## Risks / open questions
@@ -205,6 +224,9 @@ Covered at desk = every check in the row can run on the simulator. Flow only = a
 5. Fill the codes-scan gap by approving D3 (redact local `2026-09-28-phone-console-2.jsonl`). Default: not part of this task; the gap is listed.
 6. The emulator has no BLE: `new BleManager()` and the permission prompt may misbehave. Default: Stage B checks it first; `adb shell pm grant` for BLE/notification permissions in the runner; the sim path skips `requestBlePermission`.
 7. Dev-client first-run sheets and Metro on WSL2 (`10.0.2.2:8081`) may need `adb reverse` as fallback. Default: deep link, then reverse.
+9. Lint `tools/sim/build-table.ts`? Default: leave (toolchain unlock for a one-off script; revisit if `tools/sim` grows).
+10. Stage C3 placement. Default: its own stage after C1, independent of C2, so the visual pass can run before the Maestro matrix exists. Folding into C2 would not be smaller (it adds an agent definition and CLAUDE.md edit).
+11. Visual-agent cost. The matrix is 6 flows x 4 combinations plus rotation, every screenshot read as an image. Default: Sonnet medium, one run per release candidate, not per commit; the lead escalates to Opus only on a flagged-ambiguous screen.
 8. Mid-command disconnect uses killing the relay, not a simulated BLE drop. Default: accept.
 
 ## Decisions
