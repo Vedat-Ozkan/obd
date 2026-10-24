@@ -209,6 +209,24 @@ describe("Stage C2 intake failure modes", () => {
     expect(w.bucket.text(part0)).toBe(altered);
   });
 
+  it("a recording whose meta dongle is simulated is refused and never lands in fixtures/recordings", async () => {
+    const w = world();
+    const { manifestKey, part0, manifest } = await uploaded(w);
+    const rows = (w.bucket.text(part0) ?? "").split("\n").slice(0, -1);
+    expect(rows[0]).toContain('"dongle": "veepeak-obdcheck-ble"');
+    rows[0] = rows[0].replace('"dongle": "veepeak-obdcheck-ble"', '"dongle": "simulated"');
+    const altered = `${rows.join("\n")}\n`;
+    await w.bucket.put(part0, altered);
+    await w.bucket.put(manifestKey, JSON.stringify({ ...manifest, parts: [{ bytes: altered.length, lines: rows.length }] }));
+    const root = tempRepo();
+    const log: string[] = [];
+    const result = await runIntake(deps(w, root, log));
+    expect(result.added).toEqual([]);
+    expect(result.refused).toHaveLength(1);
+    expect(log.join("\n")).toMatch(/simulated/);
+    expect(recordingFiles(root)).toEqual([]);
+  });
+
   it("I1 (repair 1): a part whose body the scrubber refuses (a tx line with an extra key) is refused, not written", async () => {
     const w = world();
     const { manifestKey, part0, manifest } = await uploaded(w);

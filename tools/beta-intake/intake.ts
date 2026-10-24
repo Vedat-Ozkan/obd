@@ -171,6 +171,7 @@ function checkContent(text: string, manifest: BetaManifest): void {
   try { record = JSON.parse(last); } catch { throw new Refused("the provenance line is not JSON"); }
   const line = z.object({ t: z.number() }).safeParse(record);
   if (!line.success || provenanceLine(line.data.t, manifest.provenance) !== last) throw new Refused("the provenance line disagrees with the manifest");
+  if (/"dir": "meta"[^\n]*"dongle": "simulated"/.test(body.slice(0, body.indexOf("\n")))) throw new Refused("a simulated recording is not beta data");
   let same: boolean;
   try { same = scrubRecording(body).text === body; } catch { same = false; }
   if (!same) throw new Refused("re-scrub changes the file");

@@ -14,6 +14,8 @@
     "lint": "eslint .",
     "test": "pnpm --filter './packages/*' --filter './apps/*' -r test && vitest run tools/relay/server.test.ts --exclude '**/.claude/worktrees/**' && vitest run tools/beta-backend tools/beta-intake tools/summary-backend --exclude '**/.claude/worktrees/**'",
     "replay": "tsx packages/obd-core/scripts/replay.ts",
+    "sim:table": "tsx tools/sim/build-table.ts",
+    "sim:coverage": "tsx tools/sim/build-table.ts --coverage",
     "codes-report": "tsx packages/obd-core/scripts/codes-report.ts",
     "charge-log": "tsx packages/obd-battery/scripts/charge-log.ts",
     "trend-report": "tsx packages/obd-battery/scripts/trend-report.ts",

@@ -2,7 +2,7 @@ import { latin1Decode, type RecordingLine } from "obd-core/recording";
 
 export interface RecordingMeta {
   car: "chevrolet-equinox-ev-2024";
-  dongle: "veepeak-obdcheck-ble";
+  dongle: "veepeak-obdcheck-ble" | "simulated";
   note: string;
   powerState?: "ready" | "unknown";
   writeChar: string;
