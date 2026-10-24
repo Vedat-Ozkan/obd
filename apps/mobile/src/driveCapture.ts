@@ -1,8 +1,9 @@
-import { ElmSessionError } from "obd-core/elm/session";
+import { Elm327Session, ElmSessionError } from "obd-core/elm/session";
 import { latin1Decode } from "obd-core/recording";
 import type { Transport } from "obd-core/transport";
 import { genericProfile, scanMode22Profile } from "obd-core/vehicles";
 import { ChargeLogBuilder } from "obd-battery/session";
+import { CODES_SCAN_COMMANDS, codesScanStop } from "./codesScan.js";
 import { clock, CycleSession, FLUSH_S, LinkError, RECOVERY_WAIT_S, reasonFor, ReplyError, StopRequested, type ChargeLogDeps } from "./chargeLogger.js";
 
 type VehicleProfile = Parameters<typeof scanMode22Profile>[1];
@@ -23,9 +24,25 @@ async function switchTo(session: CycleSession, target: string): Promise<void> {
   }
 }
 
-export interface DriveCaptureResult { file: string; stopReason: string; saved: string }
+export interface DriveCaptureResult { file: string; stopReason: string; saved: string; rescan: "ran" | "not run" }
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
+
+async function rescanCodes(view: Transport, recording: ChargeLogDeps["recording"]): Promise<void> {
+  recording.meta({ event: "codes rescan" });
+  const session = new Elm327Session(view);
+  try {
+    for (const command of CODES_SCAN_COMMANDS) {
+      const response = await session.send(command, { retry: false });
+      const stop = codesScanStop(command, response.kind === "error" ? `error: ${response.error.kind}` : response.kind);
+      if (stop !== undefined) { recording.meta({ event: "codes rescan stopped", reason: stop }); return; }
+    }
+  } catch (error) {
+    recording.meta({ event: "codes rescan stopped", reason: message(error) });
+  } finally {
+    await session.close();
+  }
+}
 
 /** Never rejects. Ends with a final flush, the copy to the folder, and a last meta line naming the stop reason. */
 export async function runDriveCapture(deps: ChargeLogDeps, minutes: 10 | 20): Promise<DriveCaptureResult> {
@@ -33,7 +50,7 @@ export async function runDriveCapture(deps: ChargeLogDeps, minutes: 10 | 20): Pr
   let file: string;
   try { file = stream.create(); }
   catch (error) {
-    return { file: "", stopReason: `the drive file could not be created: ${message(error)}`, saved: `NOT SAVED: ${message(error)}.` };
+    return { file: "", stopReason: `the drive file could not be created: ${message(error)}`, saved: `NOT SAVED: ${message(error)}.`, rescan: "not run" };
   }
 
   const start = deps.now();
@@ -151,6 +168,8 @@ export async function runDriveCapture(deps: ChargeLogDeps, minutes: 10 | 20): Pr
     stopReason = message(error);
   }
 
+  const rescan = link !== undefined && (stopReason === `${String(minutes)} min recorded` || stopReason === "disconnect pressed");
+  if (link !== undefined && rescan) await rescanCodes(link.view, recording);
   await link?.close();
   recording.meta(`test drive stopped: ${stopReason}`);
   flush();
@@ -159,5 +178,5 @@ export async function runDriveCapture(deps: ChargeLogDeps, minutes: 10 | 20): Pr
   catch (error) { saved = `NOT SAVED to the capture folder: ${message(error)}. The recording is in app storage (captures/${file}).`; }
   if (writeError !== undefined) saved = `Lines missing from captures/${file}: ${writeError}. ${saved}`;
   try { deps.onStatus(`Test drive stopped: ${stopReason}. ${saved}`); } catch { }
-  return { file, stopReason, saved };
+  return { file, stopReason, saved, rescan: rescan ? "ran" : "not run" };
 }

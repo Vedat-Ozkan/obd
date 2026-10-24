@@ -18,7 +18,7 @@ const drive1 = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-dr
 const drive2 = "fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-30-test-drive-2.redacted.jsonl";
 const before = "fixtures/synthetic/codes-compare-before.jsonl";
 const after = "fixtures/synthetic/codes-compare-after.jsonl";
-const input = (recording: string, stopReason: string) => ({ garageVehicleId: "1", scannedAt: "2026-09-30T18:00:00.000Z", recording, minutes: 20 as const, stopReason });
+const input = (recording: string, stopReason: string) => ({ garageVehicleId: "1", scannedAt: "2026-09-30T18:00:00.000Z", recording, minutes: 20 as const, stopReason, signals });
 const banned = /passed|validated|healthy|no red flags/i;
 const withoutLabel = (text: string) => text.replace(UNCONFIRMED_LINE, "");
 

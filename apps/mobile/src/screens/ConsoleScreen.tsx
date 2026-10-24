@@ -10,7 +10,9 @@ import { runCapture } from "../capture.js";
 import { batteryScanMeta, runAndSaveBatteryDiagnosis } from "../batteryDiagnosisFlow.js";
 import { runChargeLog } from "../chargeLogger.js";
 import { DRIVE_MINUTES, runDriveCapture } from "../driveCapture.js";
-import { keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
+import { driveReportsDocumentStore, keepPrivateBatteryScan } from "../batteryReportsDocumentStore.js";
+import { createDriveReportHistory, preDriveReport } from "../driveReports.js";
+import { driveReportFromRecording, renderDriveReport } from "../../../../packages/obd-battery/src/driveReport.js";
 import { CODES_SCAN_COMMANDS, codesScanStop } from "../codesScan.js";
 import { ConsoleSession } from "../console.js";
 import { RecordingBuffer } from "../recording.js";
@@ -400,6 +402,7 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
     driveRecording.start({ car: "chevrolet-equinox-ev-2024", dongle: "veepeak-obdcheck-ble", note: `T2.13 test drive (${String(minutes)} min): ${note.trim()}`, writeChar: active.writeCharacteristicUuid, notifyChar: active.notifyCharacteristicUuid, mtu: active.mtu });
     let connected = false;
     let notified = 0;
+    const driveStart = new Date();
     const task = async () => {
       const result = await runDriveCapture({
         connect: async () => {
@@ -418,7 +421,19 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
         stream: driveTargets,
         stopRequested: () => run.stop,
       }, minutes);
-      try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}`); }
+      let driveText = "";
+      if (result.file !== "") {
+        try {
+          let jsonl = "";
+          for await (const line of readLines(`captures/${result.file}`)) jsonl += `${line}\n`;
+          const parked = preDriveReport(await batteryHistory.list(entry.id), driveStart);
+          const driveReport = await driveReportFromRecording(jsonl, { garageVehicleId: entry.id, scannedAt: new Date().toISOString(), recording: result.file, minutes, stopReason: result.stopReason, signals: equinoxSignals }, parked);
+          await createDriveReportHistory(driveReportsDocumentStore).save(driveReport);
+          driveText = renderDriveReport(driveReport);
+          if (mounted.current) setReport(driveText);
+        } catch (error) { driveText = ` Drive report not made: ${error instanceof Error ? error.message : String(error)}.`; }
+      }
+      try { await release(`Test drive stopped: ${result.stopReason}. ${result.saved}${driveText.startsWith(" ") ? driveText : ""}`); }
       finally { await foregroundService.stop(); }
     };
     try {

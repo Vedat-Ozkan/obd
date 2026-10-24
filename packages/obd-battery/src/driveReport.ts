@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { parseRecording, type RecordingLine } from "obd-core/recording";
-import { codesReportFromRecording, type CodesReport, type DtcRead } from "obd-core/report";
-import { importObdbMode22 } from "obd-core/vehicles";
-import signalsetJson from "obd-core/vehicles/equinox-signalset";
+import { codesReportFromRecording, type CodesReport } from "obd-core/report";
+import type { ObdbMode22Signal } from "obd-core/vehicles";
 import { groupsUnderLoad, type GroupsUnderLoad } from "./driveGroups.js";
 import type { BatteryDiagnosisReport } from "./report.js";
 import { chargeLogFromRecording } from "./session.js";
@@ -24,6 +23,7 @@ export interface DriveReport {
   preDrive?: { scannedAt: string; recording: string };
 }
 
+type DtcRead = CodesReport["modules"][number]["stored"];
 const MODES = ["stored", "pending", "permanent"] as const;
 const dtcs = (read: DtcRead | undefined): readonly string[] | undefined => read?.status === "read" ? read.dtcs : undefined;
 
@@ -64,11 +64,11 @@ async function rescanCodes(lines: readonly RecordingLine[], stopReason: string, 
   return stoppedBy === undefined ? compared : { ...compared, stoppedEarly: stoppedBy };
 }
 
-export async function driveReportFromRecording(jsonl: string, input: { garageVehicleId: string; scannedAt: string; recording: string; minutes: 10 | 20; stopReason: string }, preDrive?: BatteryDiagnosisReport): Promise<DriveReport> {
+export async function driveReportFromRecording(jsonl: string, input: { garageVehicleId: string; scannedAt: string; recording: string; minutes: 10 | 20; stopReason: string; signals: readonly ObdbMode22Signal[] }, preDrive?: BatteryDiagnosisReport): Promise<DriveReport> {
   const lines = parseRecording(jsonl);
   const rescanAt = lines.findIndex((line) => isMeta(line, "codes rescan"));
   const driveLines = rescanAt < 0 ? lines : lines.slice(0, rescanAt);
-  const log = await chargeLogFromRecording(driveLines, input.recording, importObdbMode22(signalsetJson));
+  const log = await chargeLogFromRecording(driveLines, input.recording, input.signals);
   return parseDriveReport({
     version: 1, garageVehicleId: input.garageVehicleId, catalogId: "chevrolet-equinox-ev-2024", scannedAt: input.scannedAt, recording: input.recording,
     minutes: input.minutes, stopReason: input.stopReason, groupRule: GROUP_RULE_STATUS,
