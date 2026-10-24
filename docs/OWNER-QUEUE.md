@@ -42,7 +42,7 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 | P6 | Upgraded parked scan, reopen, redacted export | `rec/T2.14.md:11` | T2.14; T2.15 real-recording coverage |
 | P7 | T2.16 Stage B: Developer tools module DTC capture (`19 02 FF`, five Mode 09 responders), redact | `rec/T2.16.md:17-18` | T2.16 Stages B, C |
 | P8 | Unplug-reminder screenshot (optionally a rested 12 V reading) | `rec/T2.5.md:7, 9` | T2.5 |
-| P9 | T2.8a picker UI and native persistence check | `rec/T2.8.md:7, 9` | T2.8 (partial) |
+| P9 | T2.8a picker UI and native persistence check; T2.8b: Run check on the Equinox succeeds and its scan holds a `0902` reply, optionally a bench car with the Equinox entry selected shows the mismatch message | `rec/T2.8.md:7, 9` | T2.8 (partial) |
 | P10 | T2.9 Stage D phone steps 1–6 against `wrangler dev --local` | `docs/specs/T2.9-beta-data-upload.md:580-592`, `rec/T2.9.md:229` | T2.9 |
 | P11 | Only if the dash SOC is far from 70 %, and with the laptop: `uv run tools/spike/go.py` capture with a dash note | `rec/T2.2.md:8` | T2.2 |
 | P12 | T2.19 Stage B: TalkBack walkthrough of every screen plus a real check with TalkBack on; Accessibility Scanner at font 1.0 and 2.0, light and dark; rotate each screen (after T2.19 merges) | `docs/specs/T2.19-mobile-accessibility.md` Stage B | T2.19 |
