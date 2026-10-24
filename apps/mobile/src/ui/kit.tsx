@@ -46,7 +46,7 @@ export function Screen({ scroll = false, blocks = false, hidden = false, childre
 export function SwitchRow({ title, subtitle, value, onValueChange, disabled = false }: { title: string; subtitle?: string; value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean }) {
   const tokens = useTokens();
   return <TouchableRipple accessibilityRole="switch" accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title} accessibilityState={{ checked: value, disabled }} disabled={disabled} onPress={() => { onValueChange(!value); }}
-    style={styles.listRow}>
+    style={[styles.listRow, { borderBottomColor: tokens.divider }]}>
     <View style={styles.row}>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{title}</Text>
