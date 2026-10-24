@@ -20,7 +20,8 @@ import { parseRelayAddress } from "../relay/parseRelayAddress.js";
 import { finishRun } from "../runFiles.js";
 import { canUseEquinoxConsole, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageVehicle } from "../garage/flow.js";
-import { batteryHistory, betaOutbox, chargeRun, deferShare, dongleLink, dongleMemory, driveTargets, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
+import { saveChargeLogSummary } from "../chargeSummaries.js";
+import { batteryHistory, betaOutbox, chargeSummaryHistory, chargeRun, deferShare, dongleLink, dongleMemory, driveTargets, equinoxSignals, foregroundService, localDate, NOTIFICATION_INTERVAL_MS, phoneTargets, queueForBeta, requestBlePermission } from "../app/runtime.js";
 import { CHARGE_STEP_LABELS, chargeStep, reachedStep, stepMarks, type ChargeStep } from "../app/chargeSteps.js";
 import { Button, Card, ListRow, Screen, SectionLabel, styles, SwitchRow, Text, useTitleFocus } from "../ui/kit.js";
 import { DonglePicker } from "./DonglePicker.js";
@@ -354,7 +355,15 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           if ((await betaOutbox.status()).sharing) chargeRun.status("Charge log stopped; preparing the beta upload…");
           beta = await queueForBeta("charge-log", entry, readLines(`captures/${result.file}`));
         }
-        await release(`Charge log stopped: ${result.stopReason} (${result.complete ? "complete" : "partial"}). ${result.saved}${beta === undefined ? "" : ` ${beta}`}`);
+        let trend = "";
+        if (result.file !== "") {
+          try {
+            let text = "";
+            for await (const line of readLines(`captures/${result.file}`)) text += `${line}\n`;
+            await saveChargeLogSummary(chargeSummaryHistory, { garageVehicleId: entry.id, file: result.file, text, at: new Date().toISOString(), signals: equinoxSignals });
+          } catch (error) { trend = ` Trend summary not saved: ${error instanceof Error ? error.message : String(error)}.`; }
+        }
+        await release(`Charge log stopped: ${result.stopReason} (${result.complete ? "complete" : "partial"}). ${result.saved}${beta === undefined ? "" : ` ${beta}`}${trend}`);
       } finally { await foregroundService.stop(); }
     };
     try {

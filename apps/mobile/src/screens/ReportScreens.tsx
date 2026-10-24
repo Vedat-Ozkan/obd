@@ -26,7 +26,7 @@ function ReportHistory({ historyReports, openReport }: { historyReports: readonl
     </View>
     <View style={{ gap: 8 }}>
       <SectionLabel>Charge logs</SectionLabel>
-      <Text style={muted}>Charge logs are saved to your capture folder; showing them per car comes later.</Text>
+      <Text style={muted}>Charge logs are saved to your capture folder. Their capacity trend is on the car's Trends section.</Text>
     </View>
   </>;
 }

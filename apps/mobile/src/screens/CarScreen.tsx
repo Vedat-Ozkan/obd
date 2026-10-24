@@ -1,12 +1,15 @@
 import type { BatteryDiagnosisReport } from "obd-battery/report";
+import type { ChargeSessionSummary } from "obd-battery/chargeSummary";
+import { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
 import { Button as TextButton } from "react-native-paper";
 import { removeGarageVehicleWithReports } from "../batteryScan.js";
 import { canUseEquinoxConsole, vehicleAvailability, type CatalogVehicle } from "../garage/catalog.js";
 import type { GarageState, GarageVehicle, Ownership } from "../garage/flow.js";
-import { batteryHistory, garageFlow } from "../app/runtime.js";
+import { batteryHistory, chargeSummaryHistory, garageFlow } from "../app/runtime.js";
 import { socHero } from "../app/reportView.js";
-import { Button, Hero, ListRow, Text } from "../ui/kit.js";
+import { trendCaptions } from "../app/trendView.js";
+import { Button, Hero, ListRow, SectionLabel, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 import { ownershipLabel } from "./GarageScreen.js";
 
@@ -22,6 +25,9 @@ function CarScreen({ entry, vehicle, reports, busy, change, openReport, openChec
 }) {
   const tokens = useTokens();
   const latest = reports.at(0);
+  const [summaries, setSummaries] = useState<readonly ChargeSessionSummary[]>([]);
+  useEffect(() => { void chargeSummaryHistory.list(entry.id).then(setSummaries, () => undefined); }, [entry.id]);
+  const captions = trendCaptions(reports, summaries);
   const hero = latest ? socHero(latest) : undefined;
   const usable = canUseEquinoxConsole(vehicle);
   const setOwnership = (ownership: Ownership) => {
@@ -53,6 +59,11 @@ function CarScreen({ entry, vehicle, reports, busy, change, openReport, openChec
     <View>
       <ListRow icon="history" title="Report history" right={String(reports.length)} disabled={busy} onPress={openHistory} />
       <ListRow icon="account-outline" title="Ownership" right={ownershipLabel(entry.ownership)} disabled={busy} onPress={chooseOwnership} />
+    </View>
+    <View style={{ gap: 8 }}>
+      <SectionLabel>Trends</SectionLabel>
+      {captions.length === 0 ? <Text style={{ color: tokens.muted }}>Appears after a battery check or a charge log.</Text>
+        : captions.map((caption) => <Text key={caption} accessible accessibilityLabel={caption} style={{ color: tokens.muted }}>{caption}</Text>)}
     </View>
     <View style={{ alignItems: "flex-start" }}>
       <TextButton mode="text" textColor={tokens.error} disabled={busy} onPress={remove} style={{ minHeight: 48, justifyContent: "center" }}>Remove from garage</TextButton>
