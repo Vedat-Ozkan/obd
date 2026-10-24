@@ -4,7 +4,7 @@ import type { CodesReport } from "obd-core/report";
 import { View } from "react-native";
 import { Icon, TouchableRipple } from "react-native-paper";
 import { codesView, historyPoints, moduleRows, sectionDetail, type RatingView } from "../app/reportView.js";
-import { CellRangeStrip, ScanHistory } from "../ui/charts.js";
+import { CellRangeStrip, cellRangeSummary, ScanHistory } from "../ui/charts.js";
 import { Button, Card, Chip, Hero, ListRow, SectionLabel, styles, Tag, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 
@@ -29,7 +29,7 @@ function SectionScreen({ report, section, history, canCheck, busy, openCharge }:
   return <>
     <Hero label={SECTION_TITLES[section]} value={numeric ? detail.hero.value : undefined} unit={detail.hero.unit} empty={detail.hero.value}
       percent={section === "soc" && numeric ? Number(detail.hero.value) : undefined} tag={<Tag tone={detail.hero.tag} label={detail.hero.tagLabel} />}
-      accessibilityLabel={`${SECTION_TITLES[section]}: ${detail.hero.value}${detail.hero.unit ? ` ${detail.hero.unit}` : ""}, ${detail.hero.tagLabel}`}>
+      accessibilityLabel={`${SECTION_TITLES[section]}: ${detail.hero.value}${detail.hero.unit ? ` ${detail.hero.unit}` : ""}, ${detail.hero.tagLabel}${range ? `. ${cellRangeSummary(range.minMv, range.avgMv, range.maxMv)}` : ""}`}>
       {range ? <CellRangeStrip minMv={range.minMv} avgMv={range.avgMv} maxMv={range.maxMv} /> : null}
     </Hero>
     {detail.rating ? <RatingCard rating={detail.rating} /> : null}
