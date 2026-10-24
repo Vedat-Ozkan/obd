@@ -19,7 +19,7 @@ function nextHeader(header: string, command: string): string {
   return command.startsWith("ATSH") ? command.slice(4).trim() : header;
 }
 
-function isErrorReply(reply: string, command: string): boolean {
+export function isErrorReply(reply: string, command: string): boolean {
   const lines = reply.split("\r").map(normalise).filter((line) => line !== "" && line !== ">" && line !== command);
   return lines.length > 0 && lines.every((line) => ERROR_TOKENS.has(line.replace(/>$/, "").trim()));
 }
@@ -111,6 +111,10 @@ export class SimulatedTransport implements Transport {
 
   get misses(): readonly string[] {
     return this.missed;
+  }
+
+  get requested(): readonly string[] {
+    return [...this.cursors.keys()];
   }
 
   write(bytes: Uint8Array): Promise<void> {

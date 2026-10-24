@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseRecording } from "../../packages/obd-core/src/recording/format.js";
-import { buildSimTable, simKey, SimulatedTransport, type SimTable } from "../../packages/obd-core/src/transport/simulated.js";
+import { buildSimTable, isErrorReply, simKey, SimulatedTransport, type SimTable } from "../../packages/obd-core/src/transport/simulated.js";
 import { CAPTURE_COMMANDS } from "../../apps/mobile/src/capture.js";
 import { CODES_SCAN_COMMANDS } from "../../apps/mobile/src/codesScan.js";
 import { runBatteryDiagnosisScan } from "../../apps/mobile/src/batteryScan.js";
@@ -22,15 +22,22 @@ const stopped = (error: unknown) => `stopped: ${error instanceof Error ? error.m
 
 async function coverage(table: SimTable): Promise<void> {
   console.log("SIMULATED: no car, no dongle; closes no OWNER-QUEUE item");
+  const hasData = (key: string) => (table.replies[key] ?? []).some((reply) => !isErrorReply(reply, key.slice(key.indexOf("|") + 1)));
+  const noDataOnly = (name: string, keys: readonly string[]) => {
+    console.log(`${name} NO DATA-only: ${keys.filter((key) => table.replies[key] !== undefined && !hasData(key)).join(", ") || "none"}`);
+  };
   const staticMisses = (name: string, commands: readonly string[]) => {
+    const keys = commands.map((command) => simKey("", command));
     const missing = commands.filter((command) => table.replies[simKey("", command)] === undefined);
     console.log(`${name}: ${String(commands.length - missing.length)}/${String(commands.length)} keys recorded; missing: ${missing.length === 0 ? "none" : missing.join(", ")}`);
+    noDataOnly(name, keys);
   };
   staticMisses("capture", CAPTURE_COMMANDS);
   staticMisses("codes scan", CODES_SCAN_COMMANDS);
   const battery = new SimulatedTransport(table);
   const scan = await runBatteryDiagnosisScan(battery, recording(), () => undefined, () => ({ status: "match" }) as never).then((run) => run.scanStatus, stopped);
   console.log(`battery scan: ${scan}; misses: ${battery.misses.join(", ") || "none"}`);
+  noDataOnly("battery scan", battery.requested);
   const dtc = new SimulatedTransport(table);
   const modules = await runModuleDtcCapture(dtc, recording(), () => undefined).then((run) => run.status, stopped);
   console.log(`module DTC capture: ${modules}; misses: ${dtc.misses.join(", ") || "none"} (the first miss ends the run)`);

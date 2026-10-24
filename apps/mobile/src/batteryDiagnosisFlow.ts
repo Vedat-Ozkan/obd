@@ -8,7 +8,7 @@ import type { GarageVehicle } from "./garage/flow.js";
 import type { BleConnection } from "./ble/BleTransport.js";
 import type { RecordingBuffer, RecordingMeta } from "./recording.js";
 
-export function batteryScanMeta(link: Pick<BleConnection, "writeCharacteristicUuid" | "notifyCharacteristicUuid" | "mtu">, ready: boolean, dongle: RecordingMeta["dongle"] = "veepeak-obdcheck-ble"): RecordingMeta {
+export function batteryScanMeta(link: Pick<BleConnection, "writeCharacteristicUuid" | "notifyCharacteristicUuid" | "mtu">, ready: boolean, dongle: RecordingMeta["dongle"]): RecordingMeta {
   return {
     car: "chevrolet-equinox-ev-2024",
     dongle,

@@ -224,7 +224,7 @@ describe.each(BACKENDS)("E2E over $name", ({ artifact, make }) => {
   it.each([true, false])("a battery scan with Ready confirmed = %s keeps its powerState through the upload and replays into the same 12 V observations", async (ready) => {
     const state = ready ? "ready" : "unknown";
     const recording = new RecordingBuffer(() => 1);
-    recording.start(batteryScanMeta({ writeCharacteristicUuid: "fff1", notifyCharacteristicUuid: "fff2", mtu: 23 }, ready));
+    recording.start(batteryScanMeta({ writeCharacteristicUuid: "fff1", notifyCharacteristicUuid: "fff2", mtu: 23 }, ready, "veepeak-obdcheck-ble"));
     const garage = createGarageFlow(new TextStoreMemory());
     const entry = (await garage.add("chevrolet-equinox-ev-2024", "mine")).vehicles[0];
     const signals = importObdbMode22(signalsetJson);
