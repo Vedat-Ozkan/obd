@@ -23,6 +23,7 @@ It is a portfolio and personal-use project first, showcasing applied AI engineer
 | Spec template | `docs/specs/README.md` |
 | Open owner items (car, phone, builds, accounts, decisions) | `docs/OWNER-QUEUE.md` |
 | Mobile accessibility audit and checklist | `docs/ACCESSIBILITY.md` |
+| Battery trend analytics plan (pre-BM2/BM3) | `docs/ANALYTICS.md` |
 
 ## Repository map (target layout; see PLAN.md T0.1 for what exists)
 
