@@ -22,6 +22,7 @@ It is a portfolio and personal-use project first, showcasing applied AI engineer
 | Why things were decided | `docs/DECISIONS.md` |
 | Spec template | `docs/specs/README.md` |
 | Open owner items (car, phone, builds, accounts, decisions) | `docs/OWNER-QUEUE.md` |
+| Mobile accessibility audit and checklist | `docs/ACCESSIBILITY.md` |
 
 ## Repository map (target layout; see PLAN.md T0.1 for what exists)
 
