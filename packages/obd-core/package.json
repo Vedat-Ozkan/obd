@@ -15,6 +15,7 @@
     "./vehicles/scan": "./src/vehicles/scan.ts",
     "./elm/session": "./src/elm/session.ts",
     "./transport/replay": "./src/transport/replay.ts",
+    "./transport/simulated": "./src/transport/simulated.ts",
     "./vin": "./src/obd/vin.ts"
   },
   "scripts": {
