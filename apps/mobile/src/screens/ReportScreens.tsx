@@ -39,16 +39,18 @@ function ReportSummary({ report, canCheck, busy, openSection, openCodes, openChe
   const tokens = useTokens();
   const soc = summary.soc;
   const verdict = summary.verdict;
+  const { groupAskMv, groupRedMv, spreadAskMv, spreadRedMv } = verdict.policy;
+  const policySentence = `Project policy: group ask >${String(groupAskMv)} mV, group red >${String(groupRedMv)} mV; spread ask >${String(spreadAskMv)} mV, spread red >${String(spreadRedMv)} mV.`;
   const caption = `Checked ${checkedOn(report.scannedAt)}${report.scanStatus === "partial" ? " · partial scan" : ""}`;
   return <>
-    <View accessibilityRole="summary" accessibilityLabel={[verdict.headline, verdict.scope, ...verdict.findings.map((finding) => finding.detail), `Project policy: group ask over ${String(verdict.policy.groupAskMv)} mV, group red over ${String(verdict.policy.groupRedMv)} mV; spread ask over ${String(verdict.policy.spreadAskMv)} mV, spread red over ${String(verdict.policy.spreadRedMv)} mV.`, verdict.limitation, ...(report.scanStatus === "partial" ? ["Partial scan: some checks may be missing."] : []), ...verdict.coverage.map((item) => `${item.check}: ${item.status}${item.reason ? `. ${item.reason}` : ""}`)].join(" ")}
+    <View accessibilityRole="summary" accessibilityLabel={[verdict.headline, verdict.scope, ...verdict.findings.map((finding) => finding.detail), policySentence.replaceAll(">", "over "), verdict.limitation, ...(report.scanStatus === "partial" ? ["Partial scan: some checks may be missing."] : []), ...verdict.coverage.map((item) => `${item.check}: ${item.status}${item.reason ? `. ${item.reason}` : ""}`)].join(" ")}
       style={{ padding: 16, borderRadius: 12, borderWidth: 1, borderColor: tokens.muted, gap: 8 }}>
       <SectionLabel>Red-flag screen</SectionLabel>
       <Text>{verdict.headline}</Text>
       <Text>{verdict.scope}</Text>
       {report.scanStatus === "partial" ? <Text>Partial scan: some checks may be missing.</Text> : null}
       {verdict.findings.map((finding, index) => <Text key={`${finding.check}-${String(index)}`}>{finding.detail}</Text>)}
-      <Text>Project policy: group ask &gt;{verdict.policy.groupAskMv} mV, group red &gt;{verdict.policy.groupRedMv} mV; spread ask &gt;{verdict.policy.spreadAskMv} mV, spread red &gt;{verdict.policy.spreadRedMv} mV.</Text>
+      <Text>{policySentence}</Text>
       <Text>{verdict.limitation}</Text>
       {verdict.coverage.map((item) => <Text key={item.check}>{item.check}: {item.status}{item.reason ? ` — ${item.reason}` : ""}</Text>)}
     </View>
