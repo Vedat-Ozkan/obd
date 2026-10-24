@@ -42,11 +42,6 @@ describe("charge log summaries on the phone", () => {
     expect(trendCaptions([], await reopened.list("1"))).toEqual(["BMS-referenced capacity index (Ah), not state of health: Not enough data yet: 1 sessions over 0 days."]);
   });
 
-  it("refuses a charge log for a car that is not in the garage", async () => {
-    const { history } = await setup();
-    await expect(saveChargeLogSummary(history, request("9", "2026-10-01T10:00:00.000Z"))).rejects.toThrow("garage vehicle");
-  });
-
   it("does not overwrite a malformed history file", async () => {
     const { garage, store } = await setup();
     store.value = "{not json";

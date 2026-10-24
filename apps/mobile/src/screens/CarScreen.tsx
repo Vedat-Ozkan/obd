@@ -44,7 +44,8 @@ function CarScreen({ entry, vehicle, reports, busy, change, openReport, openChec
     Alert.alert("Remove from garage?", "This car is removed from the garage on this phone.", [
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: () => {
-        void change(async () => { await removeGarageVehicleWithReports(garageFlow, batteryHistory, entry.id); return garageFlow.load(); }, onRemoved);
+        const retained = { hasReports: async (id: string) => (await batteryHistory.hasReports(id)) || (await chargeSummaryHistory.list(id)).length > 0 };
+        void change(async () => { await removeGarageVehicleWithReports(garageFlow, retained, entry.id); return garageFlow.load(); }, onRemoved);
       } },
     ]);
   };
