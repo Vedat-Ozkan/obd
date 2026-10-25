@@ -129,14 +129,14 @@ flow_p9() {
 }
 
 flow_p2() {
-  local dir="$OUT/p2"; mkdir -p "$dir"
+  local dir="$OUT/p2"; [ -e "$dir" ] && dir="$OUT/p2-$(date +%H%M%S)"; mkdir -p "$dir"
   local scratch; scratch="$(mktemp -d)"
   local ip=10.0.2.2 port=8765 token=simtoken
   local result=PASS notes=""
   local envs=(-e "RELAY_URL=ws://$ip:$port" -e "RELAY_TOKEN=$token")
   stop_probe() { kill "$(cat "$scratch/probe.pid" 2>/dev/null)" 2>/dev/null; rm -f "$scratch/probe.pid" "$scratch/go"; sleep 1; }
   probe() { (cd "$ROOT" && OBD_RELAY_TOKEN=$token OBD_RELAY_PORT=$port setsid pnpm exec tsx tools/sim/relay-probe.ts "$1" "$scratch" > "$dir/probe-$1.log" 2>&1 < /dev/null & echo $! > "$dir/probe-$1.pid"); PROBE_PID="$(cat "$dir/probe-$1.pid")"; }
-  await_probe() { local n=0; until grep -q "$2" "$dir/probe-$1.log" 2>/dev/null; do sleep 1; n=$((n+1)); [ $n -gt "${3:-120}" ] && return 1; done; }
+  await_probe() { local n=0; until grep -q "$2" "$dir/probe-$1.log" 2>/dev/null; do sleep 1; n=$((n+1)); if [ $n -gt "${3:-120}" ]; then return 1; fi; done; return 0; }
   printf '{"version":1,"nextId":2,"vehicles":[{"id":"1","catalogId":"chevrolet-equinox-ev-2024","ownership":"mine"}],"interests":[]}' > "$dir/garage.json"
 
   fresh_app; seed garage.json "$dir/garage.json"
