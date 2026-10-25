@@ -1,0 +1,3 @@
+appId: com.ev.obd
+---
+- runFlow: p12-setup.yaml
