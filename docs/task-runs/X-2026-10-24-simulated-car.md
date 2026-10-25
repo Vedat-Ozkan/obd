@@ -3,7 +3,7 @@
 ## Current state (as of 2026-10-24)
 
 - **Stage:** C1 merged 0ca9b1f; Stage C2 implementation
-- **Next action:** C2 repair (2/2) running; then re-review, integrate, C3.
+- **Next action:** C2 merged; implement C3 (visual-tester agent + visual pass).
 
 ## Ownership
 
@@ -40,3 +40,5 @@
 - C1 integrator: merged 0ca9b1f, gate PASS (relay 65), worktree removed, tools/sim/runs kept on main (gitignored). C2 implementer spawned.
 - C2 implementer: head a814beb; P10 PASS (runs/20261024-155902), P13 PASS (runs/20261024-151826), P12 8/8 walked (runs/20261024-192159); C1 p2 failed once, passed on rerun.
 - C2 reviewer: REQUEST_CHANGES. p12-walk has no assertVisible; a11y audit covers only the last screen; audit reports degenerate nodes; p2 flake not diagnosed. Sent to implementer (repairs 2/2).
+- C2 re-review: APPROVE at d556c67 (repairs 2/2). The p2 flake was a start-up race: the app connected before the broker listened. It is fixed by await_probe "phone setup". The await_probe return-status bug is fixed in d556c67. Evidence is runs/20261025-014309 (p2 x3, p12 160 dumps PASS) and 20261025-003227 (p4, p9 PASS).
+- C2 integrator: merged 927171101cadf86630e319afc48740f92cc5a174; next action: C3.
