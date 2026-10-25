@@ -1,0 +1,13 @@
+appId: com.ev.obd
+---
+- runFlow: launch.yaml
+- tapOn:
+    text: "2024 Chevrolet Equinox EV"
+    index: 0
+- extendedWaitUntil:
+    visible: "Report history"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "Trends"
+- assertVisible: "${EXPECT}"
+- takeScreenshot: 01-trends
