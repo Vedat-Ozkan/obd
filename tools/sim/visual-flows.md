@@ -2,7 +2,7 @@
 
 SIMULATED: no car, no dongle; closes no OWNER-QUEUE or ACCESSIBILITY row. The agent is `visual-tester`. Findings are candidates for the lead, never fixed here.
 
-Output: `tools/sim/runs/<date>-visual/` (`<date>` is `date +%Y%m%d`). Screenshots are named `f<flow>-<combo>-<nn>-<screen>.png`; `<combo>` is `<font>-<theme>-<rot>`, e.g. `1.0-light-p` (p portrait, l landscape). `summary.md` is the only other file.
+Output: `tools/sim/runs/<date>-visual/` (`<date>` is `date +%Y%m%d`). Screenshots are named `f<flow>-<combo>-<nn>-<screen>.png`; `<combo>` is `<font>-<theme>-<rot>`, e.g. `1.0-light-p` (p portrait, l landscape). `summary.md` is the only other file; the lead saves it from the agent's text output.
 
 ## Setup commands (Bash, one call per block)
 
