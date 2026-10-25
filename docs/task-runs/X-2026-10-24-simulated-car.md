@@ -3,7 +3,7 @@
 ## Current state (as of 2026-10-24)
 
 - **Stage:** C1 merged 0ca9b1f; Stage C2 implementation
-- **Next action:** C2 merged; implement C3 (visual-tester agent + visual pass).
+- **Next action:** closed. Harness done (A, B, C1–C3). Visual findings are task candidates for the lead; nothing closes an OWNER-QUEUE row.
 
 ## Ownership
 
@@ -42,3 +42,4 @@
 - C2 reviewer: REQUEST_CHANGES. p12-walk has no assertVisible; a11y audit covers only the last screen; audit reports degenerate nodes; p2 flake not diagnosed. Sent to implementer (repairs 2/2).
 - C2 re-review: APPROVE at d556c67 (repairs 2/2). The p2 flake was a start-up race: the app connected before the broker listened. It is fixed by await_probe "phone setup". The await_probe return-status bug is fixed in d556c67. Evidence is runs/20261025-014309 (p2 x3, p12 160 dumps PASS) and 20261025-003227 (p4, p9 PASS).
 - C2 integrator: merged 927171101cadf86630e319afc48740f92cc5a174; next action: C3.
+- C3: visual pass run (Sonnet, general-purpose with the visual-tester definition, before merge); 0 high / 2 med / 10 total findings in tools/sim/runs/20261025-visual/summary.md (SIMULATED). The harness refused subagent Write of report files, so the lead saved summary.md; definition changed in 10449fa to return text. Reviewer APPROVE at 10449fa, 3 minors (summary notes applied by lead; CLAUDE.md wording). Merged 9d397eb. Stage closed.
