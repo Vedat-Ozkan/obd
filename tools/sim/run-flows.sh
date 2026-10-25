@@ -141,6 +141,7 @@ flow_p2() {
 
   fresh_app; seed garage.json "$dir/garage.json"
   local pid; probe smoke; pid="$PROBE_PID"; STARTED+=("$pid")
+  await_probe smoke "phone setup" 60 || { result=FAIL; notes="$notes relay not listening;"; }
   maestro_flow "$dir" p2-relay-connect "${envs[@]}"
   if await_probe smoke "hil:smoke: REFUSED relay: the connected phone is a simulated car" 120; then notes="$notes hil:smoke refused the simulated phone, no recording written;"; else result=FAIL; notes="$notes hil:smoke did not refuse the simulated phone;"; fi
   [ -z "$(find "$scratch" -name '*.jsonl' 2>/dev/null)" ] || { result=FAIL; notes="$notes recording written by smoke;"; }
@@ -148,6 +149,7 @@ flow_p2() {
 
   fresh_app; seed garage.json "$dir/garage.json"
   probe guard; pid="$PROBE_PID"; STARTED+=("$pid")
+  await_probe guard "phone setup" 60 || { result=FAIL; notes="$notes relay not listening;"; }
   maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect (guard) failed;"; }
   await_probe guard "PHONE CONNECTED" 60; touch "$scratch/go"
   maestro_flow "$dir" p2-relay-cancel || { result=FAIL; notes="$notes Mode 04 Cancel flow failed;"; }
@@ -156,6 +158,7 @@ flow_p2() {
 
   fresh_app; seed garage.json "$dir/garage.json"
   probe hold04; pid="$PROBE_PID"; STARTED+=("$pid")
+  await_probe hold04 "phone setup" 60 || { result=FAIL; notes="$notes relay not listening;"; }
   maestro_flow "$dir" p2-relay-connect "${envs[@]}" || { result=FAIL; notes="$notes relay connect (hold) failed;"; }
   touch "$scratch/go"
   maestro_flow "$dir" p2-relay-killed || { result=FAIL; notes="$notes prompt not shown before kill;"; }
@@ -190,19 +193,31 @@ flow_p12() {
   reset_display
   MAESTRO_TAG=setup maestro_flow "$dir" p12-setup || { result=FAIL; notes="setup (battery check to get a report) failed;"; }
   local density; density="$(adb shell wm density | grep -o '[0-9]*$' | tail -1)"
-  local ran=0 failed=0 combo
+  local ran=0 failed=0 combo step
+  local steps=(s01 s02 s03 s04 s05 s06 s07 s08 s09 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20)
+  local names=(Garage Settings "Beta data sharing" Consent "Save folder" Theme "Privacy note" "Open-source licenses" "Add a vehicle" Car "Car trends" "Report history" "Battery report" "Cell balance" Capacity "12 V battery" "Diagnostic codes" Module "State of charge" "Dongle picker")
+  mkdir -p "$dir/a11y"
   for font in 1.0 2.0; do for night in no yes; do for rot in 0 1; do
     combo="font${font}-$([ $night = yes ] && echo dark || echo light)-$([ $rot = 1 ] && echo landscape || echo portrait)"
     set_display "$font" "$night" "$rot"
     ran=$((ran+1))
-    if ! MAESTRO_TAG="walk-$combo" maestro_flow "$dir" p12-walk; then failed=$((failed+1)); notes="$notes $combo FAILED;"; fi
-    adb shell uiautomator dump /sdcard/a11y.xml > /dev/null 2>&1 && adb pull /sdcard/a11y.xml "$dir/a11y-$combo.xml" > /dev/null 2>&1
+    for step in "${steps[@]}"; do
+      if ! MAESTRO_TAG="$combo-$step" maestro_flow "$dir" p12-walk -e "STEP=$step"; then failed=$((failed+1)); notes="$notes $combo stopped at $step;"; break; fi
+      adb shell uiautomator dump /sdcard/a11y.xml > /dev/null 2>&1 && adb pull /sdcard/a11y.xml "$dir/a11y/${combo}__$step.xml" > /dev/null 2>&1
+    done
   done; done; done
   reset_display
   [ $failed = 0 ] || result=FAIL
-  notes="$notes $((ran-failed))/$ran combinations walked (font 1.0/2.0 x light/dark x portrait/landscape);"
-  (cd "$ROOT" && pnpm exec tsx tools/sim/a11y-audit.ts "$density" "$dir"/a11y-*.xml > "$dir/a11y-audit.md" 2>&1); local audit=$?
-  if [ $audit = 0 ]; then notes="$notes a11y audit in p12/a11y-audit.md (findings listed, not fixed);"; else notes="$notes a11y audit NOT CHECKED for some dumps (see p12/a11y-audit.md);"; fi
+  notes="$notes $((ran-failed))/$ran combinations walked through all ${#steps[@]} screens (font 1.0/2.0 x light/dark x portrait/landscape);"
+  (cd "$ROOT" && pnpm exec tsx tools/sim/a11y-audit.ts "$density" "$dir"/a11y/*.xml > "$dir/a11y-audit.md" 2>&1); local audit=$?
+  local audited="" i=0 checked
+  for step in "${steps[@]}"; do
+    checked="$(grep -A1 "^## .*__$step.xml" "$dir/a11y-audit.md" | grep -c 'clickable nodes;')"
+    audited="$audited ${names[$i]} ($checked/$ran);"; i=$((i+1))
+  done
+  local dumps; dumps="$(ls "$dir"/a11y/*.xml 2>/dev/null | wc -l)"
+  if [ "$dumps" = "$((ran * ${#steps[@]}))" ] && [ $audit = 0 ]; then notes="$notes a11y audit (p12/a11y-audit.md, findings listed not fixed) ran over one uiautomator dump per screen per combination, $dumps dumps; screens audited, dumps checked per combination count:$audited"
+  else result=FAIL; notes="$notes a11y audit INCOMPLETE: $dumps of $((ran * ${#steps[@]})) dumps, audit exit $audit (see p12/a11y-audit.md); screens audited:$audited"; fi
   collect_sim_misses
   record p12 "$result" "$notes"
 }

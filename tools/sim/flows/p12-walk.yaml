@@ -1,157 +1,285 @@
 appId: com.ev.obd
 ---
-- runFlow: launch.yaml
-- scrollUntilVisible:
-    element: "Garage"
-    direction: UP
-- takeScreenshot: 01-garage
-- tapOn: "Settings"
-- scrollUntilVisible:
-    element: "Settings"
-    direction: UP
-- takeScreenshot: 02-settings
-- tapOn: "Beta data sharing"
-- scrollUntilVisible:
-    element: "Beta data sharing"
-    direction: UP
-- takeScreenshot: 03-beta
-- tapOn: "Share my data to improve the app"
-- extendedWaitUntil:
-    visible: "Help improve battery checks.*"
-    timeout: 10000
-- takeScreenshot: 04-consent
-- scrollUntilVisible:
-    element: "Continue"
-- tapOn: "Continue"
-- extendedWaitUntil:
-    visible: "Beta data sharing"
-    timeout: 10000
-- back
-- scrollUntilVisible:
-    element: "Save folder"
-- tapOn: "Save folder"
-- scrollUntilVisible:
-    element: "Save folder"
-    direction: UP
-- takeScreenshot: 05-save-folder
-- back
-- scrollUntilVisible:
-    element: "Theme"
-- tapOn: "Theme"
-- scrollUntilVisible:
-    element: "Theme"
-    direction: UP
-- takeScreenshot: 06-theme
-- back
-- scrollUntilVisible:
-    element: "Privacy note"
-- tapOn: "Privacy note"
-- scrollUntilVisible:
-    element: "Privacy note"
-    direction: UP
-- takeScreenshot: 07-privacy
-- back
-- scrollUntilVisible:
-    element: "Open-source licenses"
-- tapOn: "Open-source licenses"
-- scrollUntilVisible:
-    element: "Open-source licenses"
-    direction: UP
-- takeScreenshot: 08-licenses
-- back
-- back
-- tapOn: "Add a vehicle"
-- scrollUntilVisible:
-    element: "Add a vehicle"
-    direction: UP
-- takeScreenshot: 09-add-vehicle
-- back
-- tapOn:
-    text: "2024 Chevrolet Equinox EV"
-    index: 0
-- extendedWaitUntil:
-    visible: "Run check|Report history"
-    timeout: 20000
-- takeScreenshot: 10-car
-- scrollUntilVisible:
-    element: "Trends"
-- takeScreenshot: 11-car-trends
 - runFlow:
     when:
-      notVisible: "Report history"
+      true: ${STEP == 's01'}
     commands:
+      - runFlow: launch.yaml
+      - scrollUntilVisible:
+          element: "Garage"
+          direction: UP
+      - assertVisible: "Garage"
+      - takeScreenshot: s01-garage
+
+- runFlow:
+    when:
+      true: ${STEP == 's02'}
+    commands:
+      - tapOn: "Settings"
+      - scrollUntilVisible:
+          element: "Settings"
+          direction: UP
+      - assertVisible: "Settings"
+      - takeScreenshot: s02-settings
+
+- runFlow:
+    when:
+      true: ${STEP == 's03'}
+    commands:
+      - tapOn: "Beta data sharing"
+      - scrollUntilVisible:
+          element: "Beta data sharing"
+          direction: UP
+      - assertVisible: "Beta data sharing"
+      - takeScreenshot: s03-beta
+
+- runFlow:
+    when:
+      true: ${STEP == 's04'}
+    commands:
+      - tapOn: "Share my data to improve the app"
+      - extendedWaitUntil:
+          visible: "Help improve battery checks.*"
+          timeout: 10000
+      - scrollUntilVisible:
+          element: "Help improve battery checks.*"
+          direction: UP
+      - assertVisible: "Help improve battery checks.*"
+      - takeScreenshot: s04-consent
+
+- runFlow:
+    when:
+      true: ${STEP == 's05'}
+    commands:
+      - scrollUntilVisible:
+          element: "Continue"
+      - tapOn: "Continue"
+      - extendedWaitUntil:
+          visible: "Beta data sharing"
+          timeout: 10000
+      - back
+      - scrollUntilVisible:
+          element: "Save folder"
+      - tapOn: "Save folder"
+      - scrollUntilVisible:
+          element: "Save folder"
+          direction: UP
+      - assertVisible: "Save folder"
+      - takeScreenshot: s05-save-folder
+
+- runFlow:
+    when:
+      true: ${STEP == 's06'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Theme"
+      - tapOn: "Theme"
+      - scrollUntilVisible:
+          element: "Theme"
+          direction: UP
+      - assertVisible: "Theme"
+      - takeScreenshot: s06-theme
+
+- runFlow:
+    when:
+      true: ${STEP == 's07'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Privacy note"
+      - tapOn: "Privacy note"
+      - scrollUntilVisible:
+          element: "Privacy note"
+          direction: UP
+      - assertVisible: "Privacy note"
+      - takeScreenshot: s07-privacy
+
+- runFlow:
+    when:
+      true: ${STEP == 's08'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Open-source licenses"
+      - tapOn: "Open-source licenses"
+      - scrollUntilVisible:
+          element: "Open-source licenses"
+          direction: UP
+      - assertVisible: "Open-source licenses"
+      - takeScreenshot: s08-licenses
+
+- runFlow:
+    when:
+      true: ${STEP == 's09'}
+    commands:
+      - back
+      - back
+      - tapOn: "Add a vehicle"
+      - scrollUntilVisible:
+          element: "Add a vehicle"
+          direction: UP
+      - assertVisible: "Add a vehicle"
+      - takeScreenshot: s09-add-vehicle
+
+- runFlow:
+    when:
+      true: ${STEP == 's10'}
+    commands:
+      - back
+      - tapOn:
+          text: "2024 Chevrolet Equinox EV"
+          index: 0
+      - scrollUntilVisible:
+          element: "2024 Chevrolet Equinox EV"
+          direction: UP
+      - assertVisible: "2024 Chevrolet Equinox EV"
+      - takeScreenshot: s10-car
+
+- runFlow:
+    when:
+      true: ${STEP == 's11'}
+    commands:
+      - scrollUntilVisible:
+          element: "Trends"
+      - assertVisible: "Trends"
+      - takeScreenshot: s11-car-trends
+
+- runFlow:
+    when:
+      true: ${STEP == 's12'}
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Report history"
+          commands:
+            - scrollUntilVisible:
+                element: "Report history"
+      - tapOn: "Report history"
       - scrollUntilVisible:
           element: "Report history"
-- tapOn: "Report history"
-- scrollUntilVisible:
-    element: "Report history"
-    direction: UP
-- takeScreenshot: 12-history
-- tapOn:
-    text: ".*Complete scan.*|.*Partial scan.*"
-    index: 0
-- extendedWaitUntil:
-    visible: "Battery report"
-    timeout: 20000
-- takeScreenshot: 13-report
-- scrollUntilVisible:
-    element: "Cell balance"
-- tapOn: "Cell balance"
-- scrollUntilVisible:
-    element: "Cell balance"
-    direction: UP
-- takeScreenshot: 14-cells
-- back
-- scrollUntilVisible:
-    element: "Capacity"
-- tapOn: "Capacity"
-- scrollUntilVisible:
-    element: "Capacity"
-    direction: UP
-- takeScreenshot: 15-capacity
-- back
-- scrollUntilVisible:
-    element: "12 V battery"
-- tapOn: "12 V battery"
-- scrollUntilVisible:
-    element: "12 V battery"
-    direction: UP
-- takeScreenshot: 16-twelve-volt
-- back
-- scrollUntilVisible:
-    element: "Diagnostic codes"
-- tapOn: "Diagnostic codes"
-- scrollUntilVisible:
-    element: "Diagnostic codes"
-    direction: UP
-- takeScreenshot: 17-codes
-- scrollUntilVisible:
-    element: "Module .*"
-- tapOn:
-    text: "Module .*"
-    index: 0
-- scrollUntilVisible:
-    element: "Module .*"
-    direction: UP
-- takeScreenshot: 18-module
-- back
-- back
+          direction: UP
+      - assertVisible: "Report history"
+      - takeScreenshot: s12-history
+
 - runFlow:
     when:
-      notVisible: "State of charge.*"
+      true: ${STEP == 's13'}
+    commands:
+      - tapOn:
+          text: ".*Complete scan.*|.*Partial scan.*"
+          index: 0
+      - scrollUntilVisible:
+          element: "Battery report"
+          direction: UP
+      - assertVisible: "Battery report"
+      - takeScreenshot: s13-report
+
+- runFlow:
+    when:
+      true: ${STEP == 's14'}
     commands:
       - scrollUntilVisible:
-          element: "State of charge.*"
-- tapOn: "State of charge.*"
-- scrollUntilVisible:
-    element: "State of charge"
-    direction: UP
-- takeScreenshot: 19-soc
-- back
-- scrollUntilVisible:
-    element: "Run a new check"
-- tapOn: "Run a new check"
-- extendedWaitUntil:
-    visible: "Choose your OBD dongle|Run battery check"
-    timeout: 60000
-- takeScreenshot: 20-console-or-picker
+          element: "Cell balance"
+      - tapOn: "Cell balance"
+      - scrollUntilVisible:
+          element: "Cell balance"
+          direction: UP
+      - assertNotVisible: "Battery report"
+      - assertVisible: "Cell balance"
+      - takeScreenshot: s14-cells
+
+- runFlow:
+    when:
+      true: ${STEP == 's15'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Capacity"
+      - tapOn: "Capacity"
+      - scrollUntilVisible:
+          element: "Capacity"
+          direction: UP
+      - assertNotVisible: "Battery report"
+      - assertVisible: "Capacity"
+      - takeScreenshot: s15-capacity
+
+- runFlow:
+    when:
+      true: ${STEP == 's16'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "12 V battery"
+      - tapOn: "12 V battery"
+      - scrollUntilVisible:
+          element: "12 V battery"
+          direction: UP
+      - assertNotVisible: "Battery report"
+      - assertVisible: "12 V battery"
+      - takeScreenshot: s16-twelve-volt
+
+- runFlow:
+    when:
+      true: ${STEP == 's17'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Diagnostic codes"
+      - tapOn: "Diagnostic codes"
+      - scrollUntilVisible:
+          element: "Diagnostic codes"
+          direction: UP
+      - assertNotVisible: "Battery report"
+      - assertVisible: "Diagnostic codes"
+      - takeScreenshot: s17-codes
+
+- runFlow:
+    when:
+      true: ${STEP == 's18'}
+    commands:
+      - scrollUntilVisible:
+          element: "Module .*"
+      - tapOn:
+          text: "Module .*"
+          index: 0
+      - scrollUntilVisible:
+          element: "Module .*"
+          direction: UP
+      - assertNotVisible: "Diagnostic codes"
+      - assertVisible: "Module .*"
+      - takeScreenshot: s18-module
+
+- runFlow:
+    when:
+      true: ${STEP == 's19'}
+    commands:
+      - back
+      - back
+      - runFlow:
+          when:
+            notVisible: "State of charge.*"
+          commands:
+            - scrollUntilVisible:
+                element: "State of charge.*"
+      - tapOn: "State of charge.*"
+      - scrollUntilVisible:
+          element: "State of charge"
+          direction: UP
+      - assertNotVisible: "Battery report"
+      - assertVisible: "State of charge"
+      - takeScreenshot: s19-soc
+
+- runFlow:
+    when:
+      true: ${STEP == 's20'}
+    commands:
+      - back
+      - scrollUntilVisible:
+          element: "Run a new check"
+      - tapOn: "Run a new check"
+      - extendedWaitUntil:
+          visible: "Choose your OBD dongle"
+          timeout: 60000
+      - assertVisible: "Choose your OBD dongle"
+      - takeScreenshot: s20-dongle-picker

@@ -28,7 +28,7 @@ const all = (nodes: Node[]): Node[] => nodes.flatMap((n) => [n, ...all(n.kids)])
 let unchecked = false;
 for (const file of files) {
   const nodes = all(parse(readFileSync(file, "utf8")));
-  const clickable = nodes.filter((n) => n.clickable);
+  const clickable = nodes.filter((n) => n.clickable && n.width > 0 && n.height > 0);
   console.log(`## ${file}`);
   if (nodes.length === 0 || clickable.length === 0) { console.log(`NOT CHECKED: ${nodes.length === 0 ? "no nodes" : "no clickable nodes"} in this dump`); unchecked = true; continue; }
   const small = clickable.filter((n) => n.width / scale < MIN_DP || n.height / scale < MIN_DP);
