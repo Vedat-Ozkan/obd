@@ -3,7 +3,7 @@
 ## Current state (as of 2026-10-24)
 
 - **Stage:** C1 merged 0ca9b1f; Stage C2 implementation
-- **Next action:** relay C1 report, review, integrate; then C2 and C3.
+- **Next action:** C2 repair (2/2) running; then re-review, integrate, C3.
 
 ## Ownership
 
@@ -38,3 +38,5 @@
 - C1 implementer round 2: head da53b6c; P2 PASS (runs/20261024-122711: hil:smoke refuses simulated, 2E refused by guard, Mode 04 Cancel -> confirmation-denied, no tx 04, relay killed -> "Relay ended mid-command"); P4, P9 PASS (runs/20261024-123720); scoped checks PASS. C1 reviewer spawned.
 - C1 reviewer: APPROVE (repairs 1/2 unchanged; artifacts inspected, emulator not rerun). Minor 1 fixed by quick-fix 926782d (empty captures no longer pass; lead checked the 4-line diff). Integrating.
 - C1 integrator: merged 0ca9b1f, gate PASS (relay 65), worktree removed, tools/sim/runs kept on main (gitignored). C2 implementer spawned.
+- C2 implementer: head a814beb; P10 PASS (runs/20261024-155902), P13 PASS (runs/20261024-151826), P12 8/8 walked (runs/20261024-192159); C1 p2 failed once, passed on rerun.
+- C2 reviewer: REQUEST_CHANGES. p12-walk has no assertVisible; a11y audit covers only the last screen; audit reports degenerate nodes; p2 flake not diagnosed. Sent to implementer (repairs 2/2).
