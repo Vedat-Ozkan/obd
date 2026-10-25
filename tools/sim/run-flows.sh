@@ -57,7 +57,7 @@ boot_emulator() {
 
 start_metro() {
   if curl -s -o /dev/null http://localhost:8081/status; then return; fi
-  (cd "$ROOT/apps/mobile" && CI=1 EXPO_PUBLIC_BETA_URL="${BETA_URL:-}" setsid bash -c 'echo $$ > "$0"; exec pnpm exec expo start --dev-client --clear --port 8081' "$OUT/metro.pid" > "$OUT/metro.log" 2>&1 &)
+  (cd "$ROOT/apps/mobile" && CI=1 EXPO_PUBLIC_BETA_URL="${BETA_URL:-}" setsid bash -c 'echo $$ > "$0"; exec pnpm exec expo start --dev-client ${EXPO_PUBLIC_BETA_URL:+--clear} --port 8081' "$OUT/metro.pid" > "$OUT/metro.log" 2>&1 &)
   until [ -s "$OUT/metro.pid" ]; do sleep 0.2; done
   STARTED+=("$(cat "$OUT/metro.pid")")
   METRO_OURS=1
