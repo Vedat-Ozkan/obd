@@ -42,6 +42,6 @@ Change the tests' expected ids first and see them fail on the unchanged code.
 
 - [ ] `tools/summary-backend/worker.test.ts` passes with the new Flash id and slug and three arms; its offline dry run of the eval CLI covers three arms.
 - [ ] `apps/mobile/test/summary-flow.test.ts` passes with the new id; a usage record carrying the old id or old slug is rejected.
-- [ ] `grep -rn "kimi\|mxfp4\|flash-20260910" tools/summary-backend apps/mobile/src apps/mobile/test` prints nothing.
+- [ ] `grep -rn "kimi\|mxfp4" tools/summary-backend apps/mobile/src apps/mobile/test` prints nothing, and `grep -rn "flash-20260910" tools/summary-backend apps/mobile/src` prints nothing (the mobile test that rejects the old slug names it).
 - [ ] Scoped checks green for `apps/mobile` and the summary-backend tests (`fast-checks` skill).
 - [ ] Live (lead, after merge, paid): the comparison's pre-check accepts arm A and the arm runs.
