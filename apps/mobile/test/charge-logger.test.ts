@@ -277,6 +277,7 @@ it("car not answering: three start failures stop the log within a minute and nam
   expect(r.endS).toBeLessThan(60);
   expect(r.statuses).toContain(`The car is not answering (UNABLE TO CONNECT). Is it switched on? Trying again in ${String(RECOVERY_WAIT_S)} s.`);
   expect(boundaries(r.lines)).toEqual(["start", "start", "start"]);
+  expect(String(r.lines.findLast((l) => l.dir === "meta")?.note)).toContain("the car did not answer (UNABLE TO CONNECT)");
 }, SLOW);
 
 it("car not answering after a first good init: the existing recovery path applies", async () => {
