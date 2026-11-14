@@ -258,6 +258,13 @@ describe.each(BACKENDS)("E2E over $name", ({ artifact, make }) => {
 });
 
 describe("outbox failure modes", () => {
+  it("O0 no beta backend configured: status says the beta is unavailable, configured says available", async () => {
+    const files = new MemoryBetaFiles();
+    const off = createBetaOutbox({ files, backend: new FakeBetaBackend(files), newId: idSource(), nowS: () => T0, month: () => "2026-10", appVersion: "1.0.0", configured: false });
+    expect(await off.status()).toMatchObject({ available: false });
+    expect(await setup().outbox.status()).toMatchObject({ available: true });
+  });
+
   it("O1 off-by-default: no decision, or sharing off, queues nothing and calls nothing", async () => {
     const { outbox, backend, files } = setup();
     expect(await outbox.status()).toMatchObject({ needsConsent: true, sharing: false, queued: 0 });
@@ -1065,7 +1072,7 @@ describe("Stage C1 repair round 1 (R1-R5, docs/task-runs/T2.9.md)", () => {
       await outbox.drain();
     }
     expect(backend.log).toEqual([`part:${queued.fileId}:0`, `register:${auth.installId}:beta-1`]);
-    expect(await outbox.status()).toEqual({ needsConsent: true, sharing: false, queued: 0, failed: 0, deletePending: false, line: SERVER_DELETED });
+    expect(await outbox.status()).toEqual({ available: true, needsConsent: true, sharing: false, queued: 0, failed: 0, deletePending: false, line: SERVER_DELETED });
     expect(stored(files)).toMatchObject({ consent: null, auth: null, registered: false, outbox: [], deleting: [] });
     expect(files.parts.size).toBe(0);
     expect(backend.bucket.keys()).toEqual([`tombstones/${auth.installId}.json`]);

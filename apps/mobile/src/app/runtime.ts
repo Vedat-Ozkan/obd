@@ -146,9 +146,11 @@ const dongleStore: TextStore = {
 };
 const dongleMemory = createDongleMemory(dongleStore);
 
+const betaUrl = String(process.env.EXPO_PUBLIC_BETA_URL ?? "");
 const betaOutbox = createBetaOutbox({
   files: betaPhoneFiles,
-  backend: createBetaClient(String(process.env.EXPO_PUBLIC_BETA_URL ?? ""), { fetch, putFile }),
+  backend: createBetaClient(betaUrl, { fetch, putFile }),
+  configured: betaUrl !== "",
   newId: () => uuid.v4(),
   nowS: () => Date.now() / 1000,
   month: () => localDate().slice(0, 7),

@@ -5,7 +5,7 @@ import { View } from "react-native";
 import { Icon, TouchableRipple } from "react-native-paper";
 import { codesView, historyPoints, moduleRows, sectionDetail, type RatingView } from "../app/reportView.js";
 import { CellRangeStrip, cellRangeSummary, ScanHistory } from "../ui/charts.js";
-import { Button, Card, Chip, Hero, ListRow, SectionLabel, styles, Tag, Text } from "../ui/kit.js";
+import { Card, Chip, Hero, ListRow, SectionLabel, styles, Tag, Text } from "../ui/kit.js";
 import { useTokens } from "../ui/theme.js";
 
 type Section = "soc" | "cells" | "capacity" | "twelveVolt";
@@ -19,8 +19,8 @@ function RatingCard({ rating }: { rating: RatingView }) {
   </Card>;
 }
 
-function SectionScreen({ report, section, history, canCheck, busy, openCharge }: {
-  report: BatteryDiagnosisReport; section: Section; history: readonly BatteryDiagnosisReport[]; canCheck: boolean; busy: boolean; openCharge: () => void;
+function SectionScreen({ report, section, history }: {
+  report: BatteryDiagnosisReport; section: Section; history: readonly BatteryDiagnosisReport[];
 }) {
   const tokens = useTokens();
   const detail = sectionDetail(report, section);
@@ -51,7 +51,6 @@ function SectionScreen({ report, section, history, canCheck, busy, openCharge }:
       <SectionLabel>Source</SectionLabel>
       <Text style={{ color: tokens.muted }}>{detail.source}</Text>
     </View>
-    {section === "capacity" ? <Button title="Log a charge" disabled={busy || !canCheck} onPress={openCharge} /> : null}
   </>;
 }
 

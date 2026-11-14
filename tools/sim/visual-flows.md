@@ -46,7 +46,7 @@ Start states (Maestro only for these; run from the repo root, after fresh app an
 |---|---|---|
 | App home ("Add a vehicle" visible, consent screen passed) | `maestro test --test-output-dir $OUT/maestro-launch tools/sim/flows/launch.yaml` | Garage |
 | Connected simulated car, saved parked report open | `maestro test --test-output-dir $OUT/maestro-report tools/sim/flows/start-report.yaml` | "Battery report" |
-| Saved parked report with "Add a short drive" visible | `maestro test --test-output-dir $OUT/maestro-t218 tools/sim/flows/start-t218.yaml` | "Battery report", "Add a short drive" |
+| Saved parked report, check screen with Developer tools open and "Short drive" visible | `maestro test --test-output-dir $OUT/maestro-t218 tools/sim/flows/start-t218.yaml` | "Short drive" button in Developer tools |
 
 Maestro prints COMPLETED on success. If it fails, retry once; then record the flow as not reached with the log line.
 
@@ -118,9 +118,9 @@ Combos: P4. Start state "App home" with no seed.
 
 ## Flow 4: T2.18 short drive
 
-Drive once, at 1.0 light portrait, from the start state "Saved parked report with Add a short drive visible".
-1. Screenshot the report with "Add a short drive" visible.
-2. Tap "Add a short drive"; screenshot the drive screen with its two "Start short drive" buttons.
+Drive once, at 1.0 light portrait, from the start state "Saved parked report, check screen with Developer tools open and Short drive visible".
+1. Screenshot Developer tools with "Log a charge" and "Short drive" visible.
+2. Tap "Short drive"; screenshot the drive screen with its two "Start short drive" buttons.
 3. Tap "Start short drive (10 min)". The simulated drive runs in real time: poll the UI dump every 60 s, screenshot at the start, at about 5 min and at completion (up to 15 min). The drive screen text says it stops and saves by itself.
 4. Screenshot the result and open the drive report from "Report history" (a row ending "min drive"); screenshot it top to bottom.
 5. Reopen the parked battery report from Report history and screenshot it.

@@ -21,7 +21,7 @@ function checkedOn(scannedAt: string): string {
 
 function CarScreen({ entry, vehicle, reports, busy, change, openReport, openCheck, openHistory, onRemoved }: {
   entry: GarageVehicle; vehicle: CatalogVehicle; reports: readonly BatteryDiagnosisReport[]; busy: boolean; change: Change;
-  openReport: (report: BatteryDiagnosisReport) => void; openCheck: (intent: "check" | "charge" | "drive") => void; openHistory: () => void; onRemoved: () => void;
+  openReport: (report: BatteryDiagnosisReport) => void; openCheck: (intent: "check") => void; openHistory: () => void; onRemoved: () => void;
 }) {
   const tokens = useTokens();
   const latest = reports.at(0);
@@ -56,7 +56,6 @@ function CarScreen({ entry, vehicle, reports, busy, change, openReport, openChec
       : <Hero label="State of charge" empty="No check yet" accessibilityLabel="State of charge: no check yet" />}
     {usable ? null : <Text style={{ color: tokens.muted }}>{vehicleAvailability(vehicle)}</Text>}
     <Button title="Run check" disabled={busy || !usable} onPress={() => { openCheck("check"); }} />
-    <Button title="Log a charge" tonal disabled={busy || !usable} onPress={() => { openCheck("charge"); }} />
     <View>
       <ListRow icon="history" title="Report history" right={String(reports.length)} disabled={busy} onPress={openHistory} />
       <ListRow icon="account-outline" title="Ownership" right={ownershipLabel(entry.ownership)} disabled={busy} onPress={chooseOwnership} />

@@ -27,7 +27,7 @@ function SettingsScreen({ beta, openBeta, openSaveFolder, openTheme, openPrivacy
   return <>
     <View>
       <SectionLabel>Data</SectionLabel>
-      <ListRow icon="cloud-upload-outline" title="Beta data sharing" right={beta.sharing ? "On" : "Off"} onPress={openBeta} />
+      {beta.available ? <ListRow icon="cloud-upload-outline" title="Beta data sharing" right={beta.sharing ? "On" : "Off"} onPress={openBeta} /> : null}
       <ListRow icon="folder-outline" title="Save folder" right={folder} onPress={openSaveFolder} />
     </View>
     <View>

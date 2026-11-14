@@ -16,7 +16,7 @@ import type { GarageState, Interest, Ownership } from "./src/garage/flow.js";
 import { back, type Route } from "./src/app/navigation.js";
 import { findReport } from "./src/app/reportView.js";
 import { driveReportsDocumentStore } from "./src/batteryReportsDocumentStore.js";
-import { createDriveReportHistory, preDriveReport } from "./src/driveReports.js";
+import { createDriveReportHistory } from "./src/driveReports.js";
 import { batteryHistory, betaOutbox, garageFlow, loadThemePreference } from "./src/app/runtime.js";
 import { Button, Screen, styles, Text, useTitleFocus } from "./src/ui/kit.js";
 import { FONTS, paperTheme, setThemePreference, useScheme, useTokens } from "./src/ui/theme.js";
@@ -124,7 +124,7 @@ export function App() {
     setStack((current) => [...current.filter((item) => item.name !== "check"), { name: "report", entryId: persisted.garageVehicleId, scannedAt: persisted.scannedAt, recording: persisted.recording }]);
   };
 
-  const consentVisible = beta !== undefined && (route.name === "garage" || route.name === "beta") && (beta.needsConsent || consentOpen);
+  const consentVisible = beta?.available === true && (route.name === "garage" || route.name === "beta") && (beta.needsConsent || consentOpen);
   useEffect(() => { if (consentVisible) setConsentShare(false); }, [consentVisible]);
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function App() {
   const selectedEntry = "entryId" in route ? state.vehicles.find((entry) => entry.id === route.entryId) : undefined;
   const selectedVehicle = SUPPORTED_VEHICLES.find((item) => item.id === selectedEntry?.catalogId);
   if (route.name === "check" && selectedEntry && selectedVehicle && canUseEquinoxConsole(selectedVehicle)) return <View style={{ flex: 1, backgroundColor: tokens.bg }}>
-    <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} intent={route.intent} onBack={pop} onSaved={openSaved} onLockChange={setLocked} />
+    <EquinoxConsole vehicle={selectedVehicle} entry={selectedEntry} intent={route.intent} onBack={pop} onSaved={openSaved} openIntent={(intent) => { setStack((current) => [...current.slice(0, -1), { name: "check", entryId: selectedEntry.id, intent }]); }} onLockChange={setLocked} />
   </View>;
 
   const page = (heading: string, body: ReactNode, action?: ReactNode) => <Screen scroll blocks>
@@ -168,11 +168,10 @@ export function App() {
   if (routeReport && selectedEntry && selectedVehicle) {
     const key = { entryId: selectedEntry.id, scannedAt: routeReport.scannedAt, recording: routeReport.recording };
     const canCheck = canUseEquinoxConsole(selectedVehicle);
-    const latestToday = preDriveReport(historyReports, new Date());
-    const openCheck = (intent: "check" | "charge" | "drive") => { push({ name: "check", entryId: selectedEntry.id, intent }); };
-    if (route.name === "report") return page("Battery report", <ReportSummary report={routeReport} canCheck={canCheck} canDrive={latestToday?.scannedAt === routeReport.scannedAt && latestToday.recording === routeReport.recording} busy={busy} openSection={(section) => { push({ name: "section", ...key, section }); }}
-      openCodes={() => { push({ name: "codes", ...key }); }} openCheck={() => { openCheck("check"); }} openDrive={() => { openCheck("drive"); }} openAiSummary={() => { push({ name: "aiSummary", ...key }); }} />);
-    if (route.name === "section") return page(SECTION_TITLES[route.section], <SectionScreen report={routeReport} section={route.section} history={historyReports} canCheck={canCheck} busy={busy} openCharge={() => { openCheck("charge"); }} />);
+    const openCheck = (intent: "check") => { push({ name: "check", entryId: selectedEntry.id, intent }); };
+    if (route.name === "report") return page("Battery report", <ReportSummary report={routeReport} canCheck={canCheck} busy={busy} openSection={(section) => { push({ name: "section", ...key, section }); }}
+      openCodes={() => { push({ name: "codes", ...key }); }} openCheck={() => { openCheck("check"); }} openAiSummary={() => { push({ name: "aiSummary", ...key }); }} />);
+    if (route.name === "section") return page(SECTION_TITLES[route.section], <SectionScreen report={routeReport} section={route.section} history={historyReports} />);
     if (route.name === "codes") return page("Diagnostic codes", <CodesScreen codes={routeReport.codes} busy={busy} openModule={(ecu) => { push({ name: "module", ...key, ecu }); }} />);
     if (route.name === "module") return page(`Module ${route.ecu}`, <ModuleScreen codes={routeReport.codes} ecu={route.ecu} />);
     if (route.name === "aiSummary" && __DEV__) return page("AI summary (development)", <DevelopmentSummary key={`${routeReport.scannedAt}-${routeReport.recording}`} report={routeReport} />);

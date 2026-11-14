@@ -37,6 +37,7 @@ export class BackendError extends Error {
 }
 
 export interface BetaStatus {
+  available: boolean;
   needsConsent: boolean;
   sharing: boolean;
   betaId?: string;
@@ -136,8 +137,10 @@ export function createBetaOutbox(deps: {
   month(): string;
   appVersion: string;
   partBytes?: number;
+  configured?: boolean;
 }) {
   const { files, backend } = deps;
+  const available = deps.configured ?? true;
   const partBytes = deps.partBytes ?? PART_BYTES;
   let loaded: Promise<State | undefined> | undefined;
   const load = () => (loaded ??= files.readState().then((raw) => (raw === undefined ? empty() : parseState(raw)), () => undefined));
@@ -339,9 +342,10 @@ export function createBetaOutbox(deps: {
   return {
     async status(): Promise<BetaStatus> {
       const state = await load();
-      if (!state) return { needsConsent: false, sharing: false, queued: 0, failed: 0, deletePending: false, line: `Beta data sharing is off: ${UNREADABLE}; nothing uploads.` };
+      if (!state) return { available, needsConsent: false, sharing: false, queued: 0, failed: 0, deletePending: false, line: `Beta data sharing is off: ${UNREADABLE}; nothing uploads.` };
       const betaId = state.testerKey?.slice(0, 8) ?? deletingIds(state).at(0);
       return {
+        available,
         needsConsent: state.consent === null || state.consent.version !== CONSENT_VERSION,
         sharing: sharing(state),
         ...(betaId === undefined ? {} : { betaId }),
