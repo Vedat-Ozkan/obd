@@ -32,7 +32,7 @@ packages/obd-core/      pure TS: transports, ELM327 session, PID/DTC decoding, v
 packages/obd-battery/   pure TS: charge sessions, capacity, imbalance, 12 V, reports, templates, on-device models
 packages/obd-assist/    pure TS: opt-in LLM summary and assistant, faithfulness check
 packages/obd-diagnose/  withdrawn gas-car diagnosis (ADR-012), superseded by obd-assist
-packages/obd-eval/      Node: eval harness over labeled fixtures, scoring, reports
+packages/obd-eval/      planned eval harness (BM5); empty today
 apps/mobile/            Expo (Android): BLE transport, console, relay mode, charge logger, report + assistant screens
 tools/relay/            Node in WSL2: phone relay and car MCP server with a read-only allowlist
 tools/hil-bridge/       Python (laptop near the car): fallback bridge
@@ -56,7 +56,7 @@ pnpm test           # vitest across packages
 pnpm -F obd-core test
 pnpm replay <recording.jsonl>      # run a recording through obd-core and print decoded output
 pnpm hil:smoke      # send 0100 through the phone relay and save a recording (needs phone + car)
-pnpm eval           # run battery models and the LLM suite over labeled fixtures and print scores
+pnpm eval           # planned (BM5), not implemented: battery models and the LLM suite over labeled fixtures
 cd tools/hil-bridge && uv run hil-bridge   # laptop fallback bridge; URL in docs/ARCHITECTURE.md
 ```
 
@@ -88,7 +88,7 @@ Protocol facts (init, responses, BLE, EV setup) live only in `docs/ELM327.md`; r
 
 ## Workflow
 
-Architect writes a spec, implementer builds to it, reviewer gates it. `/feature <task-id>` runs the loop. A task is done when: `pnpm check` is green, the reviewer approved, every verification item in the spec is PASS or explicitly hardware-only, and the report states what was not run. Details in `docs/WORKFLOW.md`.
+Architect writes a spec, implementer builds to it, reviewer gates it. `/feature <task-id>` runs the loop. A task is done when: `pnpm check` is green, the reviewer approved, every verification item in the spec is PASS or explicitly hardware-only, and the report states what was not run. Hardware before desk (ADR-024): no new desk task starts while more than three merged tasks wait on a phone or car check. Details in `docs/WORKFLOW.md`.
 
 ## Style
 

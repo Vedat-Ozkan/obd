@@ -24,11 +24,12 @@ Short architecture decision records. Newest last. A decision can be reversed; wh
 | 016 Measurement-first battery ML; LLM only explains | Current |
 | 017 Committed recordings mask VIN serial | Current; raw-original commits up to `c88dffa` accepted by owner |
 | 018 Battery diagnosis stays in the garage; PDF waits for beta | Current, as amended by 022 (labeled BMS capacity figure) and 023 (red-flag screen) |
-| 019 Automatic beta upload via Cloudflare R2 + Worker | Current (accepted 2026-09-25) |
-| 020 Hosted DeepSeek summary funded by optional rewarded ads | Current (accepted 2026-09-26) |
+| 019 Automatic beta upload via Cloudflare R2 + Worker | **Suspended by ADR-024** (built, not deployed) |
+| 020 Hosted DeepSeek summary funded by optional rewarded ads | Summary path current, development only; **rewarded ads suspended by ADR-024** |
 | 021 Android first, iOS-ready | Current (accepted 2026-09-28) |
-| 022 Three check modes; test-drive check; charge log paused | Current, as amended by 023 (the drive's headline is cell groups under load, not pack resistance) |
-| 023 Buyer check: a red-flag screen from a parked scan, an optional short drive and a rescan | Current (accepted 2026-10-01) |
+| 022 Three check modes; test-drive check; charge log paused | Current, as amended by 023 (the drive's headline is cell groups under load, not pack resistance); 024: the existing full-session logger collects BM1/BM2 data on the owner's car, the redesign is not a prerequisite |
+| 023 Buyer check: a red-flag screen from a parked scan, an optional short drive and a rescan | Current (accepted 2026-10-01), as amended by 024 (the drive is reached from Developer tools until confirmed on the car) |
+| 024 Hardware before desk; the parked check is the product; beta upload and ads suspended | Current (accepted 2026-11-14) |
 
 ## ADR-001: Android only until Phase 3 (2026-09-16)
 
@@ -278,3 +279,25 @@ One store listing ("used-EV battery health check") is the default. A separate Ul
 - `docs/PLAN.md`: the Phase 2 milestone, the T2.13 row, new rows T2.14–T2.18, and the Phase 3 `19 02` bullet (enumerating further modules stays in Phase 3).
 
 **Unchanged.** Read-only toward the vehicle (hard rule 5, ADR-008): service `19` is a read, and no session change is made for it. Hard rule 1: no `19` decode before a capture from the car, no temperature in °C before T2.17. Signal tiers (ADR-014), measurement-first ML (ADR-016), VIN masking (ADR-017). Measured capacity stays NOT MEASURED without a charge log; the charge log stays paused and owner-only (ADR-022). The rating chips and the AI summary are not changed by this ADR.
+
+## ADR-024: Hardware before desk; the parked check is the product; beta upload and ads suspended (2026-11-14, Accepted)
+
+**Decision.** Owner, 2026-11-14, after a whole-project review.
+
+1. **Hardware before desk.** No new desk task starts while more than three merged tasks are waiting for a phone or car check (`docs/OWNER-QUEUE.md`). Until the queue is below that, the only desk work is a fix that unblocks a queued check, or work that needs no car at all (item 5).
+2. **The parked check is the product.** The main path is garage, parked scan, report with the red-flag screen, and codes. The charge log and the short drive stay in the app behind Developer tools until each has passed on the car (spec `X-2026-11-14-parked-check-first`). The relay and the AI summary stay development-only, as they already are.
+3. **Beta upload and rewarded ads are suspended.** No further work on ADR-019's backend or ADR-020's ad path, and no deployment, until the parked check is verified on the phone and a tester is lined up. The app hides the beta prompt while no backend is configured.
+4. **Charge data comes from the existing logger.** The full-session T2.4 logger collects BM1/BM2 data on the owner's car; ADR-022's two-ends redesign is a later usability question, not a prerequisite. First settle on the car whether it answers diagnostics while switched off and charging (spec `X-2026-11-14-car-not-answering`).
+5. **One measured LLM result.** The approved paid comparison (T2.11b Stage 2, inside the US$5 cap of ADR-020) is run once and its results recorded with n. Until then the project claims only the structural check for the summary and assistant, not faithfulness.
+6. **One tool.** The second, Codex-run copy of the loop (`CODEX.md`, `.codex/`) and the two-tool handoff rules are retired. `codex exec` stays as an option for mechanical fixes.
+
+**Why.** Measured on 2026-11-14:
+- The last car session was 2026-09-30. 108 of 232 commits came after it, all at the desk; `docs/OWNER-QUEUE.md` held 32 open owner items and main was 48 commits ahead of origin.
+- No charge log has succeeded. In the three 2026-09-28 attempts the car never answered `0100`; the adapter's `UNABLE TO CONNECT` arrived 5.35–5.57 s after the request and the 5 s session timeout hid it (63 attempts in the local recordings).
+- The defects that got past review were found on the phone (the Metro resolver failure after T0.8b's approval, the charge-log starts). Review caught logic defects; it cannot see the device.
+- None of the showcase claims has a measured result: no dataset or model (`docs/ML.md`), no `pnpm eval`, no recorded live model output, and the one prompt-injection case replays a hand-written reply.
+- 35 % of commits touched only documents and records; documents added (31k lines) exceed source added (24k).
+
+**Amends.** ADR-019 and ADR-020 (suspended as above). ADR-022 (item 4). ADR-023 and T2.18 (the drive is started from Developer tools; the drive rule stays "unconfirmed" until one confirming drive, which no longer gates anything else). `docs/PLAN.md` dates: Phase 2 and BM dates are void until the first real charge log exists. `docs/WORKFLOW.md` (items 1 and 6, and the size limits there).
+
+**Unchanged.** Hard rules 1–11. Read-only toward the vehicle. Simulated runs (`tools/sim/`) still close nothing; they are the desk check before a phone check, not a replacement for it.

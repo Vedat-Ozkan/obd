@@ -2,7 +2,7 @@
 
 > Working title. An independent battery health check for used EVs, verified first on GM Ultium (2024 Chevrolet Equinox EV): an Android app that talks to a $30 Bluetooth OBD dongle, measures what the battery reports, and explains it without inventing numbers. Built full-time as an applied-AI portfolio project with an architect / implementer / reviewer agent workflow, where every claim is checked against recordings from a real car.
 
-**Status (2026-09-29):** Phase 2, battery health. The app runs on the owner's phone against the Equinox: garage, parked battery scan with a saved report, codes report, charge logger, and a relay that lets agents on the desk talk to the car. Current work is the **test-drive check** and the **battery assistant** (details below). Plan and dates: [docs/PLAN.md](docs/PLAN.md). Why things changed: [docs/DECISIONS.md](docs/DECISIONS.md).
+**Status (2026-11-14):** the parked battery check is the product and is what gets verified next; desk work is frozen until the queued phone and car checks are done (ADR-024, [docs/OWNER-QUEUE.md](docs/OWNER-QUEUE.md)). The last car session was 2026-09-30. Everything merged since then is tested at the desk only, against recordings and a simulated car. No charge log has succeeded yet, so there is no capacity estimate and no battery model, and the AI summary and assistant have no measured evaluation yet. Plan: [docs/PLAN.md](docs/PLAN.md). Why things changed: [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## What we are building
 
@@ -12,9 +12,9 @@ It offers three checks, each measuring only what its duration can support (ADR-0
 
 | Check | Takes | Measures | Who | State |
 |---|---|---|---|---|
-| **Parked scan** | ~2 min | State of charge, cell-group spread, 12 V, trouble codes, "recently cleared?" heuristic; GM's own capacity figure once verified, labeled as the car's own number | Owners and buyers | Built and run on the Equinox |
-| **Test drive** | 15–20 min of normal driving | Pack resistance from acceleration and regen steps, and cell groups that sag more than the rest under load: a view of power fade and weak cells a parked scan cannot see | Owners and buyers | Capture built (T2.12); first real drive pending; the in-app result is T2.13 |
-| **Overnight charge** | One charge | Independent capacity with an error band | Owners | Logger built; **paused** while the collection method is redesigned |
+| **Parked scan** | ~2 min | State of charge, cell-group spread, 12 V, trouble codes, "recently cleared?" heuristic; GM's own capacity figure once verified, labeled as the car's own number | Owners and buyers | Run on the Equinox in September; later changes await a phone check |
+| **Test drive** | 15–20 min of normal driving | Pack resistance from acceleration and regen steps, and cell groups that sag more than the rest under load: a view of power fade and weak cells a parked scan cannot see | Owners and buyers | Two drives recorded; absolute resistance was a NO-GO, so the check compares cell groups under load. Rule unconfirmed; in Developer tools until one confirming drive |
+| **Overnight charge** | One charge | Independent capacity with an error band | Owners | Logger built; no successful log yet. In Developer tools until one passes on the car |
 
 Every report shows observed data with its source and signal tier, marks what was not measured, and never certifies health it cannot measure. Capacity reads **NOT MEASURED** until a charge log supports it.
 
@@ -22,13 +22,13 @@ An optional **AI summary** and a **battery assistant** explain the results in pl
 
 ## Working on now
 
-- **Test-drive capture (T2.12).** One tap while parked, then drive; it stops by itself and needs no screen interaction. The first drive answers whether current and voltage can be read fast enough on the road to measure resistance, and gives a GO / NO-GO for the in-app check (T2.13, which will also get the AI summary).
-- **Battery assistant (T2.11).** Chat about your own checks through tools that fetch data, with every number cited. Chats are saved on the phone and can be picked up a week later. A paid eval compares the pinned DeepSeek V4.1 Flash with three stronger models (DeepSeek V4 Pro, Xiaomi MiMo V2.6 Pro, Moonshot Kimi K3) on number-check pass rate, citations, prompt-injection cases, cost and latency, inside one US$1 budget.
-- **Owner phone and car checks** for the recently landed work: auto-reconnecting dongle and picker, the relay smoke recording, the AI summary's paid phone gate.
+- **Phone and car checks** for everything merged at the desk, in the order at the top of [docs/OWNER-QUEUE.md](docs/OWNER-QUEUE.md): a build, one parked session, one overnight charge, one drive.
+- **Why the charge logs failed.** In the three September attempts the car never answered the first request, and a 5 s session timeout hid the dongle's own `UNABLE TO CONNECT` (it arrives after about 5.5 s). The fix is `docs/specs/X-2026-11-14-car-not-answering.md`; whether the car answers while switched off and charging is the first thing the next session checks.
+- **One measured result for the assistant:** the paid four-model comparison on the 12 frozen questions.
 
 ## Next
 
-The test-drive check in the app (T2.13); beta testers from Ultium owner forums, promoting other Ultium models from `community` to `verified` with their recordings (T2.8, T2.9); a redesigned overnight charge estimate; then the battery ML track (BM1–BM9, [docs/ML.md](docs/ML.md)): measurement-first capacity and resistance with calibrated uncertainty, per-cell-group fault detection evaluated on injected faults, and LLM evals.
+After a real charge log exists: the battery ML track (BM1–BM9, [docs/ML.md](docs/ML.md)), starting with the dataset pipeline and an independent capacity estimate with an error budget. Beta testing with other Ultium owners and the rewarded-ad funding path are suspended until the parked check is verified (ADR-024).
 
 ## How it fits together
 
@@ -85,7 +85,7 @@ Setup details and WSL2 pitfalls: [docs/FEASIBILITY.md](docs/FEASIBILITY.md#devel
 
 ## How this repo is built
 
-The build process is part of the portfolio. Every non-trivial task goes through three agents (`.claude/agents/`, and Codex equivalents in `.codex/`):
+The build process is part of the portfolio. Every non-trivial task goes through three agents (`.claude/agents/`):
 
 - **architect** writes a spec with sources for every OBD constant and a verification plan, and never writes code;
 - **implementer** builds to the spec with end-to-end tests over real recordings and reports PASS / FAIL / NOT RUN per item;

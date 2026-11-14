@@ -6,7 +6,7 @@ A spec is the contract between the architect, the implementer, and the reviewer.
 
 For BM milestones and LLM features, also read [../ML.md](../ML.md) and [../EVAL.md](../EVAL.md). Split multi-session milestones into bounded specs. Add an experiment section specifying data/model revisions and licensing, source-grouped splits and leakage audit, target review, baselines and controlled variables, metrics and artifact locations, exact dependencies, compute target and spending cap, and reproducible commands. Record unresolved prerequisites before execution. Keep ordinary fixture checks separate from required training and eval runs; a missing run is NOT RUN, not a vehicle hardware-only exception. Success may be a reproducible negative result rather than improved model quality.
 
-Size target: about 20KB for an M task, 35KB for L; beyond that, split the task or move content out rather than growing the file. State verification checks shared by all stages once, above any per-stage list, instead of repeating them. Cite ADRs and other docs for their reasoning (e.g. "per ADR-014") rather than re-deriving it in the spec.
+Size limit: about 150 lines (`docs/WORKFLOW.md`, Size limits). Beyond that, split the task. Interfaces shows only public signatures that change, not a draft of the code. State each verification check once. Cite ADRs and other docs for their reasoning (e.g. "per ADR-014") rather than re-deriving it in the spec.
 
 ## Template
 

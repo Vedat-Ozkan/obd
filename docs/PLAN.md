@@ -4,6 +4,16 @@ Revised through ADR-019 (2026-09-25): the product is a used-EV battery health ch
 
 Each task has a **verify** line. That line is the definition of done; the reviewer checks it, not the description. Tasks are sized for one implementer session (S: half a day, M: a day, L: two days). Anything larger gets split by the architect.
 
+## Current focus (2026-11-14, ADR-024)
+
+Desk work is frozen until the phone and car checks in [OWNER-QUEUE.md](OWNER-QUEUE.md) are worked down; the order is at the top of that file. All dates below are void until the first real charge log exists.
+
+- **Main path:** garage, parked scan, report with the red-flag screen, codes. This is what gets verified on the phone first.
+- **Behind Developer tools until confirmed on the car:** the charge log (T2.4) and the short drive (T2.13, T2.18). The confirming drive (R1) gates nothing else.
+- **Suspended:** beta upload and intake (T2.9, and the beta gates of T2.8), the rewarded-ad path of T2.10, T2.11c. No work and no deployment until the parked check is verified and a tester is lined up.
+- **No car needed, allowed now:** the paid assistant comparison (T2.11b Stage 2) and BM5 work that uses its recorded replies.
+- **Charge data:** collected with the existing full-session logger on the owner's car; the ADR-022 redesign is not a prerequisite for BM1/BM2.
+
 ## Phase 0: Core, BLE, and the codes report (Sep 16 – Oct 16; provisional)
 
 Goal: the app connects to the Equinox EV, reads codes and readiness where the car answers, and produces the codes / "recently cleared" section that battery reports include. The EV spike decides how Phase 2 starts.

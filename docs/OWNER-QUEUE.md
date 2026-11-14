@@ -4,6 +4,17 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 
 `rec/` = `docs/task-runs/`.
 
+## Order of work (ADR-024, 2026-11-14)
+
+Desk work is frozen until this queue is worked down. Do these in order; each step is one trip.
+
+1. **Build** (B1), from main after the two `X-2026-11-14` fixes merge.
+2. **One parked session** (P1–P9, P12–P14). Start with P14: it decides how the charge log has to be run.
+3. **One overnight charge** (C1, C2), run in the state P14 showed works.
+4. **One 10-minute drive** (R1), whenever convenient. It gates nothing else.
+
+Before each trip, run the same flow on the emulator with the simulated car (`tools/sim/`), so the trip is spent on what only the phone and car can show.
+
 ## Desk decisions (no hardware)
 
 | # | Item | Source | Unblocks |
@@ -12,11 +23,9 @@ Every open item that only the owner can do: car, phone, builds, accounts, pushes
 | D2 | T2.3: keep or drop the "agent proposal precision against the owner's verdicts" requirement; discovery ran as scripted laptop sessions (T2.3a/T2.3b), not agent-driven | `docs/PLAN.md` T2.3 row | T2.3 |
 | D4 | Tick PLAN T0.2: the worksheet is now filled from the committed redacted recordings, Gate A GO | `docs/spike-2026-09.md` §6 | T0.2 |
 | D5 | T2.7: may it tick on software evidence plus the manual run; confirm no scan-time ownership tag | `rec/T2.7.md:8` | T2.7 |
-| D6 | Choose the privacy-note contact email; review consent and privacy wording | `rec/T2.9.md:44, 65` | T2.9 Stage E |
-| D7 | Go/no-go on the paid T2.11b Stage 2 four-arm eval (stop rules US$0.05/0.15/0.05/0.25); its precondition, T2.10's paid phone check, passed 2026-09-29 | `rec/T2.11.md:13, 22` | T2.11, BM5 |
+| D7 | T2.11b Stage 2 paid comparison: **go** (owner, 2026-11-14, ADR-024). Attempted 2026-11-14 and stopped before any spend. Three things to do first: (1) arm A's pin no longer resolves: OpenRouter lists no DeepSeek-hosted endpoint for `deepseek/deepseek-v4.1-flash` (canonical `-20260910`); the DeepSeek-hosted snapshot is now `deepseek/deepseek-v4.1-flash-1017`. This is also the in-app summary's model, so the summary route is expected to fail until re-pinned. Choose the new pin. (2) Arm D's endpoint tag is now `moonshotai`; the pin says `moonshotai/mxfp4`. (3) Set `SUMMARY_COMPARE_ENABLED=1` in `tools/summary-backend/.dev.vars`; without it arms B–D answer `unavailable`. Then rerun the runbook in `tools/summary-backend/README.md` | `rec/T2.11.md:13, 22`; `tools/summary-backend/openrouter.ts` `pins` | T2.11, BM5, T2.10 summary |
 | D8 | Answer the four T2.11c outline questions (car removal with chats, session ids, history size, model on phone) | `rec/T2.11.md:13` | T2.11c |
 | D9 | Thresholds task (cell balance, 12 V) and the paid summary comparison: start or keep paused | `rec/X-2026-09-29-explanatory-summary.md:13`, `rec/X-2026-09-29-summary-wording-polish.md:11` | summary "Not rated" areas |
-| D10 | T2.10 rewarded-ad path (ledger, signed callback, T2.10b/c2/d2, US$5-capped live eval): pursue or re-scope | `rec/T2.10.md:17` | T2.10 |
 | D11 | T2.20 Stage B choices: car removal is blocked while charge summaries exist (matches reports), or delete them with the car; summary date = save time; wording fixed to "1 session" (1b0e3ff) | `rec/T2.20.md` | T2.20 |
 | D13 | Confirm T2.8b's provisional rules: an unreadable VIN blocks the check ("could not confirm"); a mismatched scan is neither kept nor queued for beta; no override; checked on every battery scan; charge logs not covered | `docs/specs/T2.8b-garage-gates.md` Open questions | T2.8 |
 | D14 | T2.13 Stage C defaults: the "not yet confirmed" label wording; pre-drive report = latest parked report of the same car earlier that day; rescan also on Disconnect; one drive on the Stage C build serves as both Stage B and the rescan check | `docs/specs/T2.13-drive-check.md` Risks Q7 | T2.13 |
@@ -42,10 +51,10 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 | P7 | T2.16 Stage B: Developer tools module DTC capture (`19 02 FF`, five Mode 09 responders), redact | `rec/T2.16.md:17-18` | T2.16 Stages B, C |
 | P8 | Unplug-reminder screenshot (optionally a rested 12 V reading) | `rec/T2.5.md:7, 9` | T2.5 |
 | P9 | T2.8a picker UI and native persistence check; T2.8b: Run check on the Equinox succeeds and its scan holds a `0902` reply, optionally a bench car with the Equinox entry selected shows the mismatch message | `rec/T2.8.md:7, 9` | T2.8 (partial) |
-| P10 | T2.9 Stage D phone steps 1–6 against `wrangler dev --local` | `docs/specs/T2.9-beta-data-upload.md:580-592`, `rec/T2.9.md:229` | T2.9 |
 | P11 | Only if the dash SOC is far from 70 %, and with the laptop: `uv run tools/spike/go.py` capture with a dash note | `rec/T2.2.md:8` | T2.2 |
 | P12 | T2.19 Stage B: TalkBack walkthrough of every screen plus a real check with TalkBack on; Accessibility Scanner at font 1.0 and 2.0, light and dark; rotate each screen (after T2.19 merges) | `docs/specs/T2.19-mobile-accessibility.md` Stage B | T2.19 |
 | P13 | T2.20 Stage B phone run: Trends section and saved charge summaries (after T2.20 B merges) | `docs/specs/T2.20-battery-trends.md` Stage B | T2.20 B |
+| P14 | Car-not-answering check: with the car switched off and plugged in, start a charge log from Developer tools and note the message and how long it takes to stop; switch the car on and start again; note which state answers | `docs/specs/X-2026-11-14-car-not-answering.md` Verification | C2, T2.4 |
 
 ## One 10-minute drive
 
@@ -64,8 +73,16 @@ One fresh diagnosis scan covers P4, P5, P6 and the T0.9b codes leg.
 
 | # | Item | Source | Unblocks |
 |---|---|---|---|
-| A1 | T2.9 owner steps 2–8 (Cloudflare, R2 `obd-beta`, lifecycle, `wrangler deploy`, token, logs off, version bump) and the Stage E deployed run | `rec/T2.9.md:65`, `docs/specs/T2.9-beta-data-upload.md:594-600, 680-696` | T2.9, beta |
 | A2 | Review and open the upstream OBDb PR | `rec/T2.2.md:8` | T2.2 |
+
+## Suspended by ADR-024 (no action until the parked check is verified and a tester is lined up)
+
+| # | Item | Source | Unblocks |
+|---|---|---|---|
+| D6 | Choose the privacy-note contact email; review consent and privacy wording | `rec/T2.9.md:44, 65` | T2.9 Stage E |
+| D10 | T2.10 rewarded-ad path (ledger, signed callback, T2.10b/c2/d2, US$5-capped live eval): pursue or re-scope | `rec/T2.10.md:17` | T2.10 |
+| P10 | T2.9 Stage D phone steps 1–6 against `wrangler dev --local` | `docs/specs/T2.9-beta-data-upload.md:580-592`, `rec/T2.9.md:229` | T2.9 |
+| A1 | T2.9 owner steps 2–8 (Cloudflare, R2 `obd-beta`, lifecycle, `wrangler deploy`, token, logs off, version bump) and the Stage E deployed run | `rec/T2.9.md:65`, `docs/specs/T2.9-beta-data-upload.md:594-600, 680-696` | T2.9, beta |
 | A3 | Recruit beta testers; promote a second Ultium model from a real beta recording (after A1, D6) | `docs/specs/T2.9-beta-data-upload.md:692` | T2.8 last gate, Phase 2 milestone |
 
 ## Not startable yet

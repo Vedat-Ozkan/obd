@@ -6,7 +6,8 @@ Claude Code specifics:
 
 - Subagents live in `.claude/agents/`: `architect` (spec, no code), `implementer` (builds to spec in its own worktree), `reviewer` (read-only gate on the branch), `integrator` (merges an approved branch into main and runs the full gate), plus `quick-fix` (small mechanical fixes), `scribe` (task-record and docs bookkeeping), and two context firewalls: `test-runner` (runs checks, returns only failures) and `recording-analyst` (answers questions about `fixtures/recordings/` with line citations, never edits them), plus `visual-tester` (drives the simulated-car app on the emulator through adb and screenshots it; reports findings, edits nothing). Use `/feature <task-id>` to run the loop for a task in `docs/PLAN.md`.
 - Path-scoped rules in `.claude/rules/` load only when matching files are touched: `protocol.md` (ELM327 constants, recordings, hardware) and `ml.md` (BM1–BM9, LLM features). Hooks in `.claude/hooks/` block destructive git, edits to `fixtures/recordings/`, and toolchain/dependency changes (the lead unlocks those with `.claude/ALLOW_TOOLCHAIN` when a spec lists them; delete it after), run `eslint --fix` on edit, and rerun the changed packages' tests on stop (`OBD_SKIP_GATE=1` bypasses). An `AGENT_STOP` file at the repo root halts every tool call.
-- Codex works in this repo too (`CODEX.md`). The shared handoff is `docs/task-runs/<task-id>.md`; `/feature` reads it before doing anything. Protocol in `docs/WORKFLOW.md`, Handoff section.
+- Each task has one record, `docs/task-runs/<task-id>.md`; `/feature` reads it before doing anything. Rules in `docs/WORKFLOW.md`, Task records.
+- Hardware before desk (ADR-024): no new desk task while more than three merged tasks wait on a phone or car check in `docs/OWNER-QUEUE.md`. Specs stay under about 150 lines.
 
 ## Model tiering (the heaviest model anywhere is Opus 5.5 at medium effort)
 

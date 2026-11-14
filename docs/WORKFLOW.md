@@ -10,7 +10,7 @@ Three roles, three subagents in `.claude/agents/`, one orchestrating skill (`/fe
 
 **Reviewer** is read-only. It reruns the checks itself rather than trusting the report, walks the verification plan item by item, and rejects any unsourced constant, any hand-edited recording, any scope creep, any test that mocks the thing under test, and any unit test that restates the code or covers no failure the spec lists. It returns APPROVE or REQUEST_CHANGES with ranked findings. Review is where guessing gets caught. 
 
-**Integrator** (Claude only) merges an approved branch into main, runs the full `pnpm check` gate there, and reverts the merge if the gate fails. Claude also has two cheap helpers: `quick-fix` for small mechanical fixes and `scribe` for task-record bookkeeping. Model and effort per role are set in the agent definitions (`.claude/agents/*.md` frontmatter, `.codex/agents/*.toml`), not here.
+**Integrator** merges an approved branch into main, runs the full `pnpm check` gate there, and reverts the merge if the gate fails. There are two cheap helpers: `quick-fix` for small mechanical fixes and `scribe` for task-record bookkeeping. Model and effort per role are set in the agent definitions (`.claude/agents/*.md` frontmatter), not here.
 
 ## The loop
 
@@ -32,7 +32,7 @@ Fresh implementer per loop is deliberate: an implementer that just argued for it
 
 A task is done when all of these hold:
 
-1. The scoped checks are green in the reviewer's own run, and `pnpm check` is green on main after the merge (in Codex, where there is no merge step, in the reviewer's own run).
+1. The scoped checks are green in the reviewer's own run, and `pnpm check` is green on main after the merge.
 2. Every verification item in the spec is PASS, or is explicitly hardware-only with the command to run and no recording yet.
 3. Every new OBD constant has a cited source in the spec.
 4. The reviewer returned APPROVE.
@@ -49,36 +49,46 @@ CI has no Bluetooth. The phone relay (ADR-013; the laptop bridge for the spike) 
 
 If the relay is unreachable (phone not in the car, app not in relay mode, car off), the implementer says so and the reviewer marks the item hardware-only. Nobody simulates the dongle to make a check pass: simulated runs (`tools/sim/`) may de-risk a check at the desk, but they are labelled simulated and never tick an item or close an OWNER-QUEUE row.
 
-## Handoff between Claude and Codex
+## Hardware before desk (ADR-024)
 
-Two tools run this loop: Claude Code (`/feature`, agents in `.claude/`) and Codex (`$obd-feature`, agents in `.codex/`; see `CODEX.md`). They share the specs, the gates above, and one progress record per task: `docs/task-runs/<task-id>.md`. The record is the handoff; nothing else is.
+The reviewer cannot see the phone or the car, and the defects that got past review were found there. So:
+
+- No new desk task starts while more than three merged tasks are waiting for a phone or car check in `docs/OWNER-QUEUE.md`. `/feature` checks this before the architect runs and stops if the limit is exceeded.
+- The exceptions are a fix that unblocks a queued check, and work that needs no car at all (for example an LLM eval run).
+- Before a phone check, run the flow on the emulator with the simulated car (`tools/sim/`). It closes nothing; it keeps the phone session for what only the phone can show.
+
+## Size limits
+
+Paper is a cost: every later agent reads it.
+
+- A spec is at most about 150 lines. Interfaces shows only the public signatures that change; it is not a draft of the code. Each verification check is stated once. A spec has no decisions log: a decision made after kickoff is recorded in the task record and the spec's governing section is edited in place.
+- A task that does not fit is split.
+- A closed task's record is a few lines (rule 4 below).
+
+## Task records
+
+One record per task, `docs/task-runs/<task-id>.md`, owned by the orchestrator. `/feature` reads it before doing anything.
 
 **One home per kind of fact.** Duplicated state is how records and specs balloon, and divergent copies are how agents act on stale decisions:
 
-- **Decisions** live in the task record (and in an ADR when they change the roadmap) — not as running amendments inside the spec. A decision made after the spec's kickoff goes in the record; if it changes a rule the spec already states, edit the spec's governing section in place to the final rule instead of appending an amendment entry.
-- **Scope, sources, and verification items** live in the spec — not restated in the record.
-- **Verification evidence** lives in the record as PASS/FAIL/NOT RUN lines plus the named artifact — not as full command transcripts.
-- The **current state** of a record is the `## Current state (<date>)` block at the top; history below is one line per stage.
+- **Decisions** live in the task record (and in an ADR when they change the roadmap).
+- **Scope, sources, and verification items** live in the spec, not restated in the record.
+- **Verification evidence** lives in the record as PASS/FAIL/NOT RUN lines plus the named artifact, not as command transcripts.
 
 When a document would restate another, cite it instead.
 
-Rules, the same for both tools:
+Rules:
 
-1. **One tool, one role at a time.** Never run Claude and Codex, or two roles, on the same task concurrently. A transfer stops the current role first.
-2. **The orchestrator owns the record.** It creates the record at preflight — noting the spec path(s), baseline (`git status --short` at start), and last tool/role — and updates the `## Current state (<date>)` block at every role change, on every blocker, and before yielding. That block is the single home for: current and completed stages; per-stage verdicts; repair count (max 2); escalation count and reason; commit SHAs and touched files; exact verification commands with PASS / FAIL / NOT RUN; open findings; decisions in effect; owner authorizations; NOT RUN items with reasons; blocker; next action. Log entries below it never restate these facts. No secrets anywhere in the record.
-3. **Resume by reconciling, not by trusting.** The receiving tool reads the record, the spec, the working tree, and the evidence, then resumes at the first incomplete or invalidated stage. Completed architecture and implementation are reused while their evidence still holds. A recorded approval is never inherited: the receiving reviewer reruns every check the current changes affect and every check the spec requires.
-4. **Missing record.** Reconstruct one from the spec, tree, and evidence only. Counters start at zero only for a genuinely new task; imported history with unknown counts stays unknown. Never invent approvals, completed stages, or findings.
-5. **Counters do not reset** across tools or resumptions.
-6. **Collapse an approved, committed stage to one line:** `<stage> <role>: <VERDICT> (repairs N/2) — commit <sha>`. Fixed findings and their detail drop from the record; git history keeps them.
-7. **Log entries cite spec sections instead of restating spec text**, and record each round's check results once, as PASS/FAIL, not as full transcripts. Other files never cite a record's history sections by heading (they get collapsed); cite the spec, a commit, or `git show <sha>:docs/task-runs/<id>.md`.
-8. **Soft-cap the record at ~8KB.** Past that, collapse closed stages first.
-9. **Owner-only items also go in `docs/OWNER-QUEUE.md`,** one row each with a link back to the record line. When one is done, record the result in the record and delete the row.
-
-Takeover prompt for a Claude session: `/feature <task-id>` reads the record first and does the reconciliation itself. For Codex, `CODEX.md` has the equivalent.
+1. **One role at a time** on a task.
+2. **An open task's record is one `## Current state (<date>)` block:** stage, per-stage verdicts, repair count (max 2), commit SHAs, PASS / FAIL / NOT RUN per verification item, open findings, decisions in effect, owner items, next action. No transcripts and no secrets.
+3. **Resume by reconciling, not by trusting.** Read the record, the spec, the working tree, and the evidence, then resume at the first incomplete or invalidated stage. A recorded approval is never inherited: the reviewer reruns every check the current changes affect.
+4. **Close by collapsing.** When a task closes, the record becomes one line per stage (`<stage> <role>: <VERDICT> (repairs N/2) — commit <sha>`), the NOT RUN items with reasons, and the open owner items. Git history keeps the rest.
+5. **Owner-only items also go in `docs/OWNER-QUEUE.md`,** one row each with a link back to the record line. When one is done, record the result in the record and delete the row.
+6. Other files never cite a record's history; cite the spec, a commit, or `git show <sha>:docs/task-runs/<id>.md`.
 
 ## Parallel work
 
-In Claude Code each implementer runs in its own git worktree (`.claude/worktrees/`, gitignored) made from `HEAD`, so independent tasks (for example a mobile screen and an eval feature) can run in parallel `/feature` invocations. Protocol tasks stay serial; they share the same session and decoding code. A worktree does not see uncommitted work on main, so commit what a task builds on first. Codex keeps working in the main tree; rule 1 of the Handoff section still applies per task.
+In Claude Code each implementer runs in its own git worktree (`.claude/worktrees/`, gitignored) made from `HEAD`, so independent tasks (for example a mobile screen and an eval feature) can run in parallel `/feature` invocations. Protocol tasks stay serial; they share the same session and decoding code. A worktree does not see uncommitted work on main, so commit what a task builds on first.
 
 ## Things this workflow deliberately does not include
 
