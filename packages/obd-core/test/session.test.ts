@@ -708,3 +708,45 @@ describe("replayRecording", () => {
     expect(out.at(-1)).toMatch(/timeout 2;/);
   });
 });
+
+describe("Elm327Session.init on the 2026-09-28 charge-log-2 recording", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reports the adapter's UNABLE TO CONNECT instead of a timeout when the car does not answer 0100", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const rec = load("fixtures/recordings/chevrolet-equinox-ev-2024/2026-09-28-charge-log-2.redacted.jsonl");
+    const subscribers = new Set<(bytes: Uint8Array) => void>();
+    let cursor = rec.findIndex((l) => l.dir === "tx");
+    const transport: Transport = {
+      write: (bytes) => {
+        const tx = rec[cursor];
+        expect(tx.dir === "tx" ? tx.data : undefined).toBe(latin1Decode(bytes));
+        cursor++;
+        for (; cursor < rec.length && rec[cursor].dir !== "tx"; cursor++) {
+          const line = rec[cursor];
+          if (line.dir !== "rx") continue;
+          setTimeout(
+            () => {
+              for (const cb of subscribers) cb(latin1Encode(line.data));
+            },
+            Math.round((line.t - tx.t) * 1000),
+          );
+        }
+        return Promise.resolve();
+      },
+      onData: (cb) => {
+        subscribers.add(cb);
+        return () => subscribers.delete(cb);
+      },
+      close: () => Promise.resolve(),
+    };
+    const session = new Elm327Session(transport);
+    const failure = rejection(session.init({ protocol: "0" }));
+    await vi.advanceTimersByTimeAsync(30000);
+    const error = await failure;
+    expect(error).toMatchObject({ kind: "init", command: "0100" });
+    expect((error as ElmSessionError).response).toMatchObject({ kind: "error", error: { kind: "unable-to-connect" } });
+  });
+});

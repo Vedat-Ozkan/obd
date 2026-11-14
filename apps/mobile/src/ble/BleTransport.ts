@@ -5,6 +5,7 @@ import type { Transport } from "obd-core/transport";
 export const VEEPEAK_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
 export const VEEPEAK_CHARACTERISTIC_UUIDS: readonly string[] = ["0000fff1-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb"];
 export const REQUESTED_MTU = 185;
+export const CONNECT_TIMEOUT_MS = 15000;
 
 export interface ScannedDevice { id: string; name?: string; rssi?: number; serviceUuids?: string[] }
 
@@ -43,7 +44,7 @@ export interface BleConnection { transport: BleTransport; deviceId: string; devi
 const normalizeUuid = (uuid: string) => uuid.toLowerCase();
 
 export async function connectVeepeak(manager: BleManager, deviceId: string): Promise<BleConnection> {
-  const connected = await manager.connectToDevice(deviceId);
+  const connected = await manager.connectToDevice(deviceId, { timeout: CONNECT_TIMEOUT_MS });
   try {
     return await setUpVeepeak(connected);
   } catch (error) {

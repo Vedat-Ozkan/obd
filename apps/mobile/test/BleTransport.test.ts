@@ -92,7 +92,7 @@ describe("orderDevices", () => {
 describe("connectVeepeak", () => {
   it("connects before discovery and assigns reversed roles by properties", async () => {
     const fake = fakeDevice(); const connection = await connectVeepeak(fake.manager, "id");
-    expect(fake.manager.connectToDevice).toHaveBeenCalledWith("id"); expect(fake.order).toEqual(["connect", "discover"]);
+    expect(fake.manager.connectToDevice).toHaveBeenCalledWith("id", { timeout: 15000 }); expect(fake.order).toEqual(["connect", "discover"]);
     expect(connection).toMatchObject({ deviceId: "id", deviceName: "Veepeak", mtu: 185, writeCharacteristicUuid: fff2, notifyCharacteristicUuid: fff1 });
     expect(fake.device.requestMTU).toHaveBeenCalledWith(185);
     expect(fake.device.monitorCharacteristicForService.mock.calls[0].slice(0, 2)).toEqual([VEEPEAK_SERVICE_UUID, fff1]);
