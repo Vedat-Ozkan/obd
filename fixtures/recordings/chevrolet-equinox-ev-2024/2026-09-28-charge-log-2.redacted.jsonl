@@ -1,0 +1,36 @@
+{"t": 0, "dir": "meta", "car": "chevrolet-equinox-ev-2024", "dongle": "veepeak-obdcheck-ble", "note": "Equinox Ready, Park; one-button capture", "writeChar": "0000fff2-0000-1000-8000-00805f9b34fb", "notifyChar": "0000fff1-0000-1000-8000-00805f9b34fb", "mtu": 247}
+{"t": 0.075, "dir": "meta", "event": "charge-log session", "reason": "start"}
+{"t": 0.076, "dir": "tx", "data": "ATZ\r"}
+{"t": 0.151, "dir": "rx", "data": "\u00fc"}
+{"t": 0.946, "dir": "rx", "data": "\r\rELM327 v1.5\r\r>"}
+{"t": 0.947, "dir": "tx", "data": "ATI\r"}
+{"t": 0.988, "dir": "rx", "data": "ATI\r"}
+{"t": 0.99, "dir": "rx", "data": "ELM327 v1.5\r\r>"}
+{"t": 0.99, "dir": "tx", "data": "ATE0\r"}
+{"t": 1.037, "dir": "rx", "data": "ATE0\r"}
+{"t": 1.038, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.039, "dir": "tx", "data": "ATL0\r"}
+{"t": 1.08, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.081, "dir": "tx", "data": "ATS0\r"}
+{"t": 1.123, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.124, "dir": "tx", "data": "ATH1\r"}
+{"t": 1.169, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.17, "dir": "tx", "data": "ATSP0\r"}
+{"t": 1.214, "dir": "rx", "data": "OK\r\r>"}
+{"t": 1.215, "dir": "tx", "data": "ATDPN\r"}
+{"t": 1.258, "dir": "rx", "data": "A0\r\r>"}
+{"t": 1.259, "dir": "tx", "data": "ATRV\r"}
+{"t": 1.305, "dir": "rx", "data": "13.2V\r\r>"}
+{"t": 1.306, "dir": "tx", "data": "0100\r"}
+{"t": 1.351, "dir": "rx", "data": "SE"}
+{"t": 1.353, "dir": "rx", "data": "A"}
+{"t": 1.355, "dir": "rx", "data": "RC"}
+{"t": 1.357, "dir": "rx", "data": "H"}
+{"t": 1.361, "dir": "rx", "data": "IN"}
+{"t": 1.362, "dir": "rx", "data": "G."}
+{"t": 1.362, "dir": "rx", "data": "."}
+{"t": 1.363, "dir": "rx", "data": ".\r"}
+{"t": 6.859, "dir": "rx", "data": "UNABLE TO CONNEC"}
+{"t": 6.86, "dir": "rx", "data": "T\r\r>"}
+{"t": 11.356, "dir": "meta", "note": "charge log stopped: disconnect pressed (partial)"}
+{"t": 11.356, "dir": "meta", "redacted": "vin-serial", "source": "2026-09-28-charge-log-2.jsonl", "source_sha256": "6972fc7145bca21711abf8a221064f5224f2cebf9898406b91808416a3a00aaf", "script": "tools/spike/redact_vin.py", "script_version": 1, "masked_messages": 0}

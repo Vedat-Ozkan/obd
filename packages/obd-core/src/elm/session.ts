@@ -55,6 +55,7 @@ export class ElmSessionError extends Error {
 }
 
 export const DEFAULT_TIMEOUT_MS = 5000;
+export const PROTOCOL_SEARCH_TIMEOUT_MS = 10000;
 export const CAN_ERROR_RETRY_DELAY_MS = 500;
 export const RESYNC_MS = 1000;
 
@@ -243,11 +244,11 @@ export class Elm327Session {
     const rv = await this.run("ATRV");
     options.onInformationalReply?.("ATRV", rv);
     let protocol = requested;
-    let response0100 = await this.run("0100");
+    let response0100 = await this.run("0100", { timeoutMs: PROTOCOL_SEARCH_TIMEOUT_MS });
     if (!answered(response0100) && protocol !== "0") {
       await this.required("ATSP0");
       protocol = "0";
-      response0100 = await this.run("0100");
+      response0100 = await this.run("0100", { timeoutMs: PROTOCOL_SEARCH_TIMEOUT_MS });
     }
     if (!answered(response0100)) throw new ElmSessionError("init", "0100", response0100);
     return {
