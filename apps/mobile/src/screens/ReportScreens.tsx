@@ -45,9 +45,9 @@ function DriveReportView({ report }: { report: DriveReport }) {
   return <Text>{renderDriveReport(report)}</Text>;
 }
 
-function ReportSummary({ report, canCheck, canDrive, busy, openSection, openCodes, openCheck, openDrive, openAiSummary }: {
-  report: BatteryDiagnosisReport; canCheck: boolean; canDrive?: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
-  openCodes: () => void; openCheck: () => void; openDrive?: () => void; openAiSummary: () => void;
+function ReportSummary({ report, canCheck, busy, openSection, openCodes, openCheck, openAiSummary }: {
+  report: BatteryDiagnosisReport; canCheck: boolean; busy: boolean; openSection: (section: "soc" | "cells" | "capacity" | "twelveVolt") => void;
+  openCodes: () => void; openCheck: () => void; openAiSummary: () => void;
 }) {
   const summary = reportSummary(report);
   const tokens = useTokens();
@@ -76,7 +76,6 @@ function ReportSummary({ report, canCheck, canDrive, busy, openSection, openCode
       {__DEV__ ? <ListRow icon="creation-outline" title="AI summary (development)" disabled={busy} onPress={openAiSummary} /> : null}
     </View>
     <Button title="Run a new check" disabled={busy || !canCheck} onPress={openCheck} />
-    {canDrive && openDrive ? <Button title="Add a short drive" tonal disabled={busy || !canCheck} onPress={openDrive} /> : null}
   </>;
 }
 

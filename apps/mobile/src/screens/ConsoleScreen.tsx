@@ -32,8 +32,8 @@ let driveMinutes: 10 | 20 = 20;
 const DRIVE_NOTE = "Equinox Ready, Park; guided short drive";
 const DRIVE_BUTTONS = [...DRIVE_MINUTES].reverse();
 
-function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange }: {
-  vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge" | "drive"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>;
+function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, openIntent, onLockChange }: {
+  vehicle: CatalogVehicle; entry: GarageVehicle; intent: "check" | "charge" | "drive"; onBack: () => void; onSaved: (report: BatteryDiagnosisReport) => Promise<void>; openIntent: (intent: "charge" | "drive") => void;
   onLockChange: (locked: boolean) => void;
 }) {
   const tokens = useTokens();
@@ -565,6 +565,10 @@ function EquinoxConsole({ vehicle, entry, intent, onBack, onSaved, onLockChange 
           </View>
         </TouchableRipple>
         {devOpen ? <>
+          {intent === "check" ? <>
+            <Button title="Log a charge" tonal disabled={!canUseEquinoxConsole(vehicle) || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => { openIntent("charge"); }} />
+            <Button title="Short drive" tonal disabled={!canUseEquinoxConsole(vehicle) || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => { openIntent("drive"); }} />
+          </> : null}
           <TextInput accessibilityLabel="Vehicle-state note" style={[inputStyle, inputColors]} value={note} onChangeText={setNote} placeholder="Vehicle-state note" placeholderTextColor={tokens.muted} editable={!capturing && !diagnosing && !chargeLogging} />
           <Button title="Run capture" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("recording")} />
           <Button title="Run codes report" tonal disabled={!canUseEquinoxConsole(vehicle) || !connection || !note.trim() || pending || capturing || diagnosing || chargeLogging || bleBusy()} onPress={() => void capture("codes")} />

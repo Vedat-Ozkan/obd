@@ -2,7 +2,11 @@ appId: com.ev.obd
 ---
 - runFlow: p12-setup.yaml
 - scrollUntilVisible:
-    element: "Add a short drive"
+    element: "Run a new check"
+- tapOn: "Run a new check"
+- tapOn: "Developer tools"
+- scrollUntilVisible:
+    element: "Short drive"
 - extendedWaitUntil:
-    visible: "Add a short drive"
+    visible: "Short drive"
     timeout: 10000
