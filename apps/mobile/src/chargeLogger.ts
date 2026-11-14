@@ -8,6 +8,7 @@ import type { RecordingBuffer } from "./recording.js";
 export const FLUSH_S = 30;
 export const RECOVERY_WAIT_S = 5;
 export const SILENT_STOP_S = 600;
+export const START_ATTEMPTS = 3;
 export const WAIT_FOR_CHARGE_S = 3600;
 export const MAX_RUN_S = 16 * 3600;
 
@@ -179,6 +180,8 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
 
   let reason: SessionReason = "start";
   let stopReason: string | undefined;
+  let initialised = false;
+  let startFailures = 0;
   try {
     while ((stopReason = stopFor()) === undefined) {
       maybeFlush();
@@ -199,6 +202,7 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
         await session.init(genericProfile, {
           onInformationalReply(command, response) { if (response.kind === "error") throw new ReplyError(response, command); },
         });
+        initialised = true;
         for (;;) {
           const cycleStart = deps.now();
           await scanMode22Profile(session, CHARGE_LOG_PROFILE);
@@ -218,6 +222,17 @@ export async function runChargeLog(deps: ChargeLogDeps): Promise<ChargeLogResult
         stopReason = message(failure);
         complete = false;
         break;
+      }
+      if (!initialised && failure instanceof ElmSessionError && failure.kind === "init" && failure.command === "0100" && failure.response?.kind === "error") {
+        const reply = failure.response.error.line;
+        if (++startFailures >= START_ATTEMPTS) {
+          stopReason = `the car did not answer (${reply})`;
+          complete = false;
+          break;
+        }
+        deps.onStatus(`The car is not answering (${reply}). Is it switched on? Trying again in ${String(RECOVERY_WAIT_S)} s.`);
+        await deps.sleep(RECOVERY_WAIT_S * 1000);
+        continue;
       }
       update();
       reason = reasonFor(failure);

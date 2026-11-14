@@ -268,6 +268,32 @@ it("2: one CAN ERROR is retried by core and starts no recovery", async () => {
   expect(r.result.stopReason).toBe("disconnect pressed");
 }, SLOW);
 
+const NOT_ANSWERING = "SEARCHING...\rUNABLE TO CONNECT\r\r>";
+
+it("car not answering: three start failures stop the log within a minute and name the car", async () => {
+  const r = await run("car-not-answering", { amps: () => REST, inject: (command) => (command === "0100" ? NOT_ANSWERING : undefined) });
+  expect(r.result).toMatchObject({ complete: false, stopReason: "the car did not answer (UNABLE TO CONNECT)" });
+  expect(txs(r.lines).filter((c) => c === "0100")).toHaveLength(3);
+  expect(r.endS).toBeLessThan(60);
+  expect(r.statuses).toContain(`The car is not answering (UNABLE TO CONNECT). Is it switched on? Trying again in ${String(RECOVERY_WAIT_S)} s.`);
+  expect(boundaries(r.lines)).toEqual(["start", "start", "start"]);
+}, SLOW);
+
+it("car not answering after a first good init: the existing recovery path applies", async () => {
+  let fired = false;
+  const r = await run("car-not-answering-later", {
+    amps: () => REST,
+    inject: (command, s) => {
+      if (command === "0100" && s >= 10 && s < 40) return NOT_ANSWERING;
+      if (command === "22 2AE3" && s >= 10 && !fired) { fired = true; return "LV RESET\r\r>"; }
+      return undefined;
+    },
+  }, { stopAt: 100 });
+  expect(r.result.stopReason).toBe("disconnect pressed");
+  expect(txs(r.lines).filter((c) => c === "0100").length).toBeGreaterThan(3);
+  expect(boundaries(r.lines).slice(1).every((reason) => reason !== "start")).toBe(true);
+}, SLOW);
+
 it("3: LV RESET mid-cycle ends the cycle; the next write is ATZ of a new session after a boundary", async () => {
   let fired = false;
   const r = await run("lv-reset", {
