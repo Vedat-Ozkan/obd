@@ -2,8 +2,8 @@ import { z } from "zod";
 import { assistantInstructions, assistantReplySchema, checkFacts, checkSummaryFacts, claimGrammar, summaryInstructions, type AssistantTurnRequest, type SummaryFact, type SummaryRequest } from "../../packages/obd-assist/src/index.js";
 import type { SummaryArea } from "../../packages/obd-assist/src/summary.js";
 
-export const model = "deepseek/deepseek-v4.1-flash";
-export const canonicalSlug = `${model}-20260910`;
+export const model = "deepseek/deepseek-v4.1-flash-1017";
+export const canonicalSlug = "deepseek/deepseek-v4.1-flash-20261017";
 export const contextCeiling = 1048576;
 export const maxCompletionTokens = 1024;
 export const summaryMaxCompletionTokens = 2048;
@@ -12,7 +12,7 @@ export const maxAssistantBodyBytes = 32768;
 const base = "https://openrouter.ai/api/v1";
 const parameters = ["max_tokens", "response_format", "reasoning"];
 
-export type AssistantModel = "deepseek/deepseek-v4.1-flash" | "deepseek/deepseek-v4-pro-0813" | "xiaomi/mimo-v2.6-pro" | "moonshotai/kimi-k3";
+export type AssistantModel = "deepseek/deepseek-v4.1-flash-1017" | "deepseek/deepseek-v4-pro-0813" | "xiaomi/mimo-v2.6-pro";
 export interface ModelPin {
   model: AssistantModel; canonicalSlug: string; providerName: string; providerTag: string; contextCeiling: number;
   inputTenthMicroUsdPerToken: number; outputTenthMicroUsdPerToken: number;
@@ -21,7 +21,6 @@ export const pins: Readonly<Record<AssistantModel, ModelPin>> = {
   [model]: { model, canonicalSlug, providerName: "DeepSeek", providerTag: "deepseek", contextCeiling, inputTenthMicroUsdPerToken: 3, outputTenthMicroUsdPerToken: 12 },
   "deepseek/deepseek-v4-pro-0813": { model: "deepseek/deepseek-v4-pro-0813", canonicalSlug: "deepseek/deepseek-v4-pro-20260813", providerName: "DeepSeek", providerTag: "deepseek", contextCeiling, inputTenthMicroUsdPerToken: 14, outputTenthMicroUsdPerToken: 40 },
   "xiaomi/mimo-v2.6-pro": { model: "xiaomi/mimo-v2.6-pro", canonicalSlug: "xiaomi/mimo-v2.6-pro-20260921", providerName: "Xiaomi", providerTag: "xiaomi/fp8", contextCeiling, inputTenthMicroUsdPerToken: 5, outputTenthMicroUsdPerToken: 9 },
-  "moonshotai/kimi-k3": { model: "moonshotai/kimi-k3", canonicalSlug: "moonshotai/kimi-k3-20260715", providerName: "Moonshot AI", providerTag: "moonshotai/mxfp4", contextCeiling, inputTenthMicroUsdPerToken: 30, outputTenthMicroUsdPerToken: 150 },
 };
 export type ConsentFor<M extends AssistantModel> = M extends typeof model ? "t2.11-openrouter-deepseek-v1" : "t2.11-openrouter-compare-eval-v1";
 export const consentFor = <M extends AssistantModel>(m: M): ConsentFor<M> => (m === model ? "t2.11-openrouter-deepseek-v1" : "t2.11-openrouter-compare-eval-v1") as ConsentFor<M>;
