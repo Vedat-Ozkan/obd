@@ -1,0 +1,638 @@
+{
+  "label": "RECORDED MODEL OUTPUT (live, scripted T2.11 questions; not synthetic, not an ELM327 recording)",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "canonicalSlug": "deepseek/deepseek-v4.1-flash-20261017",
+  "providerTag": "deepseek",
+  "returnedProviders": [
+    "DeepSeek"
+  ],
+  "promptVersion": "t2.11-v2",
+  "adapterPromptVersion": "t2.11-openrouter-v1",
+  "runDate": "2026-11-14T22:06:58.440Z",
+  "codeSha": "7b713f4ca1c646e749fb741305bdb1c39b3d9bfa",
+  "evalArtifact": "t2.11b-live-eval-A.json",
+  "questions": {
+    "q01": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 0,
+          "outputTokens": 24,
+          "costUsd": 0.0000856845
+        }
+      },
+      {
+        "reject": "invalid-response"
+      }
+    ],
+    "q02": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 487,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004931982
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_session",
+          "sessionId": "s2",
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 609,
+          "cachedInputTokens": 384,
+          "outputTokens": 24,
+          "costUsd": 0.00004880898
+        }
+      },
+      {
+        "reject": "invalid-response"
+      }
+    ],
+    "q03": [
+      {
+        "reject": "invalid-response"
+      }
+    ],
+    "q04": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 482,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004857732
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_codes",
+          "sessionId": "s1",
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 604,
+          "cachedInputTokens": 384,
+          "outputTokens": 25,
+          "costUsd": 0.00004866048
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "In the first scan session, stored codes: {fact:s1/codes-0-stored}; pending codes: {fact:s1/codes-0-pending}.",
+              "factIds": [
+                "s1/codes-0-stored",
+                "s1/codes-0-pending"
+              ]
+            },
+            {
+              "text": "In the same session, one permanent code reading was not assessed: {fact:s1/codes-0-permanent} (status {label:s1/codes-0-permanent}).",
+              "factIds": [
+                "s1/codes-0-permanent"
+              ]
+            },
+            {
+              "text": "Also in that session, another permanent code reading was not assessed: {fact:s1/codes-4-permanent} (status {label:s1/codes-4-permanent}).",
+              "factIds": [
+                "s1/codes-4-permanent"
+              ]
+            },
+            {
+              "text": "The recently cleared codes status is {fact:s1/codes-recently-cleared}, so that could not be determined.",
+              "factIds": [
+                "s1/codes-recently-cleared"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 1183,
+          "cachedInputTokens": 512,
+          "outputTokens": 233,
+          "costUsd": 0.00023956614
+        }
+      }
+    ],
+    "q05": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004842882
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 603,
+          "cachedInputTokens": 384,
+          "outputTokens": 26,
+          "costUsd": 0.00004910598
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "Your battery capacity is {fact:capacity/status}, because {fact:capacity/reason}",
+              "factIds": [
+                "capacity/status",
+                "capacity/reason"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 682,
+          "cachedInputTokens": 512,
+          "outputTokens": 57,
+          "costUsd": 0.00006062364
+        }
+      }
+    ],
+    "q06": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004842882
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 603,
+          "cachedInputTokens": 384,
+          "outputTokens": 26,
+          "costUsd": 0.00004910598
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "{label:capacity/status}: {fact:capacity/status}.",
+              "factIds": [
+                "capacity/status"
+              ]
+            },
+            {
+              "text": "{label:capacity/reason}",
+              "factIds": [
+                "capacity/reason"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 682,
+          "cachedInputTokens": 512,
+          "outputTokens": 67,
+          "costUsd": 0.00006656364
+        }
+      }
+    ],
+    "q07": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 488,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004946832
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_session",
+          "sessionId": "s2",
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 610,
+          "cachedInputTokens": 384,
+          "outputTokens": 24,
+          "costUsd": 0.00004895748
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "The average cell voltage was not read for this scan, so I cannot give a value.",
+              "factIds": [
+                "s2/cell-spread"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 1478,
+          "cachedInputTokens": 512,
+          "outputTokens": 55,
+          "costUsd": 0.00017764164
+        }
+      }
+    ],
+    "q08": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004842882
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 603,
+          "cachedInputTokens": 384,
+          "outputTokens": 26,
+          "costUsd": 0.00004910598
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "I can't tell you how far you can drive: capacity status is {fact:capacity/status}, because {fact:capacity/reason}",
+              "factIds": [
+                "capacity/status",
+                "capacity/reason"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 682,
+          "cachedInputTokens": 512,
+          "outputTokens": 67,
+          "costUsd": 0.00006656364
+        }
+      }
+    ],
+    "q09": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 26,
+          "costUsd": 0.00004961682
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "{label:s1/capacity-value}: {fact:s1/capacity-value}, with a band of {fact:s1/capacity-band}.",
+              "factIds": [
+                "s1/capacity-value",
+                "s1/capacity-band"
+              ]
+            },
+            {
+              "text": "{label:s1/capacity-method}: {fact:s1/capacity-method}",
+              "factIds": [
+                "s1/capacity-method"
+              ]
+            },
+            {
+              "text": "{label:s1/synthetic}: {fact:s1/synthetic}",
+              "factIds": [
+                "s1/synthetic"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 646,
+          "cachedInputTokens": 384,
+          "outputTokens": 130,
+          "costUsd": 0.00011726748
+        }
+      }
+    ],
+    "q10": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 482,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004857732
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_codes",
+          "sessionId": "s1",
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 604,
+          "cachedInputTokens": 384,
+          "outputTokens": 25,
+          "costUsd": 0.00004866048
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "For the first scan, some permanent diagnostic code checks could not be read, so their status is not assessed.",
+              "factIds": [
+                "s1/codes-0-permanent",
+                "s1/codes-4-permanent"
+              ]
+            },
+            {
+              "text": "Recently cleared code status is unknown for the first scan.",
+              "factIds": [
+                "s1/codes-recently-cleared"
+              ]
+            },
+            {
+              "text": "Stored diagnostic codes: {fact:s1/codes-0-stored}.",
+              "factIds": [
+                "s1/codes-0-stored"
+              ]
+            },
+            {
+              "text": "Pending diagnostic codes: {fact:s1/codes-0-pending}.",
+              "factIds": [
+                "s1/codes-0-pending"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 1183,
+          "cachedInputTokens": 1024,
+          "outputTokens": 164,
+          "costUsd": 0.00012406878
+        }
+      }
+    ],
+    "q11": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 26,
+          "costUsd": 0.00004961682
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "Capacity status: {label:s1/capacity-status}.",
+              "factIds": [
+                "s1/capacity-status"
+              ]
+            },
+            {
+              "text": "Capacity could not be assessed: {fact:s1/capacity-reason}.",
+              "factIds": [
+                "s1/capacity-reason"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 570,
+          "cachedInputTokens": 384,
+          "outputTokens": 77,
+          "costUsd": 0.00007449948
+        }
+      }
+    ],
+    "q12": [
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "list_sessions",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 481,
+          "cachedInputTokens": 256,
+          "outputTokens": 24,
+          "costUsd": 0.00004842882
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "tool",
+          "tool": "get_capacity_estimate",
+          "sessionId": null,
+          "claims": null
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 553,
+          "cachedInputTokens": 384,
+          "outputTokens": 26,
+          "costUsd": 0.00004168098
+        }
+      },
+      {
+        "reply": {
+          "version": 1,
+          "kind": "answer",
+          "tool": null,
+          "sessionId": null,
+          "claims": [
+            {
+              "text": "Your capacity estimate is {label:s1/capacity-status}: {fact:s1/capacity-status}.",
+              "factIds": [
+                "s1/capacity-status"
+              ]
+            },
+            {
+              "text": "Reason: {label:s1/capacity-reason}: {fact:s1/capacity-reason}.",
+              "factIds": [
+                "s1/capacity-reason"
+              ]
+            },
+            {
+              "text": "Note {label:sessions/s1/synthetic}: {fact:sessions/s1/synthetic}.",
+              "factIds": [
+                "sessions/s1/synthetic"
+              ]
+            }
+          ]
+        },
+        "usage": {
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "inputTokens": 637,
+          "cachedInputTokens": 384,
+          "outputTokens": 125,
+          "costUsd": 0.00011296098
+        }
+      }
+    ]
+  },
+  "adversarial": []
+}
