@@ -33,7 +33,7 @@ const url = "http://192.168.1.20:8788";
 const rows: Record<string, unknown>[] = [];
 let reports: BatteryDiagnosisReport[];
 const ids = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
-const validUsage = { model: "deepseek/deepseek-v4.1-flash-20260910", provider: "DeepSeek", promptVersion: "t2.10-v4", adapterPromptVersion: "t2.10-openrouter-v7", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
+const validUsage = { model: "deepseek/deepseek-v4.1-flash-20261017", provider: "DeepSeek", promptVersion: "t2.10-v4", adapterPromptVersion: "t2.10-openrouter-v7", inputTokens: 200, cachedInputTokens: 50, outputTokens: 20, reasoningTokens: 0, providerCostUsd: 0.000084, estimatedUsd: 0.000084, latencyMs: 17 };
 const validBudget = { uses: 5, headroomMicroUsd: 999916, enabled: true };
 const expectedBudget = { ...validBudget, chargedOrReservedMicroUsd: 84 };
 const accepted = savedReply("explanatory-accepted");
@@ -101,7 +101,7 @@ describe("recording → public development flow → HTTP access → local checke
     expect(h.statusSent).toHaveLength(1);
     expect(h.statusSent[0]).toMatchObject({ url: `${url}/v1/status`, init: { method: "GET", redirect: "error", headers: { Authorization: `Bearer ${token}` } } });
     expect(h.statusSent[0].init.body).toBeUndefined();
-    expect(view.evidence).toEqual({ version: 1, consentVersion: SUMMARY_CONSENT_VERSION, requestId: ids(1), requestedModel: "deepseek/deepseek-v4.1-flash", returnedModel: validUsage.model, configuredProvider: "DeepSeek", observedProvider: null, routingEvidence: "configured-pin-only", usage: validUsage, phoneLatencyMs: 25, budget: expectedBudget, displayCategory: "llm", failedCheck: null });
+    expect(view.evidence).toEqual({ version: 1, consentVersion: SUMMARY_CONSENT_VERSION, requestId: ids(1), requestedModel: "deepseek/deepseek-v4.1-flash-1017", returnedModel: validUsage.model, configuredProvider: "DeepSeek", observedProvider: null, routingEvidence: "configured-pin-only", usage: validUsage, phoneLatencyMs: 25, budget: expectedBudget, displayCategory: "llm", failedCheck: null });
     expect(h.sent[0].url).toBe(`${url}/v1/summaries`);
     expect(h.sent[0].init).toMatchObject({ method: "POST", redirect: "error", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
     expect(JSON.parse(bodyText(h.sent[0].init))).toEqual({ requestId: ids(1), consentVersion: SUMMARY_CONSENT_VERSION, request: prepareSummaryRequest(reports[index]) });
@@ -284,7 +284,7 @@ describe("recording → public development flow → HTTP access → local checke
 
 describe("recording-backed development evidence capture (synthetic HTTP metadata)", () => {
   it.each(["fallback", "local-rejection"])("retains valid usage on %s without exposing hosted text", async (name) => {
-    const usage = { ...validUsage, model: "deepseek/deepseek-v4.1-flash", cachedInputTokens: undefined, reasoningTokens: undefined, providerCostUsd: undefined };
+    const usage = { ...validUsage, model: "deepseek/deepseek-v4.1-flash-1017", cachedInputTokens: undefined, reasoningTokens: undefined, providerCostUsd: undefined };
     const h = harness(() => Promise.resolve(Response.json(name === "fallback" ? { kind: "fallback", reason: "private-evidence-sentinel", usage } : { kind: "llm", summary: savedReply("v2-digit-outside"), usage })));
     h.flow.consent(true);
     const view = await h.flow.summaryFor(reports[0]);
@@ -330,7 +330,7 @@ describe("recording-backed development evidence capture (synthetic HTTP metadata
   const badFields: [string, unknown][] = [
     ["inputTokens", -1], ["inputTokens", 1.5], ["inputTokens", 1048577], ["inputTokens", null], ["outputTokens", 2049], ["outputTokens", -1],
     ["cachedInputTokens", 201], ["reasoningTokens", 21], ["providerCostUsd", -0.1], ["providerCostUsd", 1.01], ["estimatedUsd", null], ["estimatedUsd", 1.01],
-    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["promptVersion", "t2.10-v2"], ["adapterPromptVersion", "t2.10-openrouter-v5"], ["promptVersion", "t2.10-v3"], ["adapterPromptVersion", "t2.10-openrouter-v6"], ["model", "private-evidence-sentinel".repeat(1000)],
+    ["latencyMs", 1.5], ["latencyMs", -1], ["latencyMs", 9007199254740992], ["model", "private-evidence-sentinel"], ["model", "deepseek/deepseek-v4.1-flash"], ["model", "deepseek/deepseek-v4.1-flash-20260910"], ["provider", "private-evidence-sentinel"], ["promptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "private-evidence-sentinel"], ["adapterPromptVersion", "t2.10-openrouter-v1"], ["adapterPromptVersion", "t2.10-openrouter-v2"], ["adapterPromptVersion", "t2.10-openrouter-v3"], ["adapterPromptVersion", "t2.10-openrouter-v4"], ["promptVersion", "t2.10-v1"], ["promptVersion", "t2.10-v2"], ["adapterPromptVersion", "t2.10-openrouter-v5"], ["promptVersion", "t2.10-v3"], ["adapterPromptVersion", "t2.10-openrouter-v6"], ["model", "private-evidence-sentinel".repeat(1000)],
   ];
   it.each(badFields.map(([field, value], index) => ({ field, value, index })))("drops malformed usage $index $field independently of checked content", async ({ field, value, index }) => {
     const h = harness(() => Promise.resolve(Response.json({ kind: "llm", summary: accepted, usage: { ...validUsage, [field]: value } })));

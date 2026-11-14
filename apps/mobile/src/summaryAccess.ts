@@ -3,9 +3,9 @@ import type { SummaryRequest } from "obd-assist";
 export const SUMMARY_CONSENT_VERSION = "t2.10-openrouter-deepseek-v1";
 export const SUMMARY_DISCLOSURE = "Send minimized, VIN-free battery report facts through OpenRouter (United States) to DeepSeek (mainland China) for an AI summary. These services may process or retain the facts under their privacy policies. The offline report stays available. You can stop future requests by withdrawing consent.";
 
-export const SUMMARY_MODEL = "deepseek/deepseek-v4.1-flash";
+export const SUMMARY_MODEL = "deepseek/deepseek-v4.1-flash-1017";
 export interface DevelopmentUsage {
-  model: typeof SUMMARY_MODEL | "deepseek/deepseek-v4.1-flash-20260910";
+  model: typeof SUMMARY_MODEL | "deepseek/deepseek-v4.1-flash-20261017";
   provider: "DeepSeek"; promptVersion: "t2.10-v4"; adapterPromptVersion: "t2.10-openrouter-v7";
   inputTokens: number; cachedInputTokens: number | null; outputTokens: number; reasoningTokens: number | null;
   providerCostUsd: number | null; estimatedUsd: number; latencyMs: number;
@@ -24,7 +24,7 @@ const cost = (value: unknown): value is number => typeof value === "number" && N
 function projectUsage(value: unknown): DevelopmentUsage | null {
   if (typeof value !== "object" || value === null) return null;
   const u = value as Record<string, unknown>;
-  if ((u.model !== SUMMARY_MODEL && u.model !== "deepseek/deepseek-v4.1-flash-20260910") || u.provider !== "DeepSeek" || u.promptVersion !== "t2.10-v4" || u.adapterPromptVersion !== "t2.10-openrouter-v7" || !integer(u.inputTokens, 1048576) || !integer(u.outputTokens, 2048) || !integer(u.latencyMs) || !cost(u.estimatedUsd)) return null;
+  if ((u.model !== SUMMARY_MODEL && u.model !== "deepseek/deepseek-v4.1-flash-20261017") || u.provider !== "DeepSeek" || u.promptVersion !== "t2.10-v4" || u.adapterPromptVersion !== "t2.10-openrouter-v7" || !integer(u.inputTokens, 1048576) || !integer(u.outputTokens, 2048) || !integer(u.latencyMs) || !cost(u.estimatedUsd)) return null;
   const cachedInputTokens = u.cachedInputTokens ?? null;
   const reasoningTokens = u.reasoningTokens ?? null;
   const providerCostUsd = u.providerCostUsd ?? null;

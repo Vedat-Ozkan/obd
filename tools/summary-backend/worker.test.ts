@@ -28,17 +28,16 @@ const uniformReply = (text: string, factIds: string[], takeawayText = text) => (
 });
 const signalset = importObdbMode22(JSON.parse(readFileSync(join(root, "packages/obd-core/vehicles/chevrolet-equinox-ev/default.json"), "utf8")));
 const token = "synthetic-development-token-0123456789";
-const model = "deepseek/deepseek-v4.1-flash";
-const canonical = `${model}-20260910`;
+const model = "deepseek/deepseek-v4.1-flash-1017";
+const canonical = "deepseek/deepseek-v4.1-flash-20261017";
 const consent = "t2.10-openrouter-deepseek-v1";
 const legacyReservation = 315802;
 const compareConsent = "t2.11-openrouter-compare-eval-v1";
 interface Arm { key: string; model: AssistantModel; canonical: string; provider: string; tag: string; consent: string; ceiling: [number, number]; capReservation: number; price: { prompt: string; completion: string; cache: string; override?: { prompt: string; completion: string } }; maxCompletion: number }
 const armTable: Arm[] = [
-  { key: "A", model, canonical: `deepseek/deepseek-v4.1-flash-20260910`, provider: "DeepSeek", tag: "deepseek", consent: "t2.11-openrouter-deepseek-v1", ceiling: [3, 12], capReservation: 22119, price: { prompt: "0.0000003", completion: "0.0000012", cache: "0.000000006" }, maxCompletion: 393216 },
+  { key: "A", model, canonical, provider: "DeepSeek", tag: "deepseek", consent: "t2.11-openrouter-deepseek-v1", ceiling: [3, 12], capReservation: 22119, price: { prompt: "0.0000003", completion: "0.0000012", cache: "0.000000006" }, maxCompletion: 393216 },
   { key: "B", model: "deepseek/deepseek-v4-pro-0813", canonical: "deepseek/deepseek-v4-pro-20260813", provider: "DeepSeek", tag: "deepseek", consent: compareConsent, ceiling: [14, 40], capReservation: 101581, price: { prompt: "0.00000066", completion: "0.00000198", cache: "0.000000022", override: { prompt: "0.00000132", completion: "0.00000396" } }, maxCompletion: 393216 },
   { key: "C", model: "xiaomi/mimo-v2.6-pro", canonical: "xiaomi/mimo-v2.6-pro-20260921", provider: "Xiaomi", tag: "xiaomi/fp8", consent: compareConsent, ceiling: [5, 9], capReservation: 35738, price: { prompt: "0.000000435", completion: "0.00000087", cache: "0.0000000036" }, maxCompletion: 131072 },
-  { key: "D", model: "moonshotai/kimi-k3", canonical: "moonshotai/kimi-k3-20260715", provider: "Moonshot AI", tag: "moonshotai/mxfp4", consent: compareConsent, ceiling: [30, 150], capReservation: 224256, price: { prompt: "0.000003", completion: "0.000015", cache: "0.0000003" }, maxCompletion: 943718 },
 ];
 interface EndpointsDoc { data: { id: string; endpoints: { provider_name: string; tag: string; context_length: number; max_completion_tokens: number; supported_parameters: string[];
   pricing: { prompt: string; completion: string; input_cache_read: string; overrides?: { prompt?: string; completion?: string; input_cache_read?: string; utc_days: number[] }[] } }[] } }
@@ -236,7 +235,7 @@ const upstream = async (url, init) => {
 };
 // Assistant turns: replies are scripted per (question, round); a cursor makes the three identical first-round questions unambiguous.
 let cursor = 0;
-const endpointDoc = (url) => { const m = String(url).replace(/^.*[/]models[/]/, '').replace(/[/]endpoints$/, ''); return m === 'deepseek/deepseek-v4.1-flash' ? settings.endpoints : settings.otherEndpoints?.[m]; };
+const endpointDoc = (url) => { const m = String(url).replace(/^.*[/]models[/]/, '').replace(/[/]endpoints$/, ''); return m === 'deepseek/deepseek-v4.1-flash-1017' ? settings.endpoints : settings.otherEndpoints?.[m]; };
 const scripted = (body) => {
   const turn = JSON.parse(body.messages[1].content); const queue = settings.scripted;
   for (let k = 0; k < queue.length; k++) { const i = (cursor + k) % queue.length; if (queue[i].question === turn.question && queue[i].round === turn.steps.length) { cursor = i + 1; return queue[i]; } }
@@ -833,7 +832,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
 
   const otherHost = "Synthetic Other Host";
   const providerCases: [string, string, unknown, string | null][] = [
-    ["assistant-provider-mismatch-C", "C", otherHost, otherHost], ["assistant-provider-mismatch-D", "D", otherHost, otherHost],
+    ["assistant-provider-mismatch-C", "C", otherHost, otherHost], ["assistant-provider-mismatch-B", "B", otherHost, otherHost],
     ["assistant-provider-absent", "C", undefined, null], ["assistant-provider-not-string", "C", 42, null],
   ];
   for (const [name, key, returned, recorded] of providerCases) {
@@ -923,11 +922,10 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
     expect(meta.requests).toEqual([{ state: "settled", reservation: reservationFor(lastBody(meta).bytes, pins[arm.model]).microUsd, actual: 66, error: null }]);
     expect(meta.budget).toMatchObject({ uses: 1, spent: 66 });
   }
-  const D = armOf("D");
-  const capTurn = turnWithBodyBytes(D.model, maxAssistantBodyBytes);
-  const cap = await acheck("ledger-D-cap-size", { output: assistantEnvelope(D, toolReply) }, assistantBody(D, capTurn), null, 1);
+  const capTurn = turnWithBodyBytes(B.model, maxAssistantBodyBytes);
+  const cap = await acheck("ledger-B-cap-size", { output: assistantEnvelope(B, toolReply) }, assistantBody(B, capTurn), null, 1);
   expect(lastBody(cap.meta).bytes).toBe(32768);
-  expect(cap.meta.requests).toEqual([{ state: "settled", reservation: 224256, actual: 66, error: null }]);
+  expect(cap.meta.requests).toEqual([{ state: "settled", reservation: 101581, actual: 66, error: null }]);
 
   const R_B = reservationFor(bytesOf.B, pins[B.model]);
   const exhausted2 = await acheck("assistant-budget-one-below-reservation", { output: assistantEnvelope(B, answerReply), budget: 1000000 - R_B.microUsd + 1 }, assistantBody(B, answerTurn), "budget-exhausted", 0);
@@ -967,8 +965,8 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
 
   const queue = questionSet.questions.flatMap((question) => assistantSaved.questions[question.repliesFrom ?? question.id].flatMap((round, index) => round.reply === undefined ? [] : [{ question: question.question, round: index, reply: round.reply, usage: round.usage }]));
   const providers = Object.fromEntries(armTable.map((arm) => [arm.model, arm.provider]));
-  const mismatchedProviders = { ...providers, [armOf("D").model]: otherHost };
-  const order = ["A", "C", "B", "D"].map(armOf);
+  const mismatchedProviders = { ...providers, [armOf("B").model]: otherHost };
+  const order = ["A", "C", "B"].map(armOf);
   const saveDir = mkdtempSync("/tmp/t2.11b-replies-");
   async function node(args: string[], env: Record<string, string> = {}): Promise<string> {
     const run = spawn(process.execPath, ["--import", "tsx", ...args], { cwd: root, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
@@ -991,7 +989,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
     comparison: { model: string; real: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; synthetic: { numberCheck: Rate; citationResolution: Rate; citationCorrectness: Rate; missingHonesty: Rate }; injection: string; reasoningRounds: Rate; returnedProvider: { mismatched: Rate; none: number; distinct: string[] }; cost: { medianUsd: number; maxUsd: number; totalUsd: number; overCheapTarget: number; overThoroughTarget: number }; latency: { medianMs: number; maxMs: number } }[];
   }
   await control({ scripted: queue, providers: mismatchedProviders, authority: compare });
-  const stdout = await evalRun("0.05,0.05,0.15,0.25", "/tmp/t2.11b-eval-dry.json", ["--save-replies", saveDir]);
+  const stdout = await evalRun("0.05,0.05,0.15", "/tmp/t2.11b-eval-dry.json", ["--save-replies", saveDir]);
   const dryText = readFileSync("/tmp/t2.11b-eval-dry.json", "utf8");
   const dry = JSON.parse(dryText) as EvalArtifact;
   expect(stdout + dryText).not.toMatch(new RegExp(`${token}|synthetic-key|SENTINEL_`));
@@ -1027,14 +1025,14 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
   }
   for (const [index, item] of dry.comparison.entries()) {
     const roundCount = dry.arms[index].rows.flatMap((row) => row.rounds ?? []).length;
-    const differs = order[index].key === "D";
+    const differs = order[index].key === "B";
     expect(roundCount).toBeGreaterThan(0);
     expect(item.returnedProvider, order[index].key).toMatchObject({ mismatched: { n: differs ? roundCount : 0, d: roundCount }, none: 0, distinct: [differs ? otherHost : order[index].provider] });
   }
   for (const [index, arm] of order.entries()) {
     const file = join(saveDir, `t2.11-live-${arm.model.split("/")[1]}.json`);
     const savedFile = JSON.parse(readFileSync(file, "utf8")) as { label: string; promptVersion: string; model: string; canonicalSlug: string; providerTag: string; returnedProviders: string[]; questions: Record<string, unknown[]> };
-    expect(savedFile).toMatchObject({ promptVersion: "t2.11-v2", model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag, returnedProviders: [arm.key === "D" ? otherHost : arm.provider] });
+    expect(savedFile).toMatchObject({ promptVersion: "t2.11-v2", model: arm.model, canonicalSlug: arm.canonical, providerTag: arm.tag, returnedProviders: [arm.key === "B" ? otherHost : arm.provider] });
     expect(Object.keys(savedFile.questions)).toEqual(questionSet.questions.map((item) => item.id));
     const replayed = JSON.parse(await node(["packages/obd-assist/scripts/replay-assistant.ts", "fixtures/synthetic/t2.11-question-set.json", file])) as { note: string; sections: { real: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[]; synthetic: { id: string; kind: string; reason: string | null; citationsResolve: boolean; numbersMatch: boolean; expectationMet: boolean | null }[] } };
     expect(replayed.note).toBe(savedFile.label);
@@ -1044,7 +1042,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
     rows.push({ name: `eval-dry-replay-${arm.key}`, source: "synthetic", note: replayed.note, questions: byId.size });
   }
   await control({ scripted: queue, providers, authority: compare });
-  await evalRun("0.00001,0.00001,0.00001,0.00001", "/tmp/t2.11b-eval-dry-cap.json", []);
+  await evalRun("0.00001,0.00001,0.00001", "/tmp/t2.11b-eval-dry-cap.json", []);
   const capped = JSON.parse(readFileSync("/tmp/t2.11b-eval-dry-cap.json", "utf8")) as EvalArtifact;
   for (const arm of capped.arms) {
     expect(arm.rows[0].status).toBe("RUN");
@@ -1052,7 +1050,7 @@ Outside placeholders, text may contain only letters, ASCII spaces and . , ; : ! 
     expect(arm.injection.verdict).toBe("NOT RUN");
   }
   await control({ scripted: queue, providers, authority: compare, budget: 1000000 - 5100 });
-  await evalRun("0.05,0.05,0.05,0.05", "/tmp/t2.11b-eval-dry-budget.json", []);
+  await evalRun("0.05,0.05,0.05", "/tmp/t2.11b-eval-dry-budget.json", []);
   const broke = JSON.parse(readFileSync("/tmp/t2.11b-eval-dry-budget.json", "utf8")) as { arms: { stoppedBy: string | null; rows: EvalRow[] }[] };
   for (const arm of broke.arms) {
     expect(arm.stoppedBy).toBe("budget");
